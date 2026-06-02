@@ -1,0 +1,121 @@
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Secrets / local env files ───────────────────────────────────────────────
+.env
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+**/*.env
+**/*.env.*
+!.env.example
+!.env.sample
+!*.env.example
+!*.env.sample
+!**/.env.example
+!**/.env.sample
+!**/*.env.example
+!**/*.env.sample
+
+.npmrc
+**/.npmrc
+.pypirc
+**/.pypirc
+.netrc
+**/.netrc
+.aws/
+.azure/
+.gcloud/
+.docker/
+**/.aws/
+**/.azure/
+**/.gcloud/
+**/.docker/
+
+# Common private key / credential files. Commit public templates only.
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.ovpn
+*.jks
+*.keystore
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+credentials.json
+client_secret*.json
+service-account*.json
+*-service-account.json
+firebase-adminsdk*.json
+*_credentials.*
+*.credentials
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.venv/
+venv/
+.pytest_cache/
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+!frontend/.vscode/extensions.json
+*.swp
+*.swo
+
+# ── Frontend build ───────────────────────────────────────────────────────────
+frontend/dist/
+
+# ── Runtime databases / generated user data ────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.db.lock
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+backend/*.db.lock
+backend/.milvus_data.db.lock
+backend/uploads/
+backend/demo_*.py
+uploads/
+
+# ── Persistent data directory (default LOCAL_NOTEBOOK_DATA_DIR) ─────────────
+local-notebook-data/
+etcd/
+minio/
+milvus/
+
+# ── Services runtime ────────────────────────────────────────────────────────
+services/**/__pycache__/
+
+# ── Internal dev docs (not for distribution) ────────────────────────────────
+IMAGE_IMPLEMENTATION_PLAN.md
+IMAGE_IMPLEMENTATION_SUMMARY.md
+MIGRATION_NOTES.md
+kimi_paper.pdf
+
+# ── Logs & misc ─────────────────────────────────────────────────────────────
+*.log
+dump.rdb

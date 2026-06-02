@@ -1,0 +1,10 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+sentence-transformers>=3.0.0
+
+# setuptools 81+ 删除了 pkg_resources,部分 ML 库还在 import 它,先锁版本
+setuptools<81
+# PyTorch: 安装 GPU 版本 (CUDA 12.1)
+# pip install torch --index-url https://download.pytorch.org/whl/cu121
+# 如果没有 GPU，使用 CPU 版本:
+# pip install torch --index-url https://download.pytorch.org/whl/cpu

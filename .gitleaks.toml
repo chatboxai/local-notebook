@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated files and local runtime data"
+paths = [
+  '''(^|/)__pycache__/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)frontend/dist/''',
+  '''(^|/)local-notebook-data/''',
+  '''(^|/)backend/uploads/''',
+  '''(^|/)uploads/''',
+]
