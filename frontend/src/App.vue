@@ -12,6 +12,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { installDomI18n } from './i18n'
 
 
 const globalToast = ref({
@@ -21,6 +22,7 @@ const globalToast = ref({
 })
 
 let toastTimer: number | null = null
+let stopI18n: (() => void) | null = null
 
 function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'warning') {
   if (toastTimer) {
@@ -45,10 +47,12 @@ function handleGlobalToast(event: Event) {
 
 onMounted(() => {
   window.addEventListener('global-toast', handleGlobalToast)
+  stopI18n = installDomI18n()
 })
 
 onUnmounted(() => {
   window.removeEventListener('global-toast', handleGlobalToast)
+  stopI18n?.()
   if (toastTimer) {
     clearTimeout(toastTimer)
   }

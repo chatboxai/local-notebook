@@ -2,13 +2,24 @@
   <div class="settings-page">
 
     <header class="settings-header">
-      <button class="btn-back" @click="router.push('/')">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-        </svg>
-        返回
-      </button>
-      <h1 class="settings-title">设置</h1>
+      <div class="settings-header-left">
+        <button class="btn-back" @click="router.push('/')">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+          </svg>
+          返回
+        </button>
+        <h1 class="settings-title">设置</h1>
+      </div>
+      <div class="settings-header-right">
+        <LanguageSwitcher />
+        <span class="user-badge">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+          </svg>
+          <span>admin</span>
+        </span>
+      </div>
     </header>
 
     <div class="settings-layout">
@@ -571,6 +582,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getSettings, updateSettings, type SettingsMap } from '../services/api'
 import { getToken } from '../services/auth'
+import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -942,12 +954,24 @@ function showToast(msg: string, type: 'success' | 'error') {
 .settings-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
   padding: 0 24px;
   height: 56px;
   background: #fff;
   border-bottom: 1px solid #e8e8e4;
   flex-shrink: 0;
+}
+
+.settings-header-left,
+.settings-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-header-left {
+  min-width: 0;
 }
 
 .btn-back {
@@ -970,6 +994,30 @@ function showToast(msg: string, type: 'success' | 'error') {
   font-weight: 600;
   color: #1a1a1a;
   margin: 0;
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #666;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .settings-header {
+    padding: 0 12px;
+  }
+
+  .settings-title {
+    display: none;
+  }
+
+  .user-badge {
+    padding: 6px 8px;
+  }
 }
 
 
