@@ -509,7 +509,7 @@
           <div v-if="messages.length === 0" class="chat-empty">
 
             <template v-if="hasReadyFiles">
-              <div class="greeting-message">{{ randomGreeting }}</div>
+              <div class="greeting-message">{{ localizedGreeting }}</div>
             </template>
 
             <template v-else>
@@ -1320,6 +1320,7 @@ import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, T
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
+import { locale, translateText } from '../i18n'
 
 
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
@@ -1531,8 +1532,15 @@ const readyFiles = computed(() => files.value.filter(f => f.status === 'ready'))
 const hasReadyFiles = computed(() => readyFiles.value.length > 0)
 
 
-const GREETINGS = ['小洛在此，您请讲', '今天想聊点什么呀？', '嗨，你来啦']
-const randomGreeting = ref(GREETINGS[Math.floor(Math.random() * GREETINGS.length)])
+const GREETINGS = [
+  { zh: '小洛在此，您请讲', en: 'Xiaoluo is here. Go ahead.' },
+  { zh: '今天想聊点什么呀？', en: 'What would you like to talk about today?' },
+  { zh: '嗨，你来啦', en: 'Hi, you are here.' },
+] as const
+const randomGreeting = ref<(typeof GREETINGS)[number]>(
+  GREETINGS[Math.floor(Math.random() * GREETINGS.length)] ?? GREETINGS[0],
+)
+const localizedGreeting = computed(() => randomGreeting.value[locale.value])
 
 
 const selectedFileIds = ref<string[]>([])
@@ -2355,6 +2363,18 @@ onUnmounted(() => {
   stopWorkflowPolling()
 })
 
+function localizedThinkingLabel() {
+  return escapeHtml(translateText('思考过程'))
+}
+
+function renderThinkingToggleContent(isExpanded: boolean) {
+  const iconPath = isExpanded
+    ? 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'
+    : 'M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z'
+
+  return `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="${iconPath}"/></svg><span>${localizedThinkingLabel()}</span>`
+}
+
 
 async function handleCitationClickEvent(event: MouseEvent) {
   const target = event.target as HTMLElement
@@ -2372,7 +2392,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
         thinkingBlock.classList.remove('expanded')
         thinkingBlock.classList.add('collapsed')
 
-        thinkingToggle.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg><span>思考过程</span>`
+        thinkingToggle.innerHTML = renderThinkingToggleContent(false)
 
         if (blockId) {
           userExpandedThinkingBlocks.delete(blockId)
@@ -2382,7 +2402,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
         thinkingBlock.classList.remove('collapsed')
         thinkingBlock.classList.add('expanded')
 
-        thinkingToggle.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg><span>思考过程</span>`
+        thinkingToggle.innerHTML = renderThinkingToggleContent(true)
 
         if (blockId) {
           userExpandedThinkingBlocks.add(blockId)
@@ -4064,7 +4084,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
 
         segments.push({
           type: 'thinking',
-          html: renderThinkingBlock(reasoningContent, shouldExpand, isStreaming, blockId)
+          html: renderThinkingBlock(reasoningContent, shouldExpand, isStreaming, blockId, localizedThinkingLabel())
         })
       }
     } else if (part.type === 'citation_ref') {
@@ -4106,7 +4126,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         currentText = ''
       }
 
-      segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(part.display)}</div>` })
+      segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(translateText(part.display))}</div>` })
     }
   }
 
@@ -4130,7 +4150,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         const autoExpand = isStreamingMode && !content && !isThinkingComplete
         const shouldExpand = userExpanded || autoExpand
 
-        segments.push({ type: 'thinking', html: renderThinkingBlock(thinking, shouldExpand, isStreamingMode && !isThinkingComplete, blockId) })
+        segments.push({ type: 'thinking', html: renderThinkingBlock(thinking, shouldExpand, isStreamingMode && !isThinkingComplete, blockId, localizedThinkingLabel()) })
       }
 
 
