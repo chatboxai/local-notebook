@@ -8,7 +8,7 @@
 
 ## 演示
 
-![演示截图](./docs/screenshots/demo.jpg)
+![演示截图](./docs/screenshots/demo-zh.jpg)
 
 > 视频演示后续补充。
 
@@ -77,7 +77,7 @@ PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
 
 启动后到前端 **Settings** 页填入 LLM / Embedding / MinerU / FunASR 配置，实时生效，无需重启。
 
-![配置页截图](./docs/screenshots/setting.jpg)
+![配置页截图](./docs/screenshots/setting-zh.jpg)
 
 推荐路径：首次部署先用云 API（阿里云百炼 / OpenAI 兼容服务等）快速跑通流程；之后可在 Settings 页逐项切换到 [services/](./services) 下的本地模型服务（Ollama / vLLM / 本地 Embedding / MinerU / FunASR），实现端到端离网。
 

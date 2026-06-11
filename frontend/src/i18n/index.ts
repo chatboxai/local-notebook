@@ -415,46 +415,63 @@ function localizeNode(node: Node) {
   }
 }
 
-export function installDomI18n(root: ParentNode = document.body) {
+export interface DomI18nController {
+  refresh: () => void
+  stop: () => void
+}
+
+export function installDomI18n(root: ParentNode = document.body): DomI18nController {
   let isLocalizing = false
-  let pendingMutationFrame: number | null = null
+  let pendingApplyTimer: number | null = null
+  let releaseTimer: number | null = null
+
+  const releaseLocalizingSoon = () => {
+    if (releaseTimer !== null) {
+      window.clearTimeout(releaseTimer)
+    }
+
+    releaseTimer = window.setTimeout(() => {
+      releaseTimer = null
+      isLocalizing = false
+    }, 0)
+  }
 
   const apply = () => {
+    if (pendingApplyTimer !== null) {
+      window.clearTimeout(pendingApplyTimer)
+      pendingApplyTimer = null
+    }
+
     isLocalizing = true
     document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en'
     localizeNode(root as Node)
-    window.requestAnimationFrame(() => {
-      isLocalizing = false
-    })
+    releaseLocalizingSoon()
   }
 
-  const observer = new MutationObserver((mutations) => {
+  const scheduleApply = (delay = 0) => {
+    if (pendingApplyTimer !== null) {
+      window.clearTimeout(pendingApplyTimer)
+    }
+
+    pendingApplyTimer = window.setTimeout(() => {
+      pendingApplyTimer = null
+      apply()
+    }, delay)
+  }
+
+  const observer = new MutationObserver(() => {
     if (isLocalizing) return
-    if (pendingMutationFrame !== null) {
-      window.cancelAnimationFrame(pendingMutationFrame)
-    }
-
-    pendingMutationFrame = window.requestAnimationFrame(() => {
-      pendingMutationFrame = null
-      isLocalizing = true
-
-    for (const mutation of mutations) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        localizeNode(node)
-      }
-      if (mutation.type === 'characterData') {
-        localizeNode(mutation.target)
-      }
-      if (mutation.type === 'attributes') {
-        localizeNode(mutation.target)
-      }
-    }
-
-      window.requestAnimationFrame(() => {
-        isLocalizing = false
-      })
-    })
+    scheduleApply()
   })
+
+  const handleVisibilityChange = () => {
+    if (!document.hidden) {
+      scheduleApply()
+    }
+  }
+
+  const handlePageShow = () => scheduleApply()
+  const handleFocus = () => scheduleApply()
 
   observer.observe(root, {
     subtree: true,
@@ -464,16 +481,29 @@ export function installDomI18n(root: ParentNode = document.body) {
     attributeFilter: ['title', 'placeholder', 'aria-label', 'data-tooltip'],
   })
 
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('pageshow', handlePageShow)
+  window.addEventListener('focus', handleFocus)
+
   const stop = watch(locale, () => {
     window.localStorage.setItem(STORAGE_KEY, locale.value)
     apply()
   }, { immediate: true })
 
-  return () => {
-    stop()
-    if (pendingMutationFrame !== null) {
-      window.cancelAnimationFrame(pendingMutationFrame)
-    }
-    observer.disconnect()
+  return {
+    refresh: apply,
+    stop: () => {
+      stop()
+      if (pendingApplyTimer !== null) {
+        window.clearTimeout(pendingApplyTimer)
+      }
+      if (releaseTimer !== null) {
+        window.clearTimeout(releaseTimer)
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('focus', handleFocus)
+      observer.disconnect()
+    },
   }
 }

@@ -8,7 +8,7 @@
 
 ## Demo
 
-![Demo screenshot](./docs/screenshots/demo.jpg)
+![Demo screenshot](./docs/screenshots/demo-en.png)
 
 > Video demo coming later.
 
@@ -60,24 +60,11 @@ On first launch, open **Settings** and configure the LLM `api_key` / `base_url`.
 
 The first `--build` usually takes 10-25 minutes. This is intentional: the project favors dependencies that can run fully locally after installation, including the vector database, document parsing, and agent framework.
 
-### Common Network Issues in Mainland China
-
-- **Docker image pull fails**: errors often contain `registry-1.docker.io: Client.Timeout exceeded`. Configure a working Docker registry mirror.
-- **apt / pip installs are slow during build**: use mirrors through environment variables:
-
-```bash
-APT_MIRROR=mirrors.aliyun.com \
-PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
-./start.sh up -d --build
-```
-
-If mirrors work but requests still time out, local proxy software may be interrupting Docker traffic. Temporarily disable the proxy or set Docker Desktop → Settings → Resources → Proxies to “No proxy”.
-
 ## Configuration
 
 Open **Settings** in the frontend to configure LLM / Embedding / MinerU / FunASR. Settings take effect immediately without restarting services.
 
-![Settings screenshot](./docs/screenshots/setting.jpg)
+![Settings screenshot](./docs/screenshots/setting-en.png)
 
 Recommended path: first use a cloud API such as Alibaba Cloud Bailian or another OpenAI-compatible provider to validate the workflow. Then switch components one by one to local services under [services/](./services), such as Ollama / vLLM / local Embedding / MinerU / FunASR, for end-to-end offline operation.
 
