@@ -291,6 +291,14 @@ const reverseEnToZh = Object.fromEntries(
   Object.entries(zhToEn).map(([zh, en]) => [en, zh]),
 ) as Record<string, string>
 
+interface LocalizedValueRecord {
+  source: string
+  localized: string
+}
+
+const textNodeValues = new WeakMap<Node, LocalizedValueRecord>()
+const attributeValues = new WeakMap<Element, Map<string, LocalizedValueRecord>>()
+
 function getInitialLocale(): Locale {
   if (typeof window === 'undefined') return 'zh'
   const stored = window.localStorage.getItem(STORAGE_KEY)
@@ -327,7 +335,7 @@ export function translateText(text: string, targetLocale: Locale = locale.value)
     return replaceWithDictionary(text, reverseEnToZh)
   }
 
-  let output = replaceWithDictionary(text, zhToEn)
+  let output = text
   output = output.replace(/第\s*(\d+)\s*\/\s*(\d+)\s*页/g, 'Page $1 / $2')
   output = output.replace(/第\s*(\d+)\s*页/g, 'Page $1')
   output = output.replace(/已选择\s*(\d+)\/(\d+)\s*张/g, 'Selected $1/$2 images')
@@ -342,6 +350,7 @@ export function translateText(text: string, targetLocale: Locale = locale.value)
   output = output.replace(/(\d+)\s*天前/g, '$1 days ago')
   output = output.replace(/(\d+)\s*个月前/g, '$1 months ago')
   output = output.replace(/(\d+)年(\d+)月(\d+)日/g, '$1-$2-$3')
+  output = replaceWithDictionary(output, zhToEn)
   return output
 }
 
@@ -372,11 +381,32 @@ function shouldSkipNode(node: Node) {
   ].join(',')))
 }
 
+function resolveSourceValue(
+  record: LocalizedValueRecord | undefined,
+  currentValue: string,
+) {
+  if (!record) return currentValue
+  return currentValue === record.localized ? record.source : currentValue
+}
+
+function getAttributeRecords(element: Element) {
+  let records = attributeValues.get(element)
+  if (!records) {
+    records = new Map()
+    attributeValues.set(element, records)
+  }
+  return records
+}
+
 function localizeNode(node: Node) {
   if (node.nodeType === Node.TEXT_NODE) {
     if (shouldSkipNode(node)) return
-    const translated = translateText(node.textContent || '')
-    if (translated !== node.textContent) node.textContent = translated
+    const currentValue = node.textContent || ''
+    const sourceValue = resolveSourceValue(textNodeValues.get(node), currentValue)
+    const translated = translateText(sourceValue)
+
+    textNodeValues.set(node, { source: sourceValue, localized: translated })
+    if (translated !== currentValue) node.textContent = translated
     return
   }
 
@@ -406,7 +436,12 @@ function localizeNode(node: Node) {
   for (const attribute of ['title', 'placeholder', 'aria-label', 'data-tooltip']) {
     const value = element.getAttribute(attribute)
     if (!value) continue
-    const translated = translateText(value)
+
+    const records = getAttributeRecords(element)
+    const sourceValue = resolveSourceValue(records.get(attribute), value)
+    const translated = translateText(sourceValue)
+
+    records.set(attribute, { source: sourceValue, localized: translated })
     if (translated !== value) element.setAttribute(attribute, translated)
   }
 
