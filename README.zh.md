@@ -40,19 +40,23 @@ local-Notebook 围绕这两点重新设计：
 前置要求：Docker Desktop（Mac / Windows）或 Docker Engine + Compose（Linux）。
 
 ```bash
-git clone https://github.com/<your-org>/local-notebook.git
+git clone https://github.com/chatboxai/local-notebook.git
 cd local-notebook
-./start.sh up --build
-./start.sh up
-./start.sh down
+
+# 首次构建并启动
+./start.sh up -d --build
+
+# 后续启动 / 查看日志 / 停止
+./start.sh up -d
 ./start.sh logs -f
+./start.sh down
 ```
 
 启动后访问：
 
 - 前端：[http://localhost:8080](http://localhost:8080)
-- 后端 API：[http://localhost:8081](http://localhost:8081)，例如 `curl localhost:8081/health`
-- 局域网内其他机器：使用本机 IP + 8080
+- 后端 API：[http://localhost:8081](http://localhost:8081)，例如 `curl http://localhost:8081/health`
+- 局域网内其他机器：`http://<本机 IP>:8080`
 
 首次进入后请到 **Settings** 页填入 LLM `api_key` / `base_url`。不用 Docker 的本地开发方式见 [backend/README.md](./backend/README.md) 与 [frontend/README.md](./frontend/README.md)。
 
@@ -112,7 +116,7 @@ LOCAL_NOTEBOOK_DATA_DIR=/Users/foo/MyNotebook ./start.sh up
 - **macOS / Windows 性能**：Docker Desktop bind mount 对大量小文件 IO 有延迟，数千文件时可考虑 named volume。
 - **生产部署务必覆盖 `SECRET_KEY`**：`export SECRET_KEY=$(openssl rand -hex 32)`。
 
-## Roadmap
+## 路线图
 
 | 阶段 | 主要内容 |
 |---|---|
@@ -121,6 +125,6 @@ LOCAL_NOTEBOOK_DATA_DIR=/Users/foo/MyNotebook ./start.sh up
 | **v0.3** | 自动记忆持久化、Skill 库自迭代、长期任务规划 |
 | **v0.4+** | 多租户隔离、SSO 登录、审计日志、PostgreSQL + Milvus 集群部署模板 |
 
-## License
+## 许可证
 
 [Apache License 2.0](./LICENSE)

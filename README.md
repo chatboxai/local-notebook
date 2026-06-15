@@ -40,19 +40,23 @@ local-Notebook is designed around these constraints:
 Prerequisite: Docker Desktop on Mac / Windows, or Docker Engine + Compose on Linux.
 
 ```bash
-git clone https://github.com/<your-org>/local-notebook.git
+git clone https://github.com/chatboxai/local-notebook.git
 cd local-notebook
-./start.sh up --build
-./start.sh up
-./start.sh down
+
+# First build and start
+./start.sh up -d --build
+
+# Later start / logs / stop
+./start.sh up -d
 ./start.sh logs -f
+./start.sh down
 ```
 
 After startup:
 
 - Frontend: [http://localhost:8080](http://localhost:8080)
-- Backend API: [http://localhost:8081](http://localhost:8081), for example `curl localhost:8081/health`
-- Other machines on the LAN: host IP + 8080
+- Backend API: [http://localhost:8081](http://localhost:8081), for example `curl http://localhost:8081/health`
+- Other machines on the LAN: `http://<host-ip>:8080`
 
 On first launch, open **Settings** and configure the LLM `api_key` / `base_url`. For non-Docker local development, see [backend/README.md](./backend/README.md) and [frontend/README.md](./frontend/README.md).
 
