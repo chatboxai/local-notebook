@@ -74,7 +74,8 @@ export function renderThinkingBlock(
   thinking: string,
   isExpanded: boolean,
   isStreaming: boolean = false,
-  blockId: string = ''
+  blockId: string = '',
+  headerLabel: string = '思考过程'
 ): string {
   if (!thinking) return ''
 
@@ -132,7 +133,7 @@ export function renderThinkingBlock(
   return `<div class="thinking-block ${expandedClass}"${blockIdAttr} data-thinking-block>
     <div class="thinking-header" data-thinking-toggle>
       ${icon}
-      <span>思考过程</span>
+      <span>${headerLabel}</span>
       ${isStreaming ? '<span class="thinking-streaming-dot"></span>' : ''}
     </div>
     <div class="thinking-content">

@@ -11,7 +11,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { installDomI18n, type DomI18nController } from './i18n'
 
 
 const globalToast = ref({
@@ -21,6 +23,9 @@ const globalToast = ref({
 })
 
 let toastTimer: number | null = null
+let domI18n: DomI18nController | null = null
+let removeRouteHook: (() => void) | null = null
+const router = useRouter()
 
 function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'warning') {
   if (toastTimer) {
@@ -43,12 +48,25 @@ function handleGlobalToast(event: Event) {
   showToast(customEvent.detail.message, customEvent.detail.type)
 }
 
+function refreshI18nAfterRouteChange() {
+  nextTick(() => {
+    domI18n?.refresh()
+    window.setTimeout(() => domI18n?.refresh(), 50)
+  })
+}
+
 onMounted(() => {
   window.addEventListener('global-toast', handleGlobalToast)
+  domI18n = installDomI18n()
+  removeRouteHook = router.afterEach(() => {
+    refreshI18nAfterRouteChange()
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('global-toast', handleGlobalToast)
+  removeRouteHook?.()
+  domI18n?.stop()
   if (toastTimer) {
     clearTimeout(toastTimer)
   }

@@ -29,6 +29,7 @@
         </div>
       </div>
       <div class="header-right">
+        <LanguageSwitcher />
         <button class="btn-settings" @click="$router.push('/settings')" title="设置">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/>
@@ -508,7 +509,7 @@
           <div v-if="messages.length === 0" class="chat-empty">
 
             <template v-if="hasReadyFiles">
-              <div class="greeting-message">{{ randomGreeting }}</div>
+              <div class="greeting-message">{{ localizedGreeting }}</div>
             </template>
 
             <template v-else>
@@ -1253,6 +1254,7 @@ import FeatureDetailPanel from '../components/project/FeatureDetailPanel.vue'
 import WorkflowDetailPanel from '../components/project/WorkflowDetailPanel.vue'
 import PdfViewer from '../components/PdfViewer.vue'
 import SessionHistoryPanel from '../components/SessionHistoryPanel.vue'
+import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 import { usePanelResize } from '../composables/usePanelResize'
 import {
   getProject,
@@ -1318,6 +1320,7 @@ import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, T
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
+import { locale, translateText } from '../i18n'
 
 
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
@@ -1529,8 +1532,15 @@ const readyFiles = computed(() => files.value.filter(f => f.status === 'ready'))
 const hasReadyFiles = computed(() => readyFiles.value.length > 0)
 
 
-const GREETINGS = ['小洛在此，您请讲', '今天想聊点什么呀？', '嗨，你来啦']
-const randomGreeting = ref(GREETINGS[Math.floor(Math.random() * GREETINGS.length)])
+const GREETINGS = [
+  { zh: '小洛在此，您请讲', en: 'Xiaoluo is here. Go ahead.' },
+  { zh: '今天想聊点什么呀？', en: 'What would you like to talk about today?' },
+  { zh: '嗨，你来啦', en: 'Hi, you are here.' },
+] as const
+const randomGreeting = ref<(typeof GREETINGS)[number]>(
+  GREETINGS[Math.floor(Math.random() * GREETINGS.length)] ?? GREETINGS[0],
+)
+const localizedGreeting = computed(() => randomGreeting.value[locale.value])
 
 
 const selectedFileIds = ref<string[]>([])
@@ -2353,6 +2363,18 @@ onUnmounted(() => {
   stopWorkflowPolling()
 })
 
+function localizedThinkingLabel() {
+  return escapeHtml(translateText('思考过程'))
+}
+
+function renderThinkingToggleContent(isExpanded: boolean) {
+  const iconPath = isExpanded
+    ? 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'
+    : 'M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z'
+
+  return `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="${iconPath}"/></svg><span>${localizedThinkingLabel()}</span>`
+}
+
 
 async function handleCitationClickEvent(event: MouseEvent) {
   const target = event.target as HTMLElement
@@ -2370,7 +2392,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
         thinkingBlock.classList.remove('expanded')
         thinkingBlock.classList.add('collapsed')
 
-        thinkingToggle.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg><span>思考过程</span>`
+        thinkingToggle.innerHTML = renderThinkingToggleContent(false)
 
         if (blockId) {
           userExpandedThinkingBlocks.delete(blockId)
@@ -2380,7 +2402,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
         thinkingBlock.classList.remove('collapsed')
         thinkingBlock.classList.add('expanded')
 
-        thinkingToggle.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg><span>思考过程</span>`
+        thinkingToggle.innerHTML = renderThinkingToggleContent(true)
 
         if (blockId) {
           userExpandedThinkingBlocks.add(blockId)
@@ -4062,7 +4084,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
 
         segments.push({
           type: 'thinking',
-          html: renderThinkingBlock(reasoningContent, shouldExpand, isStreaming, blockId)
+          html: renderThinkingBlock(reasoningContent, shouldExpand, isStreaming, blockId, localizedThinkingLabel())
         })
       }
     } else if (part.type === 'citation_ref') {
@@ -4104,7 +4126,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         currentText = ''
       }
 
-      segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(part.display)}</div>` })
+      segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(translateText(part.display))}</div>` })
     }
   }
 
@@ -4128,7 +4150,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         const autoExpand = isStreamingMode && !content && !isThinkingComplete
         const shouldExpand = userExpanded || autoExpand
 
-        segments.push({ type: 'thinking', html: renderThinkingBlock(thinking, shouldExpand, isStreamingMode && !isThinkingComplete, blockId) })
+        segments.push({ type: 'thinking', html: renderThinkingBlock(thinking, shouldExpand, isStreamingMode && !isThinkingComplete, blockId, localizedThinkingLabel()) })
       }
 
 
