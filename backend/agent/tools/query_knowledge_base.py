@@ -25,15 +25,18 @@ class CitationState:
 
 
 class QueryKBParams(BaseModel):
-    query: str = Field(description="查询文本，描述你想找到的信息")
-    num: int = Field(default=8, description="返回结果数量（默认 8）")
+    query: str = Field(description="Search query describing the information you want to find.")
+    num: int = Field(default=8, description="Number of results to return. Default is 8.")
     file_names: Optional[list[str]] = Field(
         default=None,
-        description="限定检索的文件名列表（可选）。不指定则检索当前范围内所有文件。",
+        description=(
+            "Optional list of file names to restrict the search to. "
+            "If omitted, search all files available in the current scope."
+        ),
     )
     include_images: bool = Field(
         default=True,
-        description="是否同时检索图片（默认 True）",
+        description="Whether to search images as well. Default is True.",
     )
 
     @field_validator("file_names", mode="before")
@@ -53,8 +56,9 @@ class QueryKBParams(BaseModel):
 class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
     name: str = "query_knowledge_base"
     description: str = (
-        "在知识库中进行语义搜索，返回相关文本片段和图片的摘要及引用标记。"
-        "所有事实性内容必须基于此工具的返回结果，并在回答中使用 [citation_X] 标注来源。"
+        "Run semantic search over the knowledge base and return relevant text "
+        "summaries, image summaries, and citation markers. All factual content "
+        "must be grounded in this tool's results and cited with `[citation_X]`."
     )
     params: type[QueryKBParams] = QueryKBParams
 
@@ -65,7 +69,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
     async def __call__(self, params: QueryKBParams) -> ToolReturnValue:
         query = params.query.strip()
         if not query:
-            return ToolError(message="query 不能为空")
+            return ToolError(message="query must not be empty")
 
         num = params.num
         file_names = params.file_names
@@ -78,7 +82,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 self._resolve_file_ids_by_name, state.project_id, file_names
             )
             if not resolved_ids:
-                return ToolError(message=f"未找到文件：{', '.join(file_names)}")
+                return ToolError(message=f"Files not found: {', '.join(file_names)}")
             if file_ids:
                 allowed = set(file_ids)
                 file_ids = [fid for fid in resolved_ids if fid in allowed] or resolved_ids
@@ -91,7 +95,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
         try:
             q_vector = await embed_single(query)
         except RuntimeError as e:
-            return ToolError(message=f"Embedding 服务不可用：{e}")
+            return ToolError(message=f"Embedding service is unavailable: {e}")
 
         text_hits = await asyncio.to_thread(
             search,
@@ -112,7 +116,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
             )
 
         if not text_hits and not image_hits:
-            return ToolOk(output=json.dumps([{"message": "未找到相关内容"}], ensure_ascii=False))
+            return ToolOk(output=json.dumps([{"message": "No relevant content found"}], ensure_ascii=False))
 
         results = []
 
@@ -137,7 +141,12 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
             results.append({"_callable_params": callable_params})
 
         results.append({
-            "_hint": "以上仅返回片段摘要。如需完整原文请调用 read_segments 并传入 citation_ids；如需深入分析图片请调用 ask_image 并传入 image_id。所有引用必须使用完整的 [citation_X] 格式标注，禁止编造未经检索的内容。"
+            "_hint": (
+                "These results contain summaries only. To retrieve complete original "
+                "text, call read_segments with citation_ids. For deeper image "
+                "analysis, call ask_image with image_id. All citations must use the "
+                "full `[citation_X]` format, and unsupported content must not be fabricated."
+            )
         })
 
         output = json.dumps(results, ensure_ascii=False)
@@ -217,7 +226,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 results.append({
                     "citation_id": f"[{existing_id}]",
                     "file_name": file_name,
-                    "summary": f"[图片] {summary}",
+                    "summary": f"[Image] {summary}",
                     "type": "image",
                     "_reused": True,
                 })
@@ -240,7 +249,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 "citation_id": f"[{citation_id}]",
                 "image_id": image_id,
                 "file_name": file_name,
-                "summary": f"[图片] {summary}",
+                "summary": f"[Image] {summary}",
                 "type": "image",
             })
 

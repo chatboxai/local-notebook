@@ -69,7 +69,7 @@ class ListFilesParams(BaseModel):
 
 class ListFilesTool(CallableTool2[ListFilesParams]):
     name: str = "list_files"
-    description: str = "列出当前对话可用的文件。如需文件详细信息，请使用 get_file_meta。"
+    description: str = "List files available in the current conversation. Use get_file_meta for file details."
     params: type[ListFilesParams] = ListFilesParams
 
     def __init__(self, citation_state: Optional[CitationState] = None):
@@ -108,14 +108,14 @@ class ListFilesTool(CallableTool2[ListFilesParams]):
 
 
 class GetFileMetaParams(BaseModel):
-    file_name: str = Field(description="文件名")
+    file_name: str = Field(description="File name.")
 
 
 class GetFileMetaTool(CallableTool2[GetFileMetaParams]):
     name: str = "get_file_meta"
     description: str = (
-        "获取文件的元信息。文档返回段落数量和摘要；"
-        "图片文件返回 VLM 生成的描述；音频文件返回段落数。"
+        "Get file metadata. Documents return segment counts and summaries; "
+        "image files return VLM-generated descriptions; audio files return segment counts."
     )
     params: type[GetFileMetaParams] = GetFileMetaParams
 
@@ -127,14 +127,14 @@ class GetFileMetaTool(CallableTool2[GetFileMetaParams]):
         state = self.state
         file_name = params.file_name.strip()
         if not file_name:
-            return ToolError(message="file_name 不能为空")
+            return ToolError(message="file_name must not be empty")
 
         file_row = await asyncio.to_thread(
             _get_file_by_name, state.project_id, file_name, state.file_ids
         )
         if not file_row:
             return ToolOk(output=json.dumps(
-                {"error": f"未找到文件 '{file_name}'，请使用 list_files 查看可用文件"},
+                {"error": f"File '{file_name}' was not found. Use list_files to see available files."},
                 ensure_ascii=False,
             ))
 
@@ -149,7 +149,7 @@ class GetFileMetaTool(CallableTool2[GetFileMetaParams]):
                 "SELECT description, vlm_model FROM images WHERE file_id = ? ORDER BY image_index LIMIT 1",
                 (file_id,),
             )
-            description = img_rows[0]["description"] if img_rows else "（暂无描述）"
+            description = img_rows[0]["description"] if img_rows else "(No description yet)"
             return ToolOk(output=json.dumps({
                 "file_name": file_row["file_name"],
                 "file_type": ft,
@@ -192,17 +192,20 @@ class GetFileMetaTool(CallableTool2[GetFileMetaParams]):
 
 class AskImageParams(BaseModel):
     file_name: str = Field(
-        description="文件名。对于直接图片文件，传入图片文件名；对于 PDF 内嵌图片，传入 PDF 文件名。"
+        description=(
+            "File name. For a direct image file, pass the image file name. "
+            "For an image embedded in a PDF, pass the PDF file name."
+        )
     )
     question: str = Field(
-        description="要问的问题，如：这张图片的主要内容是什么？图中有哪些文字？"
+        description="Question to ask about the image, such as its main content or visible text."
     )
     image_id: Optional[str] = Field(
         default=None,
         description=(
-            "PDF 内嵌图片的标识符（可选）。仅当查询 PDF 中的图片时需要，"
-            "来自 query_knowledge_base 搜索图片结果中的 image_id 字段，"
-            "格式为 {file_id}_img_{image_index}。"
+            "Optional identifier for an image embedded in a PDF. Required only when "
+            "querying a PDF image. It comes from the image_id field in image results "
+            "returned by query_knowledge_base and has the format {file_id}_img_{image_index}."
         ),
     )
 
@@ -210,8 +213,8 @@ class AskImageParams(BaseModel):
 class AskImageTool(CallableTool2[AskImageParams]):
     name: str = "ask_image"
     description: str = (
-        "对指定图片提问，使用视觉语言模型分析图片并回答问题。"
-        "支持两种场景：直接图片文件（传 file_name）；PDF 内嵌图片（传 file_name + image_id）。"
+        "Ask a question about a specific image using a vision-language model. "
+        "Supports direct image files with file_name, and PDF-embedded images with file_name plus image_id."
     )
     params: type[AskImageParams] = AskImageParams
 
@@ -226,16 +229,16 @@ class AskImageTool(CallableTool2[AskImageParams]):
         image_id = (params.image_id or "").strip()
 
         if not file_name:
-            return ToolError(message="file_name 不能为空")
+            return ToolError(message="file_name must not be empty")
         if not question:
-            return ToolError(message="question 不能为空")
+            return ToolError(message="question must not be empty")
 
         file_row = await asyncio.to_thread(
             _get_file_by_name, state.project_id, file_name, state.file_ids
         )
         if not file_row:
             return ToolOk(output=json.dumps(
-                {"error": f"未找到文件 '{file_name}'，请使用 list_files 查看可用文件"},
+                {"error": f"File '{file_name}' was not found. Use list_files to see available files."},
                 ensure_ascii=False,
             ))
 
@@ -255,20 +258,20 @@ class AskImageTool(CallableTool2[AskImageParams]):
 
         if ft not in IMAGE_EXTENSIONS:
             return ToolOk(output=json.dumps(
-                {"error": f"'{file_name}' 不是图片文件。如需查询 PDF 中的图片，请提供 image_id 参数。"},
+                {"error": f"'{file_name}' is not an image file. To query an image inside a PDF, provide image_id."},
                 ensure_ascii=False,
             ))
 
         if not os.path.exists(file_path):
             return ToolOk(output=json.dumps(
-                {"error": f"图片文件不存在: {file_path}"},
+                {"error": f"Image file does not exist: {file_path}"},
                 ensure_ascii=False,
             ))
 
         answer = await self._call_vlm(file_path, question)
         if answer is None:
             return ToolOk(output=json.dumps(
-                {"error": "VLM 调用失败，请检查 VLM 配置"},
+                {"error": "VLM call failed. Check the VLM configuration."},
                 ensure_ascii=False,
             ))
 
@@ -302,28 +305,28 @@ class AskImageTool(CallableTool2[AskImageParams]):
         img_sep = image_id.rfind("_img_")
         if img_sep == -1:
             return ToolOk(output=json.dumps(
-                {"error": f"image_id 格式不正确: {image_id}，应为 {{file_id}}_img_{{index}}"},
+                {"error": f"Invalid image_id format: {image_id}. Expected {{file_id}}_img_{{index}}."},
                 ensure_ascii=False,
             ))
         try:
             image_index = int(image_id[img_sep + 5:])
         except ValueError:
             return ToolOk(output=json.dumps(
-                {"error": f"无法从 image_id 解析 image_index: {image_id}"},
+                {"error": f"Could not parse image_index from image_id: {image_id}"},
                 ensure_ascii=False,
             ))
 
         img_path = await asyncio.to_thread(_get_pdf_image_path, file_path, image_index)
         if not img_path:
             return ToolOk(output=json.dumps({
-                "error": f"未找到 image_index={image_index} 对应的图片文件",
-                "hint": "图片可能在 PDF 解析时未被提取，请确认 MinerU 已正确解析该 PDF",
+                "error": f"No image file found for image_index={image_index}",
+                "hint": "The image may not have been extracted during PDF parsing. Confirm that MinerU parsed the PDF correctly.",
             }, ensure_ascii=False))
 
         answer = await self._call_vlm(img_path, question)
         if answer is None:
             return ToolOk(output=json.dumps(
-                {"error": "VLM 调用失败，请检查 VLM 配置"},
+                {"error": "VLM call failed. Check the VLM configuration."},
                 ensure_ascii=False,
             ))
 

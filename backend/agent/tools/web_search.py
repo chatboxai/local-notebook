@@ -13,20 +13,23 @@ logger = logging.getLogger("tool.web_search")
 
 
 class WebSearchParams(BaseModel):
-    query: str = Field(description="搜索关键词")
-    max_results: int = Field(default=5, description="返回结果数量，默认 5 条")
+    query: str = Field(description="Search query.")
+    max_results: int = Field(default=5, description="Number of results to return. Default is 5.")
     freshness: str = Field(
         default="noLimit",
-        description="时间范围：noLimit(不限)/oneDay(一天内)/oneWeek(一周内)/oneMonth(一月内)/oneYear(一年内)",
+        description=(
+            "Time range: noLimit, oneDay, oneWeek, oneMonth, or oneYear."
+        ),
     )
 
 
 class WebSearchTool(CallableTool2[WebSearchParams]):
     name: str = "web_search"
     description: str = (
-        "搜索互联网获取最新信息。"
-        "用于查找时事新闻、行业动态、相关人物或机构信息、公开评价、同类资料、或文档中没有的内容。"
-        "搜索结果会包含引用标记 [citation_X]，请在回答中使用。"
+        "Search the internet for current information. Use it for news, industry "
+        "updates, people or organization information, public reviews, related "
+        "materials, or content not covered by the documents. Search results include "
+        "citation markers in `[citation_X]` format; use them in the answer."
     )
     params: type[WebSearchParams] = WebSearchParams
 
@@ -44,10 +47,10 @@ class WebSearchTool(CallableTool2[WebSearchParams]):
     async def __call__(self, params: WebSearchParams) -> ToolReturnValue:
         query = params.query.strip()
         if not query:
-            return ToolError(message="搜索关键词不能为空", brief="空查询")
+            return ToolError(message="Search query must not be empty", brief="empty query")
 
         if not self.api_key:
-            return ToolError(message="联网搜索未配置，请在设置中填写博查 API Key", brief="未配置")
+            return ToolError(message="Web search is not configured. Add the Bocha API key in Settings.", brief="not configured")
 
         max_results = params.max_results
         freshness = params.freshness
@@ -77,22 +80,22 @@ class WebSearchTool(CallableTool2[WebSearchParams]):
                 except Exception:
                     pass
                 return ToolError(
-                    message=f"搜索请求失败 (状态码: {resp.status_code}) {error_detail}",
-                    brief="请求失败",
+                    message=f"Search request failed (status code: {resp.status_code}) {error_detail}",
+                    brief="request failed",
                 )
 
             data = resp.json()
             web_pages = data.get("data", {}).get("webPages", {}).get("value", [])
 
             if not web_pages:
-                return ToolOk(output="未找到相关搜索结果")
+                return ToolOk(output="No relevant search results found")
 
             state = self.state
             results = []
             for item in web_pages:
                 citation_id = f"citation_{state.citation_counter}"
 
-                title = item.get("name", "无标题")
+                title = item.get("name", "Untitled")
                 url = item.get("url", "")
                 snippet = item.get("summary") or item.get("snippet", "")
                 source = item.get("siteName", "")
@@ -118,13 +121,13 @@ class WebSearchTool(CallableTool2[WebSearchParams]):
                 }
                 state.citation_counter += 1
 
-            logger.info(f"搜索成功，获取 {len(results)} 条结果")
+            logger.info(f"Search succeeded, got {len(results)} results")
             return ToolOk(output=json.dumps(results, ensure_ascii=False))
 
         except httpx.TimeoutException:
-            return ToolError(message="搜索请求超时，请稍后重试", brief="超时")
+            return ToolError(message="Search request timed out. Try again later.", brief="timeout")
         except httpx.HTTPError as e:
-            return ToolError(message=f"网络请求失败: {e}", brief="网络错误")
+            return ToolError(message=f"Network request failed: {e}", brief="network error")
         except Exception as e:
             logger.exception("Web search error")
-            return ToolError(message=f"搜索失败: {e}", brief="搜索异常")
+            return ToolError(message=f"Search failed: {e}", brief="search error")

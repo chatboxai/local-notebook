@@ -1978,6 +1978,50 @@ function showToast(message: string, type: 'success' | 'error' | 'info' | 'warnin
   }, duration)
 }
 
+async function copyTextToClipboard(text: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return
+    }
+  } catch (error) {
+    console.warn('Clipboard API failed, falling back to execCommand:', error)
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '0'
+  textarea.style.left = '0'
+  textarea.style.width = '1px'
+  textarea.style.height = '1px'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+
+  const selection = document.getSelection()
+  const selectedRange = selection && selection.rangeCount > 0
+    ? selection.getRangeAt(0)
+    : null
+
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+
+  if (selectedRange && selection) {
+    selection.removeAllRanges()
+    selection.addRange(selectedRange)
+  }
+
+  if (!copied) {
+    throw new Error('Fallback copy command was not accepted')
+  }
+}
+
 
 const isUploading = ref(false)
 
@@ -2107,7 +2151,7 @@ async function copySelectedBlockText() {
   if (!selectedPdfBlock.value) return
 
   try {
-    await navigator.clipboard.writeText(selectedPdfBlock.value.content)
+    await copyTextToClipboard(selectedPdfBlock.value.content)
     showToast('复制成功')
   } catch (error) {
     console.error('Failed to copy text:', error)
@@ -4298,10 +4342,11 @@ async function copyMessageAsText(msg: Message) {
     .trim()
 
   try {
-    await navigator.clipboard.writeText(plainText)
+    await copyTextToClipboard(plainText)
     showCopyToast('已复制为纯文本')
   } catch (err) {
     console.error('复制失败:', err)
+    showCopyToast('复制失败')
   }
 }
 
@@ -4309,19 +4354,21 @@ async function copyMessageAsMarkdown(msg: Message) {
   const markdown = getMessageTextContent(msg)
 
   try {
-    await navigator.clipboard.writeText(markdown)
+    await copyTextToClipboard(markdown)
     showCopyToast('已复制为 Markdown')
   } catch (err) {
     console.error('复制失败:', err)
+    showCopyToast('复制失败')
   }
 }
 
 async function copyUserMessage(msg: Message) {
   try {
-    await navigator.clipboard.writeText(msg.content || '')
+    await copyTextToClipboard(msg.content || '')
     showCopyToast('已复制')
   } catch (err) {
     console.error('复制失败:', err)
+    showCopyToast('复制失败')
   }
 }
 
