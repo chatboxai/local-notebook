@@ -136,7 +136,11 @@ class ChatAgent:
             if is_final:
                 history.append(Message(
                     role="user",
-                    content="【系统提示】工具调用次数已达到上限，请立即根据已有信息回答，不要再调用任何工具。",
+                    content=(
+                        "[System notice] The tool-call limit has been reached. "
+                        "Answer immediately using the information already available, "
+                        "and do not call any more tools."
+                    ),
                 ))
 
             part_queue: asyncio.Queue[StreamedMessagePart | None] = asyncio.Queue()
@@ -354,11 +358,11 @@ class ChatAgent:
 
                 messages.append(Message(
                     role="user",
-                    content=f"[对话上下文摘要]\n{session_obj.compact_summary}",
+                    content=f"[Conversation context summary]\n{session_obj.compact_summary}",
                 ))
                 messages.append(Message(
                     role="assistant",
-                    content="好的，我已了解之前的对话内容。请继续。",
+                    content="Understood. I have the prior conversation context. Please continue.",
                 ))
 
                 if session_obj.compact_message_id:
@@ -403,7 +407,7 @@ class ChatAgent:
                 role = msg.role
 
                 if msg._error and not content.startswith("⚠️"):
-                    content = f"⚠️ 生成失败：{msg._error}"
+                    content = f"Generation failed: {msg._error}"
 
                 if role == "tool":
                     if msg.citations:
@@ -569,23 +573,34 @@ class ChatAgent:
         compact_text = self._format_messages_for_compact(messages_to_compact)
 
         compact_system_prompt = (
-            "你是一个文档问答系统的对话压缩模块。"
-            "你的任务是将较长的对话历史压缩为结构化摘要，以便系统在后续对话中"
-            "基于摘要继续回答用户问题，而不丢失关键上下文。\n\n"
-            "你不是对话的参与者，因此，请以客观、简洁的第三人称视角进行总结。"
+            "You are the conversation compaction module for a document Q&A system. "
+            "Your task is to compress a long conversation history into a structured "
+            "summary so the system can continue answering future user questions "
+            "without losing key context.\n\n"
+            "You are not a participant in the conversation. Summarize objectively, "
+            "concisely, and in the third person."
         )
 
         compact_prompt = (
-            "请将以下对话历史压缩为结构化摘要，控制在 1000 字以内。\n\n"
-            "## 输出要求\n"
-            "1. **已完成的任务与关键发现**：总结用户提问和助手的核心回答。"
-            "如果回答中引用了文档内容，保留对应的 [citation_X] 标记，格式不可修改\n"
-            "2. **进行中的任务**：用户尚未得到完整回答的问题\n"
-            "3. **用户偏好与关键上下文**：用户强调的要点、涉及的文件名/主题等\n\n"
-            "## 注意事项\n"
-            "- 只保留对后续对话有价值的信息，省略寒暄、重复和已纠正的错误\n"
-            "- 不要杜撰 citation 标记，只保留对话中实际出现的\n"
-            f"## 对话历史\n{compact_text}"
+            "Compress the conversation history below into a structured summary within "
+            "1000 words.\n\n"
+            "## Output Requirements\n"
+            "1. **Completed tasks and key findings**: summarize the user's questions "
+            "and the assistant's core answers. If answers cited document content, "
+            "preserve the exact `[citation_X]` markers without changing their format.\n"
+            "2. **Ongoing tasks**: note questions the user has not yet received a "
+            "complete answer to.\n"
+            "3. **User preferences and key context**: record points the user emphasized, "
+            "relevant file names, topics, and constraints.\n\n"
+            "## Notes\n"
+            "- Keep only information that is useful for later turns; omit pleasantries, "
+            "repetition, and corrected mistakes.\n"
+            "- Do not invent citation markers. Preserve only markers that actually "
+            "appear in the conversation.\n"
+            "- Write the summary in English to avoid biasing future assistant replies "
+            "toward any user-facing language. Future replies must still follow the "
+            "latest user's language.\n\n"
+            f"## Conversation History\n{compact_text}"
         )
 
         from kosong._generate import generate

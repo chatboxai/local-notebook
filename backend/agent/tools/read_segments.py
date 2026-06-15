@@ -16,16 +16,16 @@ class ReadSegmentsParams(BaseModel):
     citation_ids: list[str] = Field(
         default_factory=list,
         description=(
-            "要读取的 citation_id 列表，支持 [citation_X] 格式。"
-            "用于获取已引用段落的完整原文内容。"
+            "List of citation_ids to read. Supports the [citation_X] format. "
+            "Use this to retrieve the complete original text of cited segments."
         ),
     )
     offsets: Optional[list[int]] = Field(
         default=None,
         description=(
-            "相对位置列表（仅当 citation_ids 只有一个时生效）。"
-            "0=当前片段，-1=前一个，1=后一个，范围 -7 到 7。"
-            "示例：[-1, 0, 1] 读取前一个、当前、后一个共 3 个片段。"
+            "Relative segment offsets. Only applies when citation_ids contains one item. "
+            "0=current segment, -1=previous segment, 1=next segment, range -7 to 7. "
+            "Example: [-1, 0, 1] reads the previous, current, and next segments."
         ),
     )
 
@@ -40,8 +40,8 @@ class ReadSegmentsParams(BaseModel):
 class ReadSegmentsTool(CallableTool2[ReadSegmentsParams]):
     name: str = "read_segments"
     description: str = (
-        "读取文本块的完整原文内容。支持传 citation_ids（如 [citation_X]），"
-        "可配合 offsets 获取上下文相邻段落（仅单 citation 时生效）。"
+        "Read the complete original text of text segments. Pass citation_ids such "
+        "as [citation_X]. Use offsets to include adjacent context when reading a single citation."
     )
     params: type[ReadSegmentsParams] = ReadSegmentsParams
 
@@ -55,7 +55,7 @@ class ReadSegmentsTool(CallableTool2[ReadSegmentsParams]):
         offsets = params.offsets
 
         if not citation_ids:
-            return ToolError(message="citation_ids 不能为空")
+            return ToolError(message="citation_ids must not be empty")
 
         normalized_ids = [cid.strip("[] ") for cid in citation_ids]
 
@@ -65,25 +65,25 @@ class ReadSegmentsTool(CallableTool2[ReadSegmentsParams]):
         for cid in normalized_ids:
             meta = state.citations_map.get(cid)
             if not meta:
-                errors.append({"error": f"未找到 citation: [{cid}]", "citation_id": f"[{cid}]"})
+                errors.append({"error": f"Citation not found: [{cid}]", "citation_id": f"[{cid}]"})
                 continue
             if meta.get("type") != "segment":
-                errors.append({"error": f"[{cid}] 不是文本引用，无法读取原文", "citation_id": f"[{cid}]"})
+                errors.append({"error": f"[{cid}] is not a text citation, so original text cannot be read.", "citation_id": f"[{cid}]"})
                 continue
             seg_id = meta.get("segment_id")
             if not seg_id:
-                errors.append({"error": f"[{cid}] 缺少 segment_id", "citation_id": f"[{cid}]"})
+                errors.append({"error": f"[{cid}] is missing segment_id.", "citation_id": f"[{cid}]"})
                 continue
             segment_ids.append(seg_id)
 
         if not segment_ids:
-            return ToolOk(output=json.dumps(errors or [{"error": "无有效的文本引用"}], ensure_ascii=False))
+            return ToolOk(output=json.dumps(errors or [{"error": "No valid text citations"}], ensure_ascii=False))
 
         if offsets:
             if len(segment_ids) > 1:
                 return ToolOk(output=json.dumps([{
-                    "error": "offsets 参数仅在 citation_ids 只有一个时生效",
-                    "hint": "请只传一个 citation_id，或不使用 offsets 参数",
+                    "error": "The offsets parameter only applies when citation_ids contains exactly one item.",
+                    "hint": "Pass only one citation_id, or omit offsets.",
                 }], ensure_ascii=False))
             segment_ids = self._expand_offsets(segment_ids[0], offsets)
 
@@ -91,7 +91,7 @@ class ReadSegmentsTool(CallableTool2[ReadSegmentsParams]):
         hits = await asyncio.to_thread(get_by_ids, state.project_id, segment_ids)
 
         if not hits:
-            return ToolOk(output=json.dumps([{"error": "未找到段落内容，可能已被删除"}], ensure_ascii=False))
+            return ToolOk(output=json.dumps([{"error": "Segment content was not found. It may have been deleted."}], ensure_ascii=False))
 
         hits_map = {h["id"]: h for h in hits}
         results: list[dict] = []
