@@ -31,9 +31,9 @@ local-Notebook 围绕这两点重新设计：
 
 | 目录 | 职责 | 文档 |
 |---|---|---|
-| [backend/](./backend) | FastAPI 主服务：API 路由、Agent 对话、引用解析、向量检索、ARQ 后台任务 | [backend/README.md](./backend/README.md) |
-| [frontend/](./frontend) | Vue 3 + Vite 前端：项目管理、对话界面、Settings 配置、原文跳转 | [frontend/README.md](./frontend/README.md) |
-| [services/](./services) | 可选本地模型服务：Embedding / MinerU / FunASR，完全离网时启用 | [services/README.md](./services/README.md) |
+| [backend/](./backend) | FastAPI 主服务：API 路由、Agent 对话、引用解析、向量检索、ARQ 后台任务 | [backend/README.zh.md](./backend/README.zh.md) |
+| [frontend/](./frontend) | Vue 3 + Vite 前端：项目管理、对话界面、Settings 配置、原文跳转 | [frontend/README.zh.md](./frontend/README.zh.md) |
+| [services/](./services) | 可选本地模型服务：Embedding / MinerU / FunASR，完全离网时启用 | [services/README.zh.md](./services/README.zh.md) |
 
 ## 快速开始
 
@@ -58,7 +58,7 @@ cd local-notebook
 - 后端 API：[http://localhost:8081](http://localhost:8081)，例如 `curl http://localhost:8081/health`
 - 局域网内其他机器：`http://<本机 IP>:8080`
 
-首次进入后请到 **Settings** 页填入 LLM `api_key` / `base_url`。不用 Docker 的本地开发方式见 [backend/README.md](./backend/README.md) 与 [frontend/README.md](./frontend/README.md)。
+首次进入后请到 **Settings** 页填入 LLM `api_key` / `base_url`。不用 Docker 的本地开发方式见 [backend/README.zh.md](./backend/README.zh.md) 与 [frontend/README.zh.md](./frontend/README.zh.md)。
 
 ## 首次启动较慢是正常的
 

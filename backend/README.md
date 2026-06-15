@@ -1,58 +1,60 @@
 # backend
 
-FastAPI 主服务:对外提供 REST + SSE 接口,内置 ARQ 后台 worker 处理文件解析。
+[中文](./README.zh.md)
 
-## 目录
+FastAPI service that exposes REST + SSE APIs and runs an embedded ARQ background worker for file parsing.
 
-| 子目录 | 职责 |
+## Directory
+
+| Path | Responsibility |
 |---|---|
-| [routes/](./routes) | API 路由层:`auth` / `project` / `file` / `session` / `chat` / `settings` |
-| [agent/](./agent) | 对话核心:`chat_agent`(主 Agent)、`citation_parser`(Block 级引用解析)、`prompts`、`tools/`(Agent 可调用工具) |
-| [services/](./services) | 业务服务:`embedding_service` / `vector_service`(连 standalone Milvus)/ `mineru_client`(PDF)/ `segment_service`(切块)/ `summary_service` / `vlm_client` / `export_service` |
-| [models/](./models) | SQLAlchemy ORM:`project` / `file` / `segment` / `block` / `session` / `message` / `image` / `settings` |
-| [workers/](./workers) | ARQ 后台任务:文件上传后异步解析、切块、向量化 |
-| [packages/kosong/](./packages/kosong) | 内置 Agent 推理框架(LLM provider / tool calling / streaming) |
-| [dependencies/](./dependencies) | FastAPI 依赖项:`auth`(JWT)等 |
-| [schemas/](./schemas) | Pydantic 请求 / 响应 schema |
-| `main.py` | 入口:lifespan 内启动 DB、Redis、嵌入式 ARQ worker |
-| `config.py` | 配置加载:DB 优先 + env fallback |
-| `database.py` | SQLAlchemy engine / session |
+| [routes/](./routes) | API route layer: `auth` / `project` / `file` / `session` / `chat` / `settings` |
+| [agent/](./agent) | Chat core: `chat_agent` as the main agent, `citation_parser` for block-level citations, prompts, and callable agent tools |
+| [services/](./services) | Domain services: `embedding_service` / `vector_service` for standalone Milvus / `mineru_client` for PDFs / `segment_service` / `summary_service` / `vlm_client` / `export_service` |
+| [models/](./models) | SQLAlchemy ORM models: `project` / `file` / `segment` / `block` / `session` / `message` / `image` / `settings` |
+| [workers/](./workers) | ARQ background tasks for async file parsing, chunking, and vectorization after upload |
+| [packages/kosong/](./packages/kosong) | Built-in agent reasoning framework for LLM providers, tool calling, and streaming |
+| [dependencies/](./dependencies) | FastAPI dependencies such as `auth` for JWT |
+| [schemas/](./schemas) | Pydantic request and response schemas |
+| `main.py` | Entry point: the lifespan hook initializes the DB, Redis, and embedded ARQ worker |
+| `config.py` | Configuration loading: database first, then environment fallback |
+| `database.py` | SQLAlchemy engine and session setup |
 
-## 配置策略
+## Configuration Strategy
 
-- 所有运行时配置(LLM key、base_url、Embedding mode 等)存 SQLite `settings` 表
-- 启动时 `config.load_settings(db)` 读入内存缓存,前端 Settings 页修改后实时刷新
-- `.env` 仅作为首次启动默认值,优先级:**DB > env > hardcoded default**
+- Runtime settings such as LLM keys, base URLs, and Embedding mode are stored in the SQLite `settings` table.
+- `config.load_settings(db)` loads settings into memory at startup, and frontend Settings changes refresh them immediately.
+- `.env` is only used as the initial default source. Priority: **DB > env > hardcoded default**.
 
-## 关键环境变量
+## Key Environment Variables
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Description |
 |---|---|---|
-| `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data`(由 docker-compose 注入) | Docker 模式下数据目录 |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN,可换 PostgreSQL |
-| `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC 地址 |
-| `UPLOAD_DIR` | `./uploads` | 上传文件目录 |
-| `REDIS_URL` | `redis://localhost:6379` | ARQ worker 必需 |
-| `SECRET_KEY` | `change-me-in-production` ⚠ | JWT 签名密钥,**生产必改** |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080`(7 天) | JWT 有效期 |
-| `WORKER_MAX_JOBS` | `4` | ARQ 并发 |
-| `PORT` | `8000` | uvicorn 监听端口 |
+| `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data` injected by docker-compose | Data directory in Docker mode |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN, replaceable with PostgreSQL |
+| `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC endpoint |
+| `UPLOAD_DIR` | `./uploads` | Uploaded file directory |
+| `REDIS_URL` | `redis://localhost:6379` | Required by the ARQ worker |
+| `SECRET_KEY` | `change-me-in-production` | JWT signing secret, must be changed in production |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 days) | JWT lifetime |
+| `WORKER_MAX_JOBS` | `4` | ARQ concurrency |
+| `PORT` | `8000` | uvicorn listen port |
 
-## 本地开发(不用 Docker 跑 backend)
+## Local Development Without Docker Backend
 
-需要 **Python 3.12+**,以及两个外部服务:**Redis** 和 **Standalone Milvus**(后者依赖 etcd + minio,共 3 个容器)。
+Requires **Python 3.12+** plus two external services: **Redis** and **Standalone Milvus**. Standalone Milvus depends on etcd and minio, so it uses three containers in total.
 
-最方便的做法是**让 docker-compose 帮你起依赖**(只起 redis/milvus 三件套,不起 backend),然后你在本机裸跑 Python:
+The simplest setup is to let docker-compose start only the dependencies, then run the Python backend directly on the host:
 
 ```bash
-# 1. 启动 redis + milvus 三件套(在项目根)
+# 1. Start Redis and the Milvus stack from the project root
 docker compose up -d redis etcd minio milvus
 
-# 2. 装 backend 依赖
+# 2. Install backend dependencies
 cd backend
 pip install -r requirements.txt
 
-# 3. 设置 env
+# 3. Configure environment variables
 export REDIS_URL=redis://localhost:6379
 export MILVUS_URI=http://localhost:19530
 export DATABASE_URL=sqlite+aiosqlite:///./local-notebook-data/local_notebook.db
@@ -60,24 +62,26 @@ export UPLOAD_DIR=./local-notebook-data/uploads
 export SECRET_KEY=$(openssl rand -hex 32)
 mkdir -p ./local-notebook-data/uploads
 
-# 4. 跑 backend
-python main.py     # 默认 http://localhost:8000
+# 4. Run the backend
+python main.py     # default: http://localhost:8000
 ```
 
-> 注:redis 容器我们对外暴露了 `6379`,milvus 容器暴露了 `19530`。所以 docker compose 起的 infra 可以同时被"docker 内的 backend"和"宿主机的 backend"使用。
+The Redis container exposes `6379`, and the Milvus container exposes `19530`, so the same docker-compose infra can be used by either the Docker backend or the host Python backend.
 
-如果你完全不想用 docker,需要手动装/起 3 个服务:
-- **Redis**:`brew install redis && redis-server`(macOS) 或自行安装
-- **Milvus standalone + etcd + minio**:三个独立进程,配置较复杂,**不推荐**,直接 `docker compose up -d redis etcd minio milvus` 简单得多
+If you do not want to use Docker at all, you must install and run all services manually:
 
-健康检查:
+- **Redis**: `brew install redis && redis-server` on macOS, or install it for your OS.
+- **Standalone Milvus + etcd + minio**: these are more complex to run as separate processes. Using `docker compose up -d redis etcd minio milvus` is recommended.
+
+Health checks:
+
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/health/redis
 ```
 
-## 数据流
+## Data Flow
 
-1. **文件上传** → `routes/file_routes.py` 写入 `UPLOAD_DIR` → 投递到 ARQ
-2. **后台解析** → `workers/parsers/` 调用 MinerU(PDF)/ FunASR(音频)→ 切块 (`segment_service`) → 向量化 (`embedding_service`) → 入库 (`vector_service`)
-3. **对话** → `routes/chat_routes.py` (SSE) → `agent/chat_agent.py` 推理 → `agent/citation_parser.py` 解析引用 → 流式返回到前端
+1. **File upload** -> `routes/file_routes.py` writes to `UPLOAD_DIR` -> job is queued in ARQ.
+2. **Background parsing** -> `workers/parsers/` calls MinerU for PDFs or FunASR for audio -> chunks with `segment_service` -> vectorizes with `embedding_service` -> writes vectors with `vector_service`.
+3. **Chat** -> `routes/chat_routes.py` streams SSE -> `agent/chat_agent.py` reasons -> `agent/citation_parser.py` parses citations -> the frontend receives streamed output.
