@@ -241,6 +241,22 @@ async def test_llm(
     )
 
 
+@router.post("/test/easy-task-llm")
+async def test_easy_task_llm(
+    body: ChatModelTestRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> dict:
+    api_key, base_url, model = await _resolve_test_config(body, kind="llm")
+    _require_chat_params(api_key, base_url, model)
+
+    return await _test_chat_completions(
+        api_key, base_url, model,
+        [{"role": "user", "content": "hi"}],
+        "easy_task_llm_verified", db,
+    )
+
+
 @router.post("/test/vlm")
 async def test_vlm(
     body: ChatModelTestRequest,

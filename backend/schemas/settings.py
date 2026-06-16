@@ -9,6 +9,8 @@ SETTING_KEYS = {
     "llm_api_key",
     "llm_base_url",
     "llm_model",
+    "easy_task_llm",
+    "easy_task_llm_verified",
     "vlm_source",
     "vlm_bailian_model",
     "vlm_api_key",
