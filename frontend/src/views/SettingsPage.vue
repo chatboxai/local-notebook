@@ -868,7 +868,7 @@ async function testLlm() {
         model: draft.llm_bailian_model || undefined,
       }
     }
-    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/easy-task-llm`, {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/llm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(body),
@@ -902,7 +902,7 @@ async function testEasyTask() {
         model: draft.easy_task_llm || undefined,
       }
     }
-    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/llm`, {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/easy-task-llm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(body),
