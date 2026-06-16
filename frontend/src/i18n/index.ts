@@ -198,7 +198,7 @@ const zhToEn: Record<string, string> = {
   '正在上传...': 'Uploading...',
   '文件数量已达上限': 'File limit reached',
   '点击上传或将文件拖至此处': 'Click to upload or drag files here',
-  '支持 pdf、docx、doc、jpg、jpeg、png': 'Supports pdf, docx, doc, jpg, jpeg, png',
+  '支持 pdf、docx、doc、epub、jpg、jpeg、png': 'Supports pdf, docx, doc, epub, jpg, jpeg, png',
   'wav、mp3、m4a、wma（即将支持）': 'wav, mp3, m4a, wma (coming soon)',
   '粘贴文字': 'Paste text',
   '粘贴复制的文字': 'Paste copied text',

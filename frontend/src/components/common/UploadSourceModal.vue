@@ -40,12 +40,12 @@
                 </svg>
               </div>
               <p class="dropzone-text">{{ props.isUploading ? '正在上传...' : (isAtLimit ? '文件数量已达上限' : '点击上传或将文件拖至此处') }}</p>
-              <p class="dropzone-hint">支持 pdf、docx、doc、jpg、jpeg、png</p>
+              <p class="dropzone-hint">支持 pdf、docx、doc、epub、jpg、jpeg、png</p>
               <p class="dropzone-hint unsupported">wav、mp3、m4a、wma（即将支持）</p>
               <input
                 ref="fileInputRef"
                 type="file"
-                accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                accept=".pdf,.docx,.doc,.epub,.jpg,.jpeg,.png"
                 multiple
                 style="display: none"
                 @change="handleFileSelect"
@@ -186,7 +186,7 @@ function handleDrop(event: DragEvent) {
 
     const validFiles = Array.from(files).filter(file => {
       const ext = file.name.toLowerCase().split('.').pop()
-      return ['docx', 'doc', 'pdf', 'jpg', 'jpeg', 'png'].includes(ext || '')
+      return ['docx', 'doc', 'pdf', 'epub', 'jpg', 'jpeg', 'png'].includes(ext || '')
     })
 
     const filesToUpload = validFiles.slice(0, remainingCount.value)

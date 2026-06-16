@@ -30,6 +30,8 @@ aiofiles==24.1.0
 pypdf==6.9.2
 python-docx==1.2.0
 pypandoc-binary==1.14     # 带预编译 pandoc 二进制,避免容器里再装 apt 包
+EbookLib==0.18          # EPUB 读取(解析 OPF/spine 阅读顺序)
+beautifulsoup4==4.13.3  # EPUB 章节 XHTML 清洗与正文抽取
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 python-jose==3.5.0

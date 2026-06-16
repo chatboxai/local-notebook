@@ -15,14 +15,14 @@ from models.project import Project
 from schemas.file import FileResponse
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".wav", ".mp3", ".m4a"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".epub", ".jpg", ".jpeg", ".png", ".wav", ".mp3", ".m4a"}
 
 router = APIRouter(prefix="/projects/{project_id}/files", tags=["files"])
 
 
 def _file_type(filename: str) -> str:
     ext = Path(filename).suffix.lower().lstrip(".")
-    if ext in {"pdf", "docx", "doc", "txt", "jpg", "jpeg", "png", "wav", "mp3", "m4a"}:
+    if ext in {"pdf", "docx", "doc", "txt", "epub", "jpg", "jpeg", "png", "wav", "mp3", "m4a"}:
         return ext
     return "unknown"
 
