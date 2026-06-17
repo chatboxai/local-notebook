@@ -113,6 +113,27 @@ async def resolve_llm_config() -> tuple[str | None, str | None, str | None]:
     return api_key or None, BAILIAN_BASE_URL, model or None
 
 
+async def is_easy_task_llm_configured() -> bool:
+    """用户是否单独配置了「简单任务模型」(节省计划开关是否实际生效)。
+
+    为空表示简单任务与主 LLM 共用同一个模型。
+    """
+    easy_model = await get_setting("easy_task_llm", "")
+    return bool(easy_model and easy_model.strip())
+
+
+async def resolve_easy_task_llm_config() -> tuple[str | None, str | None, str | None]:
+    """「节省计划」:简单任务(解析时的摘要生成)用的 LLM 配置。
+
+    复用主 LLM 的 provider(key + base_url),仅在配置了 easy_task_llm 时替换模型名;
+    未配置则与主 LLM 完全一致,即简单任务和复杂任务共用一个模型。
+    """
+    api_key, base_url, model = await resolve_llm_config()
+    if await is_easy_task_llm_configured():
+        model = (await get_setting("easy_task_llm", "")).strip()
+    return api_key, base_url, model
+
+
 async def resolve_vlm_config() -> tuple[str | None, str | None, str | None]:
     source = await get_setting("vlm_source", "")
 

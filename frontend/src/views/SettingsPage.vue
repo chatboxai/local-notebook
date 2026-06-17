@@ -257,6 +257,45 @@
               </button>
             </div>
 
+
+            <div class="form-group easy-task-group">
+              <label class="switch-row">
+                <span class="switch-text">
+                  配置 easy task model
+                  <span class="switch-sub">节省计划 · 解析任务的摘要生成使用更便宜的模型，复用上方主模型的 Key 和地址，仅替换模型名</span>
+                </span>
+                <span class="switch" :class="{ on: easyTaskEnabled }">
+                  <input
+                    type="checkbox"
+                    :checked="easyTaskEnabled"
+                    @change="toggleEasyTask(($event.target as HTMLInputElement).checked)"
+                  />
+                  <span class="switch-knob"></span>
+                </span>
+              </label>
+              <template v-if="easyTaskEnabled">
+                <input
+                  v-model="draft.easy_task_llm"
+                  placeholder="例如：deepseek-v4-flash"
+                  class="input easy-task-input"
+                />
+                <p class="field-hint">
+                  需与上方主模型为同一 provider（复用其 Key 和地址）。例如主模型配置为 deepseek-v4-pro 时，这里可填更便宜的 deepseek-v4-flash；具体模型名以该 provider 实际支持的为准。
+                </p>
+              </template>
+              <div v-if="easyTaskEnabled" class="form-actions easy-task-actions">
+                <button class="btn-test" @click="testEasyTask" :disabled="testing.easytask || !draft.easy_task_llm">
+                  {{ testing.easytask ? '测试中...' : '测试连接' }}
+                </button>
+                <span v-if="testResult.easytask" class="test-result" :class="testResult.easytask.ok ? 'ok' : 'fail'">
+                  {{ testResult.easytask.msg }}
+                </span>
+                <button class="btn-save" @click="save('easytask')" :disabled="saving">
+                  {{ saving ? '保存中...' : '保存' }}
+                </button>
+              </div>
+            </div>
+
             <hr class="section-divider" />
 
 
@@ -653,6 +692,19 @@ const showVlmKey = ref(false)
 const showMineruKey = ref(false)
 const showBochaKey = ref(false)
 
+// 「节省计划」开关:开关状态由 easy_task_llm 是否非空驱动。
+// 关闭 = 不设置 easy model(简单任务与主 LLM 共用模型),清空并立即持久化;
+// 没有 easy_task_llm 时,后端 resolve 会回退到主 LLM。
+const easyTaskEnabled = ref(false)
+async function toggleEasyTask(on: boolean) {
+  easyTaskEnabled.value = on
+  if (on) return
+  testResult.easytask = null
+  const hadValue = !!(draft.easy_task_llm || saved.easy_task_llm)
+  draft.easy_task_llm = ''
+  if (hadValue) await save('easytask')  // 立即持久化「不设置」
+}
+
 const DEFAULT_SETTINGS: SettingsMap = {
 
   bailian_api_key: '',
@@ -662,6 +714,7 @@ const DEFAULT_SETTINGS: SettingsMap = {
   llm_api_key: '',
   llm_base_url: '',
   llm_model: '',
+  easy_task_llm: '',
 
   vlm_source: '',
   vlm_bailian_model: '',
@@ -702,14 +755,15 @@ const overviewMineruReady = computed(() => {
   return !!saved.mineru_api_key
 })
 
-const testing = reactive({ llm: false, vlm: false, embedding: false, mineru: false, websearch: false })
+const testing = reactive({ llm: false, easytask: false, vlm: false, embedding: false, mineru: false, websearch: false })
 const testResult = reactive<{
   llm: { ok: boolean; msg: string } | null
+  easytask: { ok: boolean; msg: string } | null
   vlm: { ok: boolean; msg: string } | null
   embedding: { ok: boolean; msg: string } | null
   mineru: { ok: boolean; msg: string } | null
   websearch: { ok: boolean; msg: string } | null
-}>({ llm: null, vlm: null, embedding: null, mineru: null, websearch: null })
+}>({ llm: null, easytask: null, vlm: null, embedding: null, mineru: null, websearch: null })
 
 const toast = reactive({ show: false, msg: '', type: 'success' as 'success' | 'error' })
 
@@ -724,6 +778,7 @@ onMounted(async () => {
     savedEmbeddingSource.value = remote.embedding_source || ''
     Object.assign(saved, DEFAULT_SETTINGS, remote)
     Object.assign(draft, DEFAULT_SETTINGS, remote)
+    easyTaskEnabled.value = !!(remote.easy_task_llm && remote.easy_task_llm.trim())
   } finally {
     loading.value = false
   }
@@ -733,6 +788,7 @@ onMounted(async () => {
 const SECTION_KEYS: Record<string, (keyof SettingsMap)[]> = {
   bailian: ['bailian_api_key'],
   llm: ['llm_source', 'llm_bailian_model', 'llm_api_key', 'llm_base_url', 'llm_model'],
+  easytask: ['easy_task_llm'],
   vlm: ['vlm_source', 'vlm_bailian_model', 'vlm_api_key', 'vlm_base_url', 'vlm_model'],
   embedding: ['embedding_source', 'embedding_bailian_model', 'embedding_model', 'embedding_api_key', 'embedding_base_url'],
   mineru: ['mineru_source', 'mineru_base_url', 'mineru_api_key'],
@@ -823,6 +879,40 @@ async function testLlm() {
     testResult.llm = { ok: false, msg: '无法连接' }
   } finally {
     testing.llm = false
+  }
+}
+
+async function testEasyTask() {
+  // 节省计划复用主 LLM 的 provider(key/url),只把模型名换成 easy_task_llm 来测试。
+  testing.easytask = true
+  testResult.easytask = null
+  try {
+    let body: Record<string, string | undefined>
+    if (draft.llm_source === 'custom') {
+      body = {
+        source: 'custom',
+        api_key: draft.llm_api_key,
+        base_url: draft.llm_base_url,
+        model: draft.easy_task_llm,
+      }
+    } else {
+      body = {
+        source: 'bailian',
+        api_key: draft.bailian_api_key || undefined,
+        model: draft.easy_task_llm || undefined,
+      }
+    }
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/easy-task-llm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    testResult.easytask = { ok: !!data.ok, msg: data.msg || (data.ok ? '连接成功' : '连接失败') }
+  } catch {
+    testResult.easytask = { ok: false, msg: '无法连接' }
+  } finally {
+    testing.easytask = false
   }
 }
 
@@ -1239,6 +1329,67 @@ label {
 }
 
 
+.easy-task-group {
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: #fafaf8;
+  border: 1px solid #e8e8e4;
+  border-radius: 8px;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+.switch-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #999;
+  line-height: 1.5;
+}
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d0d0cc;
+  transition: background 0.15s;
+}
+.switch.on { background: #1a1a1a; }
+.switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.switch.on .switch-knob { transform: translateX(18px); }
+.easy-task-input { margin-top: 12px; }
+.easy-task-actions { margin-top: 16px; padding-top: 16px; }
+
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -1249,6 +1400,7 @@ label {
 }
 
 .btn-save {
+  margin-left: auto;  /* 始终固定在 .form-actions 最右侧 */
   padding: 8px 20px;
   background: #1a1a1a;
   color: #fff;

@@ -90,7 +90,9 @@ async def _llm_complete(
 
 
 async def _resolve_llm() -> tuple[str, str, str] | None:
-    api_key, base_url, model = await config.resolve_llm_config()
+    # 解析任务的摘要生成属于「简单任务」,走节省计划:若配置了 easy_task_llm 则用更便宜的
+    # 模型(复用主 LLM 的 key/url),否则与主 LLM 一致。
+    api_key, base_url, model = await config.resolve_easy_task_llm_config()
     if not api_key or not base_url or not model:
         return None
     return api_key, base_url, model

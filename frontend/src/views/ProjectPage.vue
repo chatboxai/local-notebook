@@ -2771,7 +2771,7 @@ const FILE_SIZE_LIMITS = {
 function getFileSizeLimit(file: File): number | null {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
 
-  if (['txt', 'docx', 'pdf'].includes(ext)) {
+  if (['txt', 'docx', 'pdf', 'epub'].includes(ext)) {
     return FILE_SIZE_LIMITS.document
   }
   if (['jpg', 'jpeg', 'png'].includes(ext)) {

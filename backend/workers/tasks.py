@@ -158,10 +158,12 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
             llm_cfg = None
             try:
                 from services.summary_service import _resolve_llm, generate_segment_summaries
+                import config as _config
                 llm_cfg = await _resolve_llm()
                 if llm_cfg:
                     ak, bu, md = llm_cfg
-                    logger.info(f"[{file_name}] step 2.5: generating summaries for {len(segments)} segments (model={md})")
+                    economy = await _config.is_easy_task_llm_configured()
+                    logger.info(f"[{file_name}] step 2.5: generating summaries for {len(segments)} segments (model={md}, economy={economy})")
                     seg_inputs = [{"segment_index": s.segment_index, "content": s.content} for s in segments]
                     segment_summaries = await generate_segment_summaries(seg_inputs, ak, bu, md)
                     logger.info(f"[{file_name}] summaries generated: {len(segment_summaries)}/{len(segments)}")
@@ -416,7 +418,7 @@ async def _extract_text_and_blocks(
 ) -> tuple[str, list, list]:
     from workers.parsers import get_parser_for_file
 
-    if file_type in ("txt", "pdf", "docx"):
+    if file_type in ("txt", "pdf", "docx", "epub"):
         parser = get_parser_for_file(file_path)
         if file_type == "pdf":
             result = await parser.parse(file_path, file_id=file_id, db=db)

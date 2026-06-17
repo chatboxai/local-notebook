@@ -1,6 +1,7 @@
 from .pdf_parser import PDFParser
 from .txt_parser import TxtParser
 from .docx_parser import DocxParser
+from .epub_parser import EpubParser
 from .image_parser import ImageParser
 
 
@@ -9,6 +10,7 @@ PARSERS = {
     ".txt": TxtParser,
     ".docx": DocxParser,
     ".doc": DocxParser,
+    ".epub": EpubParser,
     ".jpg": ImageParser,
     ".jpeg": ImageParser,
     ".png": ImageParser,
@@ -31,6 +33,7 @@ __all__ = [
     "PDFParser",
     "TxtParser",
     "DocxParser",
+    "EpubParser",
     "get_parser_for_file",
     "PARSERS",
 ]
