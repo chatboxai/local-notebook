@@ -390,10 +390,10 @@ async def _describe_images(file_name: str, raw_images: list) -> list:
     logger.info(f"[{file_name}] step 1.5/5: VLM 描述 {len(raw_images)} 张图片（model={model}，并发=2）")
 
     PROMPT = (
-        "请简洁描述这张图片的内容，重点关注：\n"
-        "1. 图片主题和主要内容\n"
-        "2. 关键视觉元素（图表数据、文字、物体等）\n"
-        "用中文回答，100-200字。"
+        "Briefly describe this image in English. Focus on:\n"
+        "1. The image's main subject and content.\n"
+        "2. Key visual elements such as chart data, visible text, objects, or scenes.\n"
+        "Use 50-100 English words."
     )
 
     semaphore = asyncio.Semaphore(5)

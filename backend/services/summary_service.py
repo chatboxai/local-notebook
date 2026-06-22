@@ -9,56 +9,57 @@ import config
 
 logger = logging.getLogger("service.summary")
 
-SEGMENT_SUMMARY_PROMPT = """请为以下文本生成一个摘要（不超过200字），用于文档检索和归纳总结。
+SEGMENT_SUMMARY_PROMPT = """Generate a concise English summary for the following text. The summary will be used for document retrieval and synthesis.
 
-要求：
-1. 保留关键实体（人名、地名、专业术语、数字等）
-2. 突出核心观点或主题
-3. 使用陈述句，直接描述内容，避免使用"本文讲述了"等缺乏信息密度的通用表述
-4. 直接输出结果，不要有任何多余的解释
+Requirements:
+1. Preserve key entities such as names, places, technical terms, and numbers.
+2. Highlight the core claim, topic, or finding.
+3. Use direct declarative sentences; avoid low-information phrases such as "this text discusses".
+4. Write in English. Keep exact source terms, titles, names, and quoted wording unchanged when translation would lose precision.
+5. Output only the summary, with no extra explanation.
 
-文本内容：
+Text:
 {content}
 
-摘要："""
+Summary:"""
 
-FILE_SUMMARY_PROMPT = """基于以下文件信息，生成文件的整体总结和关键词。
+FILE_SUMMARY_PROMPT = """Using the following file information, generate an overall English summary and keywords.
 
-文件名：{filename}
+File name: {filename}
 
-段落摘要：
+Segment summaries:
 {segment_summaries}
 
-=== 总结要求 ===
-1. 不超过200字，综合各段落核心信息，提炼文件主旨
-2. 使用简洁的陈述句，信息密度高
-3. 加粗标记规则（用 **粗体** 标记）：
-   - 加粗文档的**核心论点**或**主要结论**
-   - 加粗**关键概念定义**（如专业术语首次出现时）
-   - 不要加粗人名、地名等具体例子，除非它们本身就是文档主题
+=== Summary Requirements ===
+1. Write no more than 120 English words. Combine the key information from the segment summaries and extract the file's main purpose.
+2. Use concise, information-dense declarative sentences.
+3. Bold marking rules (use **bold**):
+   - Bold the document's **core claim** or **main conclusion**.
+   - Bold **key concept definitions**, especially when a technical term first appears.
+   - Do not bold names, places, or concrete examples unless they are the document's main topic.
 
-=== 关键词要求 ===
-1. 提取5个关键词，每个2-6个字
-2. 关键词应体现文档的核心主题，而非具体案例
-3. 优先选择：学科领域、研究方法、核心概念、主要观点
+=== Keyword Requirements ===
+1. Extract 5 keywords, each 1-4 English words.
+2. Keywords should reflect the document's core themes rather than isolated examples.
+3. Prefer disciplines, methods, core concepts, and main viewpoints.
 
-严格按 JSON 格式输出：
-{{"summary": "文件总结内容...", "keywords": ["关键词1", "关键词2", "关键词3", "关键词4", "关键词5"]}}"""
+Return strict JSON only:
+{{"summary": "Overall file summary...", "keywords": ["keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5"]}}"""
 
-PROJECT_SUMMARY_PROMPT = """基于以下项目信息和文件总结，生成项目的整体总结（不超过200字）。
+PROJECT_SUMMARY_PROMPT = """Using the following project information and file summaries, generate an overall English project summary in no more than 120 words.
 
-项目名称：{project_name}
+Project name: {project_name}
 
-文件总结：
+File summaries:
 {file_summaries}
 
-要求：
-1. 综合所有文件的主题和内容
-2. 体现文件之间的关联
-3. 突出项目的核心价值
-4. 直接输出结果，不要有任何多余的解释
+Requirements:
+1. Combine the topics and content across all files.
+2. Explain the relationships among the files.
+3. Highlight the project's core value.
+4. Write in English and output only the summary, with no extra explanation.
 
-项目总结："""
+Project summary:"""
 
 
 async def _llm_complete(

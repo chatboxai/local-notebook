@@ -406,7 +406,7 @@ class ChatAgent:
                 content = msg.content or ""
                 role = msg.role
 
-                if msg._error and not content.startswith("⚠️"):
+                if msg._error:
                     content = f"Generation failed: {msg._error}"
 
                 if role == "tool":
