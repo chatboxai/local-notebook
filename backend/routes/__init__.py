@@ -5,6 +5,7 @@ from routes.file_routes import file_router as direct_file_router
 from routes.session_routes import router as session_router
 from routes.chat_routes import router as chat_router
 from routes.settings_routes import router as settings_router
+from routes.workflow_routes import router as workflow_router
 
 __all__ = [
     "auth_router",
@@ -14,4 +15,5 @@ __all__ = [
     "session_router",
     "chat_router",
     "settings_router",
+    "workflow_router",
 ]

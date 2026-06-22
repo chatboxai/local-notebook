@@ -1018,13 +1018,6 @@ export async function findBlockByPosition(
 }
 
 
-export interface WorkflowType {
-  type: string
-  display_name: string
-  description?: string
-}
-
-
 export interface WorkflowProgress {
   total: number
   completed: number
@@ -1092,12 +1085,6 @@ export interface WorkflowListItem {
 }
 
 
-export async function getWorkflowTypes(): Promise<{ types: WorkflowType[] }> {
-  const response = await api.get('/api/workflows/types')
-  return response.data
-}
-
-
 export async function renameWorkflow(workflowId: string, title: string): Promise<WorkflowListItem> {
   const response = await api.put(`/api/workflows/${workflowId}/title`, { title })
   return response.data
@@ -1112,7 +1099,6 @@ export async function finalizeWorkflow(workflowId: string): Promise<{ success: b
 
 export async function createWorkflow(
   projectId: string,
-  workflowType: string,
   title: string,
   customConfig?: {
     prompt?: string
@@ -1121,7 +1107,6 @@ export async function createWorkflow(
 ): Promise<CreateWorkflowResponse> {
   const response = await api.post('/api/workflows/generate', {
     project_id: projectId,
-    workflow_type: workflowType,
     title,
     custom_config: customConfig
   }, { timeout: 60000 })
@@ -1151,8 +1136,9 @@ export async function getWorkflowDetail(workflowId: string): Promise<WorkflowDet
 }
 
 
-export async function getProjectWorkflows(_projectId: string): Promise<{ workflows: WorkflowListItem[] }> {
-  return { workflows: [] }
+export async function getProjectWorkflows(projectId: string): Promise<{ workflows: WorkflowListItem[] }> {
+  const response = await api.get(`/api/workflows/project/${projectId}`)
+  return response.data
 }
 
 

@@ -15,23 +15,25 @@
         />
         <span
           v-else
-          class="panel-title editable"
+          class="panel-title"
+          :class="{ editable: canEditTitle, pending: !canEditTitle }"
           @click="startEditTitle"
-          title="点击重命名"
-        >{{ workflow.title || workflow.display_name }}</span>
+          :title="canEditTitle ? uiText('点击重命名') : uiText('标题生成后可重命名')"
+        >{{ workflowTitleText }}</span>
       </div>
       <span class="workflow-status-badge" :class="getWorkflowStatusClass(workflow.status)">
         {{ getWorkflowStatusText(workflow.status) }}
       </span>
 
 
+      <!-- MVP: 导出(/export)尚未实现，暂时隐藏 -->
       <button
-        v-if="workflow.status === 'completed' || workflow.status === 'partial'"
+        v-if="false && (workflow.status === 'completed' || workflow.status === 'partial')"
         class="panel-export-btn"
         :class="{ loading: isExporting }"
         :disabled="isExporting"
         @click="handleExportWord"
-        title="导出为 Word 文档"
+        :title="uiText('导出为 Word 文档')"
       >
         <svg v-if="!isExporting" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -40,7 +42,7 @@
           <path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/>
         </svg>
       </button>
-      <button class="panel-toggle-btn" @click="$emit('close')" title="关闭">
+      <button class="panel-toggle-btn" @click="$emit('close')" :title="uiText('关闭')">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
         </svg>
@@ -48,12 +50,12 @@
     </div>
     <div ref="contentRef" class="workflow-report-content" @click="handleContentClick">
 
-      <div class="floating-toc" :class="{ expanded: tocExpanded }">
-        <button class="toc-toggle" @click="tocExpanded = !tocExpanded" title="目录导航">
+      <div class="floating-toc" :class="{ expanded: tocExpanded, 'locale-en': locale === 'en' }">
+        <button class="toc-toggle" @click="tocExpanded = !tocExpanded" :title="uiText('目录导航')">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
           </svg>
-          <span class="toc-title">目录</span>
+          <span class="toc-title">{{ uiText('目录') }}</span>
         </button>
         <div v-if="tocExpanded" class="toc-list">
           <div
@@ -93,16 +95,18 @@
             </div>
             <div class="feature-title-row">
               <span class="feature-section-title">{{ feature.step_name }}</span>
+              <!-- MVP: 单栏目重新生成(/steps/regenerate)尚未实现，暂时隐藏 -->
               <button
+                v-if="false"
                 class="step-regenerate-btn"
                 :disabled="!canRegenerate(feature.status)"
                 @click="handleRegenerateStep(feature.step_index)"
-                title="重新生成"
+                :title="uiText('重新生成')"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                   <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                 </svg>
-                <span>重新生成</span>
+                <span>{{ uiText('重新生成') }}</span>
               </button>
             </div>
           </div>
@@ -129,6 +133,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
+                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></component>
 
@@ -158,6 +163,7 @@
                               class="inline-citation"
                               :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature) }"
                               :title="undefined"
+                              :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                               @click="handleCitationClick({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
@@ -184,6 +190,7 @@
                               class="inline-citation"
                               :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature) }"
                               :title="undefined"
+                              :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                               @click="handleCitationClick({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
@@ -208,6 +215,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
+                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template>
                 </p>
@@ -225,6 +233,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
+                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></blockquote>
 
@@ -232,7 +241,7 @@
                 <figure v-else-if="processed.block.block_type === 'image'" class="feature-image">
                   <div class="image-wrapper">
                     <img v-if="processed.block.asset" :src="getAssetUrl(processed.block.asset.url)" :alt="processed.block.caption || ''" />
-                    <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" title="下载图片">
+                    <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" :title="uiText('下载图片')">
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                       </svg>
@@ -246,7 +255,7 @@
                   <figure v-for="(asset, ai) in processed.block.assets" :key="ai" class="feature-image">
                     <div class="image-wrapper">
                       <img :src="getAssetUrl(asset.url)" :alt="processed.block.caption || ''" />
-                      <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" title="下载图片">
+                      <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" :title="uiText('下载图片')">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                         </svg>
@@ -277,6 +286,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
+                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></li>
               </ul>
@@ -284,7 +294,7 @@
           </div>
           <div v-else class="report-body empty-blocks">
             <div v-if="feature.status === 'pending' || feature.status === 'processing'" class="empty-placeholder">
-              <span class="loading-text">正在重新生成，请稍候</span>
+              <span class="loading-text">{{ uiText('正在生成，请稍候') }}</span>
               <span class="loading-dots" aria-hidden="true">
                 <span class="dot dot-1">.</span>
                 <span class="dot dot-2">.</span>
@@ -292,10 +302,10 @@
               </span>
             </div>
             <div v-else-if="feature.status === 'failed'" class="workflow-feature-error">
-              {{ feature.error_message || '生成失败，请点击“重新生成”按钮重试' }}
+              {{ feature.error_message || uiText('生成失败，请点击“重新生成”按钮重试') }}
             </div>
             <div v-else class="empty-placeholder">
-              暂无内容
+              {{ uiText('暂无内容') }}
             </div>
           </div>
         </div>
@@ -303,7 +313,7 @@
 
 
       <div v-if="features.length === 0 && workflow.steps.filter(s => s.status === 'failed').length === 0" class="workflow-empty">
-        <p>暂无生成结果</p>
+        <p>{{ uiText('暂无生成结果') }}</p>
       </div>
     </div>
 
@@ -324,11 +334,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import type { WorkflowDetail, WorkflowStatus, WorkflowContentFeature } from '../../services/api'
 import type { FeatureBlock, CitationMetadata } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
 import { getAssetUrl, exportWorkflowToWord } from '../../services/api'
+import { locale, translateText } from '../../i18n'
 
 import WebCitationTooltip from '../common/WebCitationTooltip.vue'
 
@@ -354,13 +365,27 @@ const emit = defineEmits<{
   (e: 'update-title', id: string, title: string): void
 }>()
 
+function uiText(text: string): string {
+  return translateText(text)
+}
+
 
 const isEditingTitle = ref(false)
 const titleInputRef = ref<HTMLInputElement | null>(null)
 const editingTitleValue = ref('')
+const workflowTitleText = computed(() => {
+  const title = (props.workflow.title || '').trim()
+  if (title && title !== 'custom') return title
+  return uiText('正在生成标题')
+})
+const canEditTitle = computed(() => {
+  const title = (props.workflow.title || '').trim()
+  return Boolean(title && title !== 'custom')
+})
 
 function startEditTitle() {
-  editingTitleValue.value = props.workflow.title || props.workflow.display_name
+  if (!canEditTitle.value) return
+  editingTitleValue.value = props.workflow.title || ''
   isEditingTitle.value = true
   nextTick(() => {
     titleInputRef.value?.focus()
@@ -439,7 +464,7 @@ function handleCitationClick(part: CitationPart, feature: WorkflowContentFeature
 }
 
 
-const tocExpanded = ref(false)
+const tocExpanded = ref(true)
 const activeTocIndex = ref(0)
 const contentRef = ref<HTMLElement | null>(null)
 
@@ -515,7 +540,7 @@ async function handleExportWord() {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    emit('showToast', '导出成功', 'success')
+    emit('showToast', uiText('导出成功'), 'success')
   } catch (error: any) {
     console.error('导出失败:', error)
     const message = error.response?.status === 429
@@ -523,7 +548,7 @@ async function handleExportWord() {
       : error.response?.status === 400
         ? '当前状态不支持导出'
         : '导出失败，请稍后重试'
-    emit('showToast', message, 'error')
+    emit('showToast', uiText(message), 'error')
   } finally {
     isExporting.value = false
   }
@@ -599,7 +624,7 @@ function getWorkflowStatusText(status: WorkflowStatus): string {
     failed: '失败',
     partial: '部分完成'
   }
-  return map[status] || status
+  return uiText(map[status] || status)
 }
 
 
@@ -836,6 +861,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 
 
 .panel-title {
+  display: block;
   font-size: 16px;
   font-weight: 600;
   color: #111827;
@@ -890,6 +916,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 32px;
   width: 32px;
   height: 32px;
   border: none;
@@ -909,6 +936,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 .workflow-status-badge {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   padding: 2px 8px;
   font-size: 12px;
   font-weight: 500;
@@ -1045,6 +1073,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   top: 100%;
   right: 0;
   min-width: 140px;
+  max-width: min(260px, calc(100vw - 48px));
   background: #fff;
   border: 1px solid #e5e7eb;
   border-top: none;
@@ -1052,6 +1081,10 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   max-height: 300px;
   overflow-y: auto;
+}
+
+.floating-toc.locale-en .toc-list {
+  min-width: 200px;
 }
 
 .toc-item {
@@ -1430,7 +1463,7 @@ h6.feature-heading {
 
 
 .inline-citation.disabled::after {
-  content: '抱歉，暂时无法定位该引用来源';
+  content: attr(data-disabled-title);
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
@@ -1643,6 +1676,14 @@ h6.feature-heading {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.panel-title-row .panel-title {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel-rename-btn {
@@ -1671,6 +1712,11 @@ h6.feature-heading {
   color: var(--primary-color);
 }
 
+.panel-title.pending {
+  cursor: default;
+  color: var(--text-tertiary);
+}
+
 .panel-title-input {
   font-size: 16px;
   font-weight: 600;
@@ -1681,6 +1727,6 @@ h6.feature-heading {
   outline: none;
   background: white;
   width: 100%;
-  min-width: 200px;
+  min-width: 0;
 }
 </style>

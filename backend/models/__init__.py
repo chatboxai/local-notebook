@@ -6,5 +6,10 @@ from models.settings import Setting
 from models.segment import Segment
 from models.block import Block
 from models.image import Image
+from models.workflow import Workflow
+from models.feature import Feature
 
-__all__ = ["Project", "File", "Session", "Message", "Setting", "Segment", "Block", "Image"]
+__all__ = [
+    "Project", "File", "Session", "Message", "Setting", "Segment", "Block",
+    "Image", "Workflow", "Feature",
+]

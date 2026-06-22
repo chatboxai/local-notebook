@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+from utils.time import utc_isoformat
 
 
 class Image(Base):
@@ -34,5 +35,5 @@ class Image(Base):
             "image_index": self.image_index,
             "description": self.description,
             "vlm_model": self.vlm_model,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": utc_isoformat(self.created_at),
         }

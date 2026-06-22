@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
+from schemas.base import UTCDateTimeModel
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -13,7 +15,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
 
 
-class ProjectResponse(BaseModel):
+class ProjectResponse(UTCDateTimeModel):
     id: str
     name: str
     description: Optional[str]

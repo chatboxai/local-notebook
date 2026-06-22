@@ -2,8 +2,10 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
+from schemas.base import UTCDateTimeModel
 
-class FileResponse(BaseModel):
+
+class FileResponse(UTCDateTimeModel):
     id: str
     project_id: str
     file_name: str

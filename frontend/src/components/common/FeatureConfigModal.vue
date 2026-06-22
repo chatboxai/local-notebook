@@ -5,7 +5,7 @@
         <div class="feature-config-modal">
           <div class="feature-config-header">
             <h3 class="feature-config-title">{{ title }}</h3>
-            <button class="feature-config-close" @click="handleCancel" aria-label="关闭">
+            <button class="feature-config-close" @click="handleCancel" :aria-label="uiText('关闭')">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
               </svg>
@@ -14,7 +14,7 @@
           <div class="feature-config-content">
             <div class="feature-config-files">
               <div class="files-header" @click="toggleSelectAll">
-                <span class="files-title">选择文件</span>
+                <span class="files-title">{{ uiText('选择文件') }}</span>
                 <div class="files-header-right">
                   <span class="files-count">{{ localSelectedIds.length }}/{{ selectableFiles.length }}</span>
                   <div class="select-all-checkbox" :class="{ checked: isAllSelected, indeterminate: isPartialSelected }">
@@ -51,29 +51,29 @@
                   </div>
                 </div>
                 <div v-if="selectableFiles.length === 0" class="files-empty">
-                  暂无可选文件
+                  {{ uiText('暂无可选文件') }}
                 </div>
               </div>
             </div>
             <div class="feature-config-body">
-              <p v-if="message" class="feature-config-message">{{ message }}</p>
+              <p v-if="message" class="feature-config-message">{{ uiText(message) }}</p>
               <div class="feature-config-section">
-                <p class="section-title">自定义要求（可选）</p>
+                <p class="section-title">{{ uiText('自定义要求（可选）') }}</p>
                 <textarea
                   v-model="localPrompt"
                   class="prompt-input"
                   rows="3"
-                  placeholder="例如：强调受众画像，减少背景介绍"
+                  :placeholder="uiText('例如：强调受众画像，减少背景介绍')"
                 ></textarea>
               </div>
             </div>
           </div>
           <div class="feature-config-actions">
             <button class="feature-config-btn cancel" @click="handleCancel">
-              {{ cancelText }}
+              {{ uiText(cancelText || '取消') }}
             </button>
             <button class="feature-config-btn confirm" @click="handleConfirm">
-              {{ confirmText }}
+              {{ uiText(confirmText || '确定') }}
             </button>
           </div>
         </div>
@@ -84,6 +84,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { translateText } from '../../i18n'
 
 interface FileItem {
   id: string
@@ -108,6 +109,10 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'update:visible', value: boolean): void
 }>()
+
+function uiText(text: string): string {
+  return translateText(text)
+}
 
 const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp']

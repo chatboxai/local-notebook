@@ -882,12 +882,13 @@
         :class="{ collapsed: rightPanelCollapsed, 'detail-mode': showFeatureDetail || showWorkflowDetail }"
         :style="{
           width: rightPanelCollapsed ? '0px' : rightPanelWidth + 'px',
-          maxWidth: (showFeatureDetail || showWorkflowDetail) ? '900px' : '500px'
+          maxWidth: (showFeatureDetail || showWorkflowDetail) ? '900px' : '600px'
         }"
       >
 
         <WorkflowDetailPanel
           v-if="showWorkflowDetail && currentWorkflow"
+          :key="currentWorkflow.id"
           :workflow="currentWorkflow"
           :features="workflowFeatures"
           :active-citation-num="activeWorkflowCitationNum"
@@ -1021,23 +1022,33 @@
 
                 <div class="studio-tools-fixed">
                   <div class="tool-grid oneclick">
-                    <div class="tool-card tool-card--purple disabled" title="功能开发中">
+                    <div class="tool-card tool-card--blue" :class="{ disabled: !hasReadyFiles }" :title="hasReadyFiles ? uiText('快速掌握材料主线与重点') : uiText('请先上传并处理文件')" @click="openWorkflowConfig('quick_read')">
                       <div class="tool-card-icon">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/></svg>
                       </div>
-                      <span class="tool-card-title">综合报告</span>
+                      <span class="tool-card-title">{{ uiText('内容速读') }}</span>
                     </div>
-                    <div class="tool-card tool-card--blue disabled" title="功能开发中">
+                    <div class="tool-card tool-card--indigo" :class="{ disabled: !hasReadyFiles }" :title="hasReadyFiles ? uiText('系统拆解材料中的关键逻辑') : uiText('请先上传并处理文件')" @click="openWorkflowConfig('deep_dive')">
                       <div class="tool-card-icon">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M9 3h6l1 2h4a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4l1-2zm1.24 2-.5 1H5v13h14V7h-4.74l-.5-1h-3.52zM7 10h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>
                       </div>
-                      <span class="tool-card-title">深度解析</span>
+                      <span class="tool-card-title">{{ uiText('核心详解') }}</span>
                     </div>
-                    <div class="tool-card tool-card--teal disabled" title="功能开发中">
+                    <div class="tool-card tool-card--custom" :class="{ disabled: !hasReadyFiles }" :title="hasReadyFiles ? uiText('完全按你的要求规划和生成') : uiText('请先上传并处理文件')" @click="openWorkflowConfig('custom')">
                       <div class="tool-card-icon">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 17h7v-2H7v2zm0-4h10v-2H7v2zm0-4h10V7H7v2z"/></svg>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M4 21v-7"/>
+                          <path d="M4 10V3"/>
+                          <path d="M12 21v-9"/>
+                          <path d="M12 8V3"/>
+                          <path d="M20 21v-5"/>
+                          <path d="M20 12V3"/>
+                          <path d="M2 14h4"/>
+                          <path d="M10 8h4"/>
+                          <path d="M18 16h4"/>
+                        </svg>
                       </div>
-                      <span class="tool-card-title">知识图谱</span>
+                      <span class="tool-card-title">{{ uiText('自定义工作流') }}</span>
                     </div>
                   </div>
                 </div>
@@ -1046,11 +1057,39 @@
             <div class="studio-results-scroll">
               <div class="oneclick-queue">
                 <div class="queue-header">
-                  <span class="queue-title">生成结果</span>
+                  <span class="queue-title">{{ uiText('生成结果') }}</span>
                 </div>
 
-                <div class="queue-empty">
-                  <p>功能开发中</p>
+                <div v-if="workflows.length === 0" class="queue-empty">
+                  <p>{{ hasReadyFiles ? uiText('点击上方按钮生成报告') : uiText('上传来源后即可生成报告') }}</p>
+                </div>
+
+                <div v-else class="workflow-list">
+                  <div
+                    v-for="wf in workflows"
+                    :key="wf.id"
+                    class="workflow-item"
+                    @click="viewWorkflowDetail(wf.id)"
+                  >
+                    <div class="workflow-item-icon icon-default">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    </div>
+                    <div class="workflow-item-info">
+                      <div class="workflow-item-name">{{ getWorkflowDisplayName(wf) }}</div>
+                      <div class="workflow-item-status">
+                        <span class="workflow-status-badge" :class="getWorkflowStatusClass(wf.status)">
+                          {{ getWorkflowStatusText(wf.status) }}
+                        </span>
+                        <span v-if="wf.status === 'processing'" class="workflow-item-time">
+                          {{ wf.progress.completed }}/{{ wf.progress.total }}
+                        </span>
+                        <span v-else-if="wf.created_at" class="workflow-item-time">{{ formatTime(wf.created_at) }}</span>
+                      </div>
+                    </div>
+                    <button class="workflow-delete-btn" @click.stop="handleDeleteWorkflow(wf.id)" :title="uiText('删除')">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1128,8 +1167,11 @@
 
     <WorkflowConfigModal
       :visible="workflowConfigModal.visible"
-      :workflow-type="workflowConfigModal.workflowType"
-      :workflow-title="workflowConfigModal.workflowTitle"
+      :modal-title="activeWorkflowPreset.title"
+      :description="activeWorkflowPreset.description"
+      :hint="activeWorkflowPreset.hint"
+      :builtin-prompt="activeWorkflowPresetPrompt"
+      :prompt-placeholder="activeWorkflowPreset.promptPlaceholder"
       :files="files"
       :selected-file-ids="selectedFileIds"
       @close="closeWorkflowConfig"
@@ -1168,12 +1210,10 @@
     <ConfirmDialog
       v-model:visible="finalizeConfirmVisible"
       type="warning"
-      title="确认定稿"
-      message="确认将此工作流标记为“定稿”吗？
-
-      定稿后内容将不可修改，且会作为后续生成的重要参考。"
-      confirm-text="确认定稿"
-      cancel-text="取消"
+      :title="uiText('确认定稿')"
+      :message="uiText('确认将此工作流标记为“定稿”吗？\n\n定稿后内容将不可修改，且会作为后续生成的重要参考。')"
+      :confirm-text="uiText('确认定稿')"
+      :cancel-text="uiText('取消')"
       @confirm="executeFinalizeWorkflow"
     />
 
@@ -1295,6 +1335,7 @@ import {
   getFeatureEditSessions,
   getFeatureEditSessionDetail,
   createWorkflow,
+  getProjectWorkflows,
   renameWorkflow,
   deleteWorkflow,
   finalizeWorkflow,
@@ -1327,6 +1368,119 @@ const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
 
 
 const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
+
+
+function uiText(text: string): string {
+  return translateText(text)
+}
+
+type WorkflowPresetKey = 'quick_read' | 'deep_dive' | 'custom'
+
+interface WorkflowPreset {
+  key: WorkflowPresetKey
+  title: string
+  description: string
+  hint: string
+  promptPlaceholder: string
+  promptZh?: string
+  promptEn?: string
+}
+
+const WORKFLOW_PRESETS: Record<WorkflowPresetKey, WorkflowPreset> = {
+  quick_read: {
+    key: 'quick_read',
+    title: '内容速读',
+    description: '快速掌握材料主线与重点',
+    hint: '适合先快速了解资料讲了什么、重点在哪里、后续该追问什么。',
+    promptPlaceholder: '可补充希望重点关注的人物、主题、章节或输出长度。',
+    promptZh: [
+      '请基于所选资料生成一份“内容速读”报告，目标是帮助读者在短时间内掌握材料主线。',
+      '',
+      '请优先覆盖：',
+      '1. 材料主题与核心结论。',
+      '2. 关键事实、人物/机构、时间线或核心概念。',
+      '3. 最值得关注的亮点、异常、争议或空白。',
+      '4. 可以继续追问或深入阅读的问题。',
+      '',
+      '要求：结构紧凑，表达清晰；只写资料支持的内容；所有事实性表述都要保留引用。'
+    ].join('\n'),
+    promptEn: [
+      'Generate a "Quick Read" report from the selected sources. The goal is to help readers grasp the main thread quickly.',
+      '',
+      'Prioritize:',
+      '1. The source theme and core conclusions.',
+      '2. Key facts, people/organizations, timeline, or core concepts.',
+      '3. The most important highlights, anomalies, disputes, or gaps.',
+      '4. Questions worth asking next or areas worth reading more deeply.',
+      '',
+      'Requirements: keep the structure compact and clear; only include source-supported content; keep citations for all factual statements.'
+    ].join('\n'),
+  },
+  deep_dive: {
+    key: 'deep_dive',
+    title: '核心详解',
+    description: '系统拆解材料中的关键逻辑',
+    hint: '适合深入理解资料里的问题、论据、关系、分歧和可执行结论。',
+    promptPlaceholder: '可补充希望加深分析的方向、读者背景、输出风格或篇幅。',
+    promptZh: [
+      '请基于所选资料生成一份“核心详解”报告，目标是系统拆解材料中最重要的问题、论据和关系。',
+      '',
+      '请优先覆盖：',
+      '1. 背景与问题定义。',
+      '2. 关键论点及其证据链。',
+      '3. 重要概念、机制、因果链或结构关系。',
+      '4. 各方观点、分歧、不确定性和潜在反例。',
+      '5. 结论、风险与可执行建议。',
+      '',
+      '要求：层次清楚，分析深入；避免泛泛总结；所有事实性表述都必须基于资料并保留引用。'
+    ].join('\n'),
+    promptEn: [
+      'Generate a "Core Deep Dive" report from the selected sources. The goal is to systematically unpack the most important problems, arguments, and relationships in the material.',
+      '',
+      'Prioritize:',
+      '1. Background and problem definition.',
+      '2. Key arguments and their evidence chains.',
+      '3. Important concepts, mechanisms, causal chains, or structural relationships.',
+      '4. Different viewpoints, disagreements, uncertainties, and possible counterexamples.',
+      '5. Conclusions, risks, and actionable recommendations.',
+      '',
+      'Requirements: keep the structure clear and the analysis deep; avoid generic summary; every factual statement must be grounded in the sources and keep citations.'
+    ].join('\n'),
+  },
+  custom: {
+    key: 'custom',
+    title: '自定义工作流',
+    description: '完全按你的要求规划和生成',
+    hint: 'AI 会把你的要求拆成多个环节，每个环节作为 workflow 中的一个 feature 生成。',
+    promptPlaceholder: '例如：请基于这些资料生成一份面向投资人的尽调报告，重点分析商业模式、增长证据、竞争格局和风险。',
+  },
+}
+
+function getWorkflowPresetPrompt(preset: WorkflowPreset): string {
+  if (locale.value === 'en' && preset.promptEn) return preset.promptEn
+  return preset.promptZh || ''
+}
+
+function buildWorkflowPrompt(preset: WorkflowPreset, extraPrompt: string): string {
+  const basePrompt = getWorkflowPresetPrompt(preset).trim()
+  const extra = extraPrompt.trim()
+  if (!basePrompt) return extra
+  if (!extra) return basePrompt
+  const extraLabel = locale.value === 'en' ? 'Additional user requirements:' : '用户补充要求：'
+  return `${basePrompt}\n\n${extraLabel}\n${extra}`
+}
+
+function formatWorkflowGeneratingMessage(displayName: string): string {
+  return locale.value === 'en'
+    ? `Generating ${uiText(displayName)}...`
+    : `正在生成${displayName}...`
+}
+
+function formatWorkflowStepRegeneratedMessage(stepName: string): string {
+  return locale.value === 'en'
+    ? `Regenerated: ${stepName}`
+    : `已重新生成：${stepName}`
+}
 
 
 function isImageFile(file: FileInfo): boolean {
@@ -1928,7 +2082,8 @@ function toggleWorkflowMenu(workflowId: string, event: Event) {
 
 function handleRenameWorkflow(workflow: WorkflowListItem) {
   workflowMenuId.value = null
-  openRenameModal('workflow', workflow.id, workflow.title || workflow.display_name)
+  if (!hasEditableWorkflowTitle(workflow)) return
+  openRenameModal('workflow', workflow.id, getWorkflowDisplayName(workflow))
 }
 
 
@@ -2189,9 +2344,9 @@ const clickedCitationTop = ref<number>(0)
 
 
 const leftPanelCollapsed = ref(false)
-const rightPanelCollapsed = ref(true)
+const rightPanelCollapsed = ref(false)
 const leftPanelWidth = ref(400)
-const rightPanelWidth = ref(450)
+const rightPanelWidth = ref(500)
 
 
 const toolboxMode = ref<'tools' | 'oneclick'>('oneclick')
@@ -2210,9 +2365,11 @@ watch(() => toolboxMode.value, (newVal, oldVal) => {
 
 const workflowConfigModal = reactive({
   visible: false,
-  workflowType: '',
-  workflowTitle: ''
+  presetKey: 'custom' as WorkflowPresetKey,
 })
+
+const activeWorkflowPreset = computed(() => WORKFLOW_PRESETS[workflowConfigModal.presetKey])
+const activeWorkflowPresetPrompt = computed(() => getWorkflowPresetPrompt(activeWorkflowPreset.value))
 
 
 const workflows = ref<WorkflowListItem[]>([])
@@ -2259,7 +2416,7 @@ const { startResize: startResizeRight } = usePanelResize({
   side: 'right',
   getConstraints: () => ({
     minWidth: 280,
-    maxWidth: (showFeatureDetail.value || showWorkflowDetail.value) ? 900 : 500
+    maxWidth: (showFeatureDetail.value || showWorkflowDetail.value) ? 900 : 600
   })
 })
 
@@ -2298,8 +2455,8 @@ function showConfirm(options: {
     confirmDialog.title = options.title
     confirmDialog.message = options.message
     confirmDialog.type = options.type || 'warning'
-    confirmDialog.confirmText = options.confirmText || '确定'
-    confirmDialog.cancelText = options.cancelText || '取消'
+    confirmDialog.confirmText = options.confirmText || uiText('确定')
+    confirmDialog.cancelText = options.cancelText || uiText('取消')
     confirmDialog.onConfirm = () => resolve(true)
     confirmDialog.onCancel = () => resolve(false)
     confirmDialog.visible = true
@@ -2308,9 +2465,9 @@ function showConfirm(options: {
 
 function openFeatureConfigDialog(stepIndex: number, dialogTitle: string, prompt: string, fileIds: string[]) {
   featureConfigDialog.title = dialogTitle
-  featureConfigDialog.message = '确定要重新生成该步骤吗？'
-  featureConfigDialog.confirmText = '重新生成'
-  featureConfigDialog.cancelText = '取消'
+  featureConfigDialog.message = uiText('确定要重新生成该步骤吗？')
+  featureConfigDialog.confirmText = uiText('重新生成')
+  featureConfigDialog.cancelText = uiText('取消')
   featureConfigDialog.stepIndex = stepIndex
   featureConfigDialog.prompt = prompt
   featureConfigDialog.selectedFileIds = fileIds
@@ -2329,7 +2486,20 @@ function closeFeatureConfigDialog() {
 function resolveStepDisplayName(configStepName: string | undefined, fallbackDisplayName: string | undefined): string {
   if (fallbackDisplayName && fallbackDisplayName.trim()) return fallbackDisplayName
   if (configStepName && /[^\x00-\x7F]/.test(configStepName)) return configStepName
-  return '该步骤'
+  return uiText('该步骤')
+}
+
+function getWorkflowDisplayName(workflow: WorkflowListItem | WorkflowDetail): string {
+  const displayName = (workflow.title || workflow.display_name || '').trim()
+  if (!displayName || displayName === 'custom') {
+    return uiText('自定义工作流')
+  }
+  return displayName
+}
+
+function hasEditableWorkflowTitle(workflow: WorkflowListItem | WorkflowDetail): boolean {
+  const title = (workflow.title || '').trim()
+  return Boolean(title && title !== 'custom')
 }
 
 
@@ -5349,56 +5519,43 @@ async function handleToolConfigConfirm(toolType: string, prompt: string, fileIds
   await handleToolClick(toolType, prompt, fileIds)
 }
 
-function openWorkflowConfig(type: string) {
+function openWorkflowConfig(presetKey: WorkflowPresetKey = 'custom') {
   if (!hasReadyFiles.value) return
-  const titleMap: Record<string, string> = {
-    research_brief: '一键生成研究简报',
-    content_plan: '一键生成内容方案',
-    design_brief: '一键生成设计简报',
-    overview_brief: '一键生成文档概览',
-    communication_plan: '一键生成传播方案'
-  }
-  workflowConfigModal.workflowType = type
-  workflowConfigModal.workflowTitle = titleMap[type] || '一键生成'
+  workflowConfigModal.presetKey = presetKey
   workflowConfigModal.visible = true
 }
 
 function closeWorkflowConfig() {
   workflowConfigModal.visible = false
-  workflowConfigModal.workflowType = ''
-  workflowConfigModal.workflowTitle = ''
+  workflowConfigModal.presetKey = 'custom'
 }
 
-async function handleWorkflowConfigConfirm(workflowType: string, title: string, prompt: string, fileIds: string[]) {
+async function handleWorkflowConfigConfirm(title: string, prompt: string, fileIds: string[]) {
+  const preset = activeWorkflowPreset.value
+  const finalPrompt = buildWorkflowPrompt(preset, prompt)
   closeWorkflowConfig()
-  await handleOneclickWorkflow(workflowType, title, prompt, fileIds)
+  await handleOneclickWorkflow(title, finalPrompt, fileIds, preset.title)
 }
 
-async function handleOneclickWorkflow(workflowType: string, title: string, prompt: string, fileIds: string[]) {
+async function handleOneclickWorkflow(title: string, prompt: string, fileIds: string[], displayName: string) {
   if (fileIds.length === 0) return
 
-  const displayNameMap: Record<string, string> = {
-    research_brief: '研究简报',
-    content_plan: '内容方案',
-    design_brief: '设计简报',
-    overview_brief: '文档概览',
-    communication_plan: '传播方案'
-  }
-  const displayName = displayNameMap[workflowType] || '工作流'
-
   try {
-    await createWorkflow(projectId, workflowType, title, {
+    const resp = await createWorkflow(projectId, title, {
       prompt,
       file_ids: fileIds
     })
 
     await loadWorkflows()
 
+    if (resp?.workflow_id) {
+      startWorkflowPolling(resp.workflow_id)
+    }
 
-    showToast(`正在生成${displayName}...`, 'success')
+    showToast(formatWorkflowGeneratingMessage(displayName), 'success')
   } catch (error) {
     console.error('创建工作流失败:', error)
-    showToast('创建任务失败，请稍后重试', 'error')
+    showToast(uiText('创建任务失败，请稍后重试'), 'error')
   }
 }
 
@@ -5430,7 +5587,7 @@ async function pollWorkflowStatus(workflowId: string) {
       if (pollErrorCount >= MAX_POLL_ERRORS) {
         stopWorkflowPolling()
         workflowLoading.value = false
-        showToast('状态获取失败，请刷新页面', 'error')
+        showToast(uiText('状态获取失败，请刷新页面'), 'error')
       }
       return
     }
@@ -5438,8 +5595,7 @@ async function pollWorkflowStatus(workflowId: string) {
     pollErrorCount = 0
 
     const shouldRefreshDetail = showWorkflowDetail.value &&
-      currentWorkflow.value?.id === workflowId &&
-      currentWorkflow.value?.status !== status.status
+      currentWorkflow.value?.id === workflowId
 
     if (currentWorkflow.value?.id === workflowId) {
       currentWorkflow.value.status = status.status
@@ -5462,11 +5618,11 @@ async function pollWorkflowStatus(workflowId: string) {
     }
 
     if (status.status === 'completed') {
-      showToast('生成完成', 'success')
+      showToast(uiText('生成完成'), 'success')
     } else if (status.status === 'partial') {
-      showToast('部分内容生成完成', 'info')
+      showToast(uiText('部分内容生成完成'), 'info')
     } else if (status.status === 'failed') {
-      showToast('生成失败，请重试', 'error')
+      showToast(uiText('生成失败，请重试'), 'error')
     }
   } catch (error) {
     console.error('获取工作流状态失败:', error)
@@ -5474,12 +5630,26 @@ async function pollWorkflowStatus(workflowId: string) {
     if (pollErrorCount >= MAX_POLL_ERRORS) {
       stopWorkflowPolling()
       workflowLoading.value = false
-      showToast('网络连接不稳定，请刷新页面重试', 'error')
+      showToast(uiText('网络连接不稳定，请刷新页面重试'), 'error')
     }
   }
 }
 
 async function loadWorkflows() {
+  try {
+    const res = await getProjectWorkflows(projectId)
+    workflows.value = res.workflows
+
+    // 若有进行中的任务且当前没有轮询，则开始轮询
+    const inProgress = workflows.value.find(
+      w => w.status === 'pending' || w.status === 'processing'
+    )
+    if (inProgress && !workflowPollingTimer.value) {
+      startWorkflowPolling(inProgress.id)
+    }
+  } catch (error) {
+    console.error('加载报告列表失败:', error)
+  }
 }
 
 
@@ -5502,7 +5672,7 @@ async function viewWorkflowDetail(workflowId: string) {
     showWorkflowDetail.value = true
   } catch (error) {
     console.error('获取工作流详情失败:', error)
-    showToast('获取详情失败', 'error')
+    showToast(uiText('获取详情失败'), 'error')
   }
 }
 
@@ -5521,7 +5691,7 @@ async function handleWorkflowStepRegenerate(stepIndex: number) {
   if (!currentWorkflow.value) return
 
   const workflowId = currentWorkflow.value.id
-  const workflowTitle = currentWorkflow.value.title || currentWorkflow.value.display_name
+  const workflowTitle = getWorkflowDisplayName(currentWorkflow.value)
   const step = currentWorkflow.value.steps?.find(s => s.step_index === stepIndex)
   const fallbackStepName = step?.display_name
 
@@ -5536,9 +5706,9 @@ async function handleWorkflowStepRegenerate(stepIndex: number) {
   } catch (error: any) {
     const status = error?.response?.status
     if (status === 404) {
-      showToast('该步骤不存在，无法重新生成', 'error')
+      showToast(uiText('该步骤不存在，无法重新生成'), 'error')
     } else {
-      showToast('获取步骤配置失败，请稍后重试', 'error')
+      showToast(uiText('获取步骤配置失败，请稍后重试'), 'error')
     }
 
     const dialogTitle = `${workflowTitle} - ${resolveStepDisplayName(undefined, fallbackStepName)}`
@@ -5560,12 +5730,12 @@ async function handleFeatureConfigConfirm(prompt: string, fileIds: string[]) {
       file_ids: fileIds && fileIds.length > 0 ? fileIds : undefined
     }
     const result = await regenerateWorkflowStep(workflowId, stepIndex, customConfig)
-    showToast(`已重新生成：${result.step_name}`, 'success')
+    showToast(formatWorkflowStepRegeneratedMessage(result.step_name), 'success')
     await loadWorkflows()
     await refreshWorkflowDetail(workflowId)
   } catch (error) {
     console.error('重新生成步骤失败:', error)
-    showToast('重新生成失败，请稍后重试', 'error')
+    showToast(uiText('重新生成失败，请稍后重试'), 'error')
   }
 }
 
@@ -5651,8 +5821,8 @@ async function handleWorkflowCitationClick(part: FeatureCitationRefPart, feature
 
 async function handleDeleteWorkflow(workflowId: string) {
   const confirmed = await showConfirm({
-    title: '确认删除',
-    message: '确定要删除这个生成记录吗？',
+    title: uiText('确认删除'),
+    message: uiText('确定要删除这个生成记录吗？'),
     type: 'danger'
   })
   if (!confirmed) return
@@ -5663,10 +5833,10 @@ async function handleDeleteWorkflow(workflowId: string) {
       currentWorkflow.value = null
     }
     await loadWorkflows()
-    showToast('已删除', 'success')
+    showToast(uiText('已删除'), 'success')
   } catch (error) {
     console.error('删除工作流失败:', error)
-    showToast('删除失败', 'error')
+    showToast(uiText('删除失败'), 'error')
   }
 }
 
@@ -5692,12 +5862,12 @@ async function executeFinalizeWorkflow() {
       if (currentWorkflow.value?.id === id) {
         currentWorkflow.value.is_finalized = true
       }
-      showToast('已成功定稿', 'success')
+      showToast(uiText('已成功定稿'), 'success')
       await loadWorkflows()
     }
   } catch (error) {
     console.error('Finalize failed:', error)
-    showToast('定稿失败', 'error')
+    showToast(uiText('定稿失败'), 'error')
   } finally {
     finalizeConfirmVisible.value = false
     workflowToFinalizeId.value = null
@@ -5716,7 +5886,7 @@ async function handleWorkflowTitleUpdate(id: string, title: string) {
     }
   } catch (error) {
     console.error('Failed to update workflow title:', error)
-    showToast('重命名失败', 'error')
+    showToast(uiText('重命名失败'), 'error')
   }
 }
 
@@ -5728,7 +5898,7 @@ function getWorkflowStatusText(status: WorkflowStatus): string {
     failed: '失败',
     partial: '部分完成'
   }
-  return map[status] || status
+  return uiText(map[status] || status)
 }
 
 function getWorkflowStatusClass(status: WorkflowStatus): string {
@@ -5740,17 +5910,6 @@ function getWorkflowStatusClass(status: WorkflowStatus): string {
     partial: 'status-partial'
   }
   return map[status] || ''
-}
-
-function getWorkflowIconColorClass(workflowType: string): string {
-  const colorMap: Record<string, string> = {
-    research_brief: 'icon-purple',
-    content_plan: 'icon-blue',
-    design_brief: 'icon-teal',
-    overview_brief: 'icon-green',
-    communication_plan: 'icon-orange'
-  }
-  return colorMap[workflowType] || 'icon-default'
 }
 
 function formatTime(isoString: string): string {
@@ -6555,7 +6714,6 @@ void [
   handleDeleteFeature,
   getWorkflowStatusText,
   getWorkflowStatusClass,
-  getWorkflowIconColorClass,
   formatTime,
 ]
 </script>
@@ -9810,6 +9968,25 @@ void [
 .tool-card--indigo .tool-card-icon { color: #4338ca; }
 .tool-card--indigo .tool-card-title { color: #4338ca; }
 .tool-card--indigo .tool-card-edit { color: #6366f1; }
+
+.tool-card--custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+}
+.tool-card--custom .tool-card-icon {
+  color: #0f766e;
+}
+.tool-card--custom .tool-card-title {
+  color: #0f766e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.tool-grid.oneclick .tool-card--custom:hover:not(.disabled) {
+  box-shadow: 0 6px 16px rgba(13, 148, 136, 0.18);
+}
 
 
 .tool-card--placeholder {
