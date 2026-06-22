@@ -3934,7 +3934,7 @@ async function sendMessage() {
           session_id: currentSession.value!.id,
           role: 'assistant',
           content_parts: hasPartial ? [...streamingParts.value] : undefined,
-          content: hasPartial ? undefined : `⚠️ 生成失败：${error}`,
+          content: hasPartial ? undefined : `Generation failed: ${error}`,
           _error: error,
           has_partial: hasPartial,
           created_at: new Date().toISOString()
@@ -4587,7 +4587,7 @@ async function submitEditMessage(msg: Message) {
           session_id: currentSession.value!.id,
           role: 'assistant',
           content_parts: hasPartial ? [...streamingParts.value] : undefined,
-          content: hasPartial ? undefined : `⚠️ 生成失败：${error}`,
+          content: hasPartial ? undefined : `Generation failed: ${error}`,
           _error: error,
           has_partial: hasPartial,
           created_at: new Date().toISOString()
@@ -4920,7 +4920,7 @@ async function regenerateMessage(assistantIndex: number) {
           session_id: currentSession.value!.id,
           role: 'assistant',
           content_parts: hasPartial ? [...streamingParts.value] : undefined,
-          content: hasPartial ? undefined : `⚠️ 生成失败：${error}`,
+          content: hasPartial ? undefined : `Generation failed: ${error}`,
           _error: error,
           has_partial: hasPartial,
           created_at: new Date().toISOString()
