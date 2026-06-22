@@ -61,7 +61,7 @@ async def _agent_sse(
             error_msg = Message(
                 session_id=session.id,
                 role="assistant",
-                content=f"⚠️ 生成失败：{str(e)}",
+                content=f"Generation failed: {str(e)}",
                 started_at=started_at,
                 finished_at=datetime.now(timezone.utc),
                 _error=str(e),

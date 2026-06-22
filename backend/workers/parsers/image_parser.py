@@ -17,7 +17,7 @@ class ImageParser(BaseParser):
             logger.info(f"Image description generated, length={len(description)}, model={vlm_model}")
         except Exception as e:
             logger.error(f"Failed to describe image: {e}")
-            error_msg = f"[图片描述生成失败: {str(e)}]"
+            error_msg = f"[Image description generation failed: {str(e)}]"
             block = Block(
                 id="b_0",
                 type="paragraph",

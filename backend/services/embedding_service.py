@@ -13,14 +13,14 @@ async def _get_config() -> tuple[str, str, str, str]:
 
     if not base_url:
         raise RuntimeError(
-            "Embedding 服务地址未配置。请前往「设置 → Embedding」填写 base_url"
-            "(Docker 部署不能用 localhost,见设置页提示)。"
+            "Embedding base URL is not configured. Set base_url in Settings > Embedding. "
+            "Docker deployments cannot use localhost; see the Settings hint."
         )
     # API 模式(bailian/custom)必须有显式 model;
     # local 模式 model 字段由本地服务忽略(用其启动时 MODEL env),空串透传即可。
     if mode == "api" and not model:
         raise RuntimeError(
-            "Embedding 模型未配置。请前往「设置 → Embedding」选择 model。"
+            "Embedding model is not configured. Select a model in Settings > Embedding."
         )
     if not api_key:
         api_key = "local"
@@ -64,17 +64,17 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 resp.raise_for_status()
         except httpx.ConnectError:
             raise RuntimeError(
-                f"无法连接 Embedding 服务 ({base_url})。"
-                "请先在「设置」中配置 Embedding 服务地址，"
-                "本地模式需启动: cd services/embedding && python server.py"
+                f"Cannot connect to the embedding service ({base_url}). "
+                "Configure the embedding service address in Settings first. "
+                "For local mode, start it with: cd services/embedding && python server.py"
             )
         except httpx.ReadTimeout:
             raise RuntimeError(
-                f"Embedding 服务超时 ({base_url})。"
-                "请检查 Embedding 服务是否正常运行。"
+                f"Embedding service timed out ({base_url}). "
+                "Check whether the embedding service is running correctly."
             )
         except httpx.HTTPStatusError as e:
-            raise RuntimeError(f"Embedding 服务返回错误 {e.response.status_code}: {e.response.text}")
+            raise RuntimeError(f"Embedding service returned error {e.response.status_code}: {e.response.text}")
 
         data = resp.json()
         items = sorted(data["data"], key=lambda x: x["index"])

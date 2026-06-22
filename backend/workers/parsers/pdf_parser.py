@@ -179,7 +179,7 @@ class PDFParser(BaseParser):
                         "img_name": os.path.basename(local_path),
                     })
                     image_index += 1
-                text = "[图片]"
+                text = "[Image]"
             elif item_type == "list":
                 list_items = item.get("list_items", [])
                 if isinstance(list_items, list) and list_items:
@@ -344,8 +344,8 @@ class PDFParser(BaseParser):
         return text.strip()
 
     def _simplify_markdown(self, markdown: str) -> str:
-        text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'[图片]', markdown)
-        text = re.sub(r'(\[图片\]\s*){2,}', '[图片]\n\n', text)
+        text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'[Image]', markdown)
+        text = re.sub(r'(\[Image\]\s*){2,}', '[Image]\n\n', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
 

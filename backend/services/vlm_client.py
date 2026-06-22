@@ -50,19 +50,19 @@ async def describe_image(
     api_key, base_url, model = await resolve_vlm_config()
 
     if not api_key:
-        raise RuntimeError("VLM API Key 未配置，请在设置页面配置 VLM")
+        raise RuntimeError("VLM API key is not configured. Configure VLM in Settings.")
     if not base_url:
-        raise RuntimeError("VLM Base URL 未配置")
+        raise RuntimeError("VLM base URL is not configured.")
     if not model:
-        raise RuntimeError("VLM 模型未配置")
+        raise RuntimeError("VLM model is not configured.")
 
     if prompt is None:
         prompt = (
-            "请详细描述这张图片的内容。包括：\n"
-            "1. 图片的主题和主要内容\n"
-            "2. 关键视觉元素（物体、人物、场景、文字等）\n"
-            "3. 整体风格和氛围\n"
-            "请用中文回答，描述要详细但简洁。"
+            "Describe this image in English. Include:\n"
+            "1. The main subject and overall content.\n"
+            "2. Key visual elements such as objects, people, scenes, text, or charts.\n"
+            "3. The overall style and atmosphere.\n"
+            "Be detailed but concise."
         )
 
     base64_image = encode_image_to_base64(image_path)
@@ -102,10 +102,10 @@ async def describe_image(
                 description = data["choices"][0]["message"]["content"]
                 return description.strip(), model
             else:
-                raise RuntimeError(f"VLM 响应格式异常: {data}")
+                raise RuntimeError(f"Unexpected VLM response format: {data}")
 
         except httpx.HTTPStatusError as e:
-            error_msg = f"VLM API 错误: {e.response.status_code}"
+            error_msg = f"VLM API error: {e.response.status_code}"
             try:
                 error_data = e.response.json()
                 if "error" in error_data:
@@ -114,4 +114,4 @@ async def describe_image(
                 pass
             raise RuntimeError(error_msg)
         except Exception as e:
-            raise RuntimeError(f"VLM 调用失败: {e}")
+            raise RuntimeError(f"VLM call failed: {e}")
