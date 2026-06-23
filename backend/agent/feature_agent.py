@@ -7,7 +7,7 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 import config
 from agent.blocks_builder import markdown_to_blocks
@@ -28,6 +28,7 @@ from kosong.tooling.simple import SimpleToolset
 logger = logging.getLogger("feature_agent")
 
 MAX_ITERATIONS = 12
+MAX_OUTPUT_TOKENS = 8192
 
 
 def _extract_text(message: Message) -> str:
@@ -86,6 +87,7 @@ class FeatureAgent:
         custom_prompt: str,
         citation_state: CitationState,
         start_display_num: int,
+        cancellation_check: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int]:
         """返回 (blocks, citations_snapshot, next_display_num)。
 
@@ -100,7 +102,7 @@ class FeatureAgent:
             api_key=api_key,
             base_url=base_url,
             reasoning_key="reasoning_content",
-        ).with_generation_kwargs(max_tokens=6000)
+        ).with_generation_kwargs(max_tokens=MAX_OUTPUT_TOKENS)
 
         capability = get_capability(feature_type)
         # 联网工具仅在已配置时启用
@@ -116,6 +118,7 @@ class FeatureAgent:
                     step_name,
                     instruction,
                     custom_prompt,
+                    citation_state.depends_on,
                 ),
             )
         ]
@@ -123,6 +126,9 @@ class FeatureAgent:
         final_text = ""
 
         for iteration in range(MAX_ITERATIONS):
+            if cancellation_check:
+                await cancellation_check()
+
             is_final = iteration == MAX_ITERATIONS - 1
             if is_final:
                 history.append(Message(
@@ -145,9 +151,14 @@ class FeatureAgent:
             except ChatProviderError as e:
                 raise RuntimeError(f"LLM 调用失败: {e}") from e
 
+            if cancellation_check:
+                await cancellation_check()
+
             if step_result.tool_calls and not is_final:
                 history.append(step_result.message)
                 tool_results = await step_result.tool_results()
+                if cancellation_check:
+                    await cancellation_check()
                 for tc, tr in zip(step_result.tool_calls, tool_results):
                     output = tr.output if hasattr(tr, "output") else str(tr)
                     if isinstance(output, str):

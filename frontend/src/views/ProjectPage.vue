@@ -907,6 +907,7 @@
           :is-loading-edit-detail="isLoadingWorkflowEditDetail"
           :edit-current-session-title="workflowEditCurrentSessionTitle"
           @close="closeWorkflowDetail"
+          @cancel="handleCancelWorkflow"
           @update-title="handleWorkflowTitleUpdate"
           @citation-click="handleWorkflowCitationClick"
           @clear-citation="clearWorkflowCitation"
@@ -1071,22 +1072,56 @@
                     class="workflow-item"
                     @click="viewWorkflowDetail(wf.id)"
                   >
-                    <div class="workflow-item-icon icon-default">
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    <div class="workflow-item-icon icon-default" :class="getWorkflowSourceClass(wf)">
+                      <svg v-if="getWorkflowPresetKey(wf) === 'quick_read'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/>
+                      </svg>
+                      <svg v-else-if="getWorkflowPresetKey(wf) === 'deep_dive'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M9 3h6l1 2h4a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4l1-2zm1.24 2-.5 1H5v13h14V7h-4.74l-.5-1h-3.52zM7 10h10v2H7v-2zm0 4h7v2H7v-2z"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 21v-7"/>
+                        <path d="M4 10V3"/>
+                        <path d="M12 21v-9"/>
+                        <path d="M12 8V3"/>
+                        <path d="M20 21v-5"/>
+                        <path d="M20 12V3"/>
+                        <path d="M2 14h4"/>
+                        <path d="M10 8h4"/>
+                        <path d="M18 16h4"/>
+                      </svg>
                     </div>
                     <div class="workflow-item-info">
-                      <div class="workflow-item-name">{{ getWorkflowDisplayName(wf) }}</div>
+                      <div class="workflow-item-title-row">
+                        <div class="workflow-item-name">{{ getWorkflowDisplayName(wf) }}</div>
+                        <span class="workflow-source-chip" :class="getWorkflowSourceClass(wf)">
+                          {{ getWorkflowSourceLabel(wf) }}
+                        </span>
+                      </div>
                       <div class="workflow-item-status">
                         <span class="workflow-status-badge" :class="getWorkflowStatusClass(wf.status)">
-                          {{ getWorkflowStatusText(wf.status) }}
+                          {{ getWorkflowDisplayStatusText(wf) }}
                         </span>
-                        <span v-if="wf.status === 'processing'" class="workflow-item-time">
-                          {{ wf.progress.completed }}/{{ wf.progress.total }}
+                        <span v-if="isWorkflowActiveStatus(wf.status)" class="workflow-item-time">
+                          {{ formatWorkflowProgress(wf) }}
+                        </span>
+                        <span v-if="isWorkflowActiveStatus(wf.status) && wf.created_at" class="workflow-item-time">
+                          {{ formatWorkflowElapsed(wf.created_at) }}
                         </span>
                         <span v-else-if="wf.created_at" class="workflow-item-time">{{ formatTime(wf.created_at) }}</span>
                       </div>
                     </div>
-                    <button class="workflow-delete-btn" @click.stop="handleDeleteWorkflow(wf.id)" :title="uiText('删除')">
+                    <button
+                      v-if="isWorkflowCancellable(wf.status)"
+                      class="workflow-stop-btn"
+                      @click.stop="handleCancelWorkflow(wf.id)"
+                      :title="uiText('停止生成')"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                        <path d="M6 6h12v12H6z"/>
+                      </svg>
+                    </button>
+                    <button v-else class="workflow-delete-btn" @click.stop="handleDeleteWorkflow(wf.id)" :title="uiText('删除')">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                     </button>
                   </div>
@@ -1337,6 +1372,7 @@ import {
   createWorkflow,
   getProjectWorkflows,
   renameWorkflow,
+  cancelWorkflow,
   deleteWorkflow,
   finalizeWorkflow,
   getWorkflowDetail,
@@ -1361,7 +1397,8 @@ import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, T
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
-import { locale, translateText } from '../i18n'
+import { getModelOutputLanguage, locale, translateText } from '../i18n'
+import { formatMessageTimestamp, formatRelativeTime } from '../utils/format'
 
 
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
@@ -1375,9 +1412,11 @@ function uiText(text: string): string {
 }
 
 type WorkflowPresetKey = 'quick_read' | 'deep_dive' | 'custom'
+type WorkflowSourceClass = 'source-quick-read' | 'source-deep-dive' | 'source-custom'
 
 interface WorkflowPreset {
   key: WorkflowPresetKey
+  sourceClass: WorkflowSourceClass
   title: string
   description: string
   hint: string
@@ -1389,6 +1428,7 @@ interface WorkflowPreset {
 const WORKFLOW_PRESETS: Record<WorkflowPresetKey, WorkflowPreset> = {
   quick_read: {
     key: 'quick_read',
+    sourceClass: 'source-quick-read',
     title: '内容速读',
     description: '快速掌握材料主线与重点',
     hint: '适合先快速了解资料讲了什么、重点在哪里、后续该追问什么。',
@@ -1418,6 +1458,7 @@ const WORKFLOW_PRESETS: Record<WorkflowPresetKey, WorkflowPreset> = {
   },
   deep_dive: {
     key: 'deep_dive',
+    sourceClass: 'source-deep-dive',
     title: '核心详解',
     description: '系统拆解材料中的关键逻辑',
     hint: '适合深入理解资料里的问题、论据、关系、分歧和可执行结论。',
@@ -1449,6 +1490,7 @@ const WORKFLOW_PRESETS: Record<WorkflowPresetKey, WorkflowPreset> = {
   },
   custom: {
     key: 'custom',
+    sourceClass: 'source-custom',
     title: '自定义工作流',
     description: '完全按你的要求规划和生成',
     hint: 'AI 会把你的要求拆成多个环节，每个环节作为 workflow 中的一个 feature 生成。',
@@ -2375,6 +2417,7 @@ const activeWorkflowPresetPrompt = computed(() => getWorkflowPresetPrompt(active
 const workflows = ref<WorkflowListItem[]>([])
 const currentWorkflow = ref<WorkflowDetail | null>(null)
 const workflowPollingTimer = ref<number | null>(null)
+const workflowElapsedTick = ref(Date.now())
 const workflowLoading = ref(false)
 const isLoadingWorkflows = ref(false)
 const workflowFeatures = ref<WorkflowContentFeature[]>([])
@@ -2384,6 +2427,7 @@ const showWorkflowDetail = ref(false)
 
 let pollErrorCount = 0
 const MAX_POLL_ERRORS = 5
+let workflowElapsedTimer: ReturnType<typeof setInterval> | null = null
 
 
 const PREVIEW_MIN_WIDTH = 700
@@ -2489,12 +2533,60 @@ function resolveStepDisplayName(configStepName: string | undefined, fallbackDisp
   return uiText('该步骤')
 }
 
+function getWorkflowRawDisplayName(workflow: WorkflowListItem | WorkflowDetail): string {
+  return (workflow.title || workflow.display_name || '').trim()
+}
+
 function getWorkflowDisplayName(workflow: WorkflowListItem | WorkflowDetail): string {
-  const displayName = (workflow.title || workflow.display_name || '').trim()
-  if (!displayName || displayName === 'custom') {
-    return uiText('自定义工作流')
+  const displayName = getWorkflowRawDisplayName(workflow)
+  if (!displayName && isWorkflowActiveStatus(workflow.status)) {
+    return uiText('正在生成标题...')
+  }
+  if (!displayName || isWorkflowPresetKey(displayName)) {
+    return uiText(WORKFLOW_PRESETS[getWorkflowPresetKey(workflow)].title)
   }
   return displayName
+}
+
+function isWorkflowPresetKey(value: string): value is WorkflowPresetKey {
+  return value === 'quick_read' || value === 'deep_dive' || value === 'custom'
+}
+
+function getWorkflowPresetKey(workflow: WorkflowListItem | WorkflowDetail): WorkflowPresetKey {
+  const workflowType = (workflow.workflow_type || '').trim()
+  if (workflowType === 'quick_read' || workflowType === 'deep_dive') return workflowType
+
+  const rawName = getWorkflowRawDisplayName(workflow).toLowerCase()
+  if (
+    rawName.includes('quick read') ||
+    rawName.includes('内容速读') ||
+    rawName.includes('“quick read”') ||
+    rawName.includes('"quick read"')
+  ) {
+    return 'quick_read'
+  }
+  if (
+    rawName.includes('core deep dive') ||
+    rawName.includes('核心详解') ||
+    rawName.includes('“core deep dive”') ||
+    rawName.includes('"core deep dive"')
+  ) {
+    return 'deep_dive'
+  }
+  if (isWorkflowPresetKey(workflowType)) return workflowType
+  return 'custom'
+}
+
+function getWorkflowSourcePreset(workflow: WorkflowListItem | WorkflowDetail): WorkflowPreset {
+  return WORKFLOW_PRESETS[getWorkflowPresetKey(workflow)]
+}
+
+function getWorkflowSourceClass(workflow: WorkflowListItem | WorkflowDetail): WorkflowSourceClass {
+  return getWorkflowSourcePreset(workflow).sourceClass
+}
+
+function getWorkflowSourceLabel(workflow: WorkflowListItem | WorkflowDetail): string {
+  return uiText(getWorkflowSourcePreset(workflow).title)
 }
 
 function hasEditableWorkflowTitle(workflow: WorkflowListItem | WorkflowDetail): boolean {
@@ -2532,10 +2624,9 @@ const projectId = route.params.id as string
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
+    workflowElapsedTick.value = Date.now()
 
-    const processingWorkflow = workflows.value.find(
-      wf => wf.status === 'pending' || wf.status === 'processing'
-    )
+    const processingWorkflow = workflows.value.find(wf => isWorkflowActiveStatus(wf.status))
     if (processingWorkflow && !workflowPollingTimer.value) {
       workflowLoading.value = true
 
@@ -2563,6 +2654,8 @@ onMounted(async () => {
   window.addEventListener('resize', checkMessagesScrollable)
 
   checkMessagesScrollable()
+
+  startWorkflowElapsedTimer()
 })
 
 
@@ -2575,6 +2668,7 @@ onUnmounted(() => {
   stopFilePolling()
   stopFeaturePolling()
   stopWorkflowPolling()
+  stopWorkflowElapsedTimer()
 })
 
 function localizedThinkingLabel() {
@@ -5534,16 +5628,24 @@ async function handleWorkflowConfigConfirm(title: string, prompt: string, fileId
   const preset = activeWorkflowPreset.value
   const finalPrompt = buildWorkflowPrompt(preset, prompt)
   closeWorkflowConfig()
-  await handleOneclickWorkflow(title, finalPrompt, fileIds, preset.title)
+  await handleOneclickWorkflow(title, finalPrompt, fileIds, preset.title, preset.key)
 }
 
-async function handleOneclickWorkflow(title: string, prompt: string, fileIds: string[], displayName: string) {
+async function handleOneclickWorkflow(
+  title: string,
+  prompt: string,
+  fileIds: string[],
+  displayName: string,
+  presetKey: WorkflowPresetKey,
+) {
   if (fileIds.length === 0) return
 
   try {
     const resp = await createWorkflow(projectId, title, {
       prompt,
-      file_ids: fileIds
+      file_ids: fileIds,
+      preset_key: presetKey,
+      output_language: getModelOutputLanguage(),
     })
 
     await loadWorkflows()
@@ -5576,6 +5678,21 @@ function stopWorkflowPolling() {
   }
 }
 
+function startWorkflowElapsedTimer() {
+  if (workflowElapsedTimer) return
+
+  workflowElapsedTimer = setInterval(() => {
+    workflowElapsedTick.value = Date.now()
+  }, 1000)
+}
+
+function stopWorkflowElapsedTimer() {
+  if (workflowElapsedTimer) {
+    clearInterval(workflowElapsedTimer)
+    workflowElapsedTimer = null
+  }
+}
+
 async function pollWorkflowStatus(workflowId: string) {
   try {
     const response = await getWorkflowsStatusBatch([workflowId])
@@ -5601,7 +5718,7 @@ async function pollWorkflowStatus(workflowId: string) {
       currentWorkflow.value.status = status.status
     }
 
-    if (status.status === 'pending' || status.status === 'processing') {
+    if (isWorkflowActiveStatus(status.status)) {
       await loadWorkflows()
       if (shouldRefreshDetail) {
         await refreshWorkflowDetail(workflowId)
@@ -5623,6 +5740,8 @@ async function pollWorkflowStatus(workflowId: string) {
       showToast(uiText('部分内容生成完成'), 'info')
     } else if (status.status === 'failed') {
       showToast(uiText('生成失败，请重试'), 'error')
+    } else if (status.status === 'cancelled') {
+      showToast(uiText('已停止生成'), 'info')
     }
   } catch (error) {
     console.error('获取工作流状态失败:', error)
@@ -5641,9 +5760,7 @@ async function loadWorkflows() {
     workflows.value = res.workflows
 
     // 若有进行中的任务且当前没有轮询，则开始轮询
-    const inProgress = workflows.value.find(
-      w => w.status === 'pending' || w.status === 'processing'
-    )
+    const inProgress = workflows.value.find(w => isWorkflowActiveStatus(w.status))
     if (inProgress && !workflowPollingTimer.value) {
       startWorkflowPolling(inProgress.id)
     }
@@ -5840,6 +5957,34 @@ async function handleDeleteWorkflow(workflowId: string) {
   }
 }
 
+async function handleCancelWorkflow(workflowId: string) {
+  try {
+    const status = await cancelWorkflow(workflowId)
+    const workflow = workflows.value.find(w => w.id === workflowId)
+    if (workflow) {
+      workflow.status = status.status
+      workflow.progress = status.progress
+    }
+    if (currentWorkflow.value?.id === workflowId) {
+      currentWorkflow.value.status = status.status
+      currentWorkflow.value.progress = status.progress
+      await refreshWorkflowDetail(workflowId)
+    }
+
+    await loadWorkflows()
+    if (isWorkflowActiveStatus(status.status)) {
+      startWorkflowPolling(workflowId)
+      showToast(uiText('正在停止生成'), 'info')
+    } else {
+      stopWorkflowPolling()
+      showToast(uiText('已停止生成'), 'info')
+    }
+  } catch (error) {
+    console.error('停止工作流失败:', error)
+    showToast(uiText('停止生成失败，请稍后重试'), 'error')
+  }
+}
+
 const finalizeConfirmVisible = ref(false)
 const workflowToFinalizeId = ref<string | null>(null)
 
@@ -5894,63 +6039,77 @@ function getWorkflowStatusText(status: WorkflowStatus): string {
   const map: Record<WorkflowStatus, string> = {
     pending: '等待中',
     processing: '生成中',
+    cancelling: '取消中',
     completed: '已完成',
     failed: '失败',
-    partial: '部分完成'
+    partial: '部分完成',
+    cancelled: '已取消'
   }
   return uiText(map[status] || status)
+}
+
+function isWorkflowActiveStatus(status: WorkflowStatus): boolean {
+  return status === 'pending' || status === 'processing' || status === 'cancelling'
+}
+
+function isWorkflowCancellable(status: WorkflowStatus): boolean {
+  return status === 'pending' || status === 'processing' || status === 'cancelling'
+}
+
+function isWorkflowPlanning(workflow: WorkflowListItem | WorkflowDetail): boolean {
+  return workflow.status === 'processing' && (workflow.progress?.total ?? 0) === 0
+}
+
+function getWorkflowDisplayStatusText(workflow: WorkflowListItem | WorkflowDetail): string {
+  if (isWorkflowPlanning(workflow)) return uiText('规划中')
+  return getWorkflowStatusText(workflow.status)
 }
 
 function getWorkflowStatusClass(status: WorkflowStatus): string {
   const map: Record<WorkflowStatus, string> = {
     pending: 'status-pending',
     processing: 'status-processing',
+    cancelling: 'status-cancelling',
     completed: 'status-completed',
     failed: 'status-failed',
-    partial: 'status-partial'
+    partial: 'status-partial',
+    cancelled: 'status-cancelled'
   }
   return map[status] || ''
 }
 
+function formatWorkflowProgress(workflow: WorkflowListItem | WorkflowDetail): string {
+  const completed = workflow.progress?.completed ?? 0
+  const total = workflow.progress?.total ?? 0
+  const totalLabel = total > 0 ? String(total) : '...'
+  return `${completed}/${totalLabel}`
+}
+
+function formatWorkflowElapsed(isoString: string): string {
+  const startedAt = new Date(isoString)
+  const elapsedMs = Math.max(0, workflowElapsedTick.value - startedAt.getTime())
+  const elapsedSeconds = Math.floor(elapsedMs / 1000)
+  const hours = Math.floor(elapsedSeconds / 3600)
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60)
+  const seconds = elapsedSeconds % 60
+
+  if (locale.value === 'en') {
+    if (hours > 0) return `${hours}h ${minutes}m`
+    if (minutes > 0) return `${minutes}m ${seconds}s`
+    return `${seconds}s`
+  }
+
+  if (hours > 0) return `${hours}小时${minutes}分钟`
+  if (minutes > 0) return `${minutes}分钟${seconds}秒`
+  return `${seconds}秒`
+}
+
 function formatTime(isoString: string): string {
-  const date = new Date(isoString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffMins < 1) return '刚刚'
-  if (diffMins < 60) return `${diffMins}分钟前`
-  if (diffHours < 24) return `${diffHours}小时前`
-  if (diffDays < 7) return `${diffDays}天前`
-
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  return `${month}月${day}日`
+  return formatRelativeTime(isoString)
 }
 
 function formatMessageTime(isoString: string): string {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  const now = new Date()
-
-  const isToday = date.getFullYear() === now.getFullYear() &&
-                  date.getMonth() === now.getMonth() &&
-                  date.getDate() === now.getDate()
-
-  if (isToday) {
-    const hours = date.getHours().toString().padStart(2, '0')
-    const minutes = date.getMinutes().toString().padStart(2, '0')
-    const seconds = date.getSeconds().toString().padStart(2, '0')
-    return `${hours}:${minutes}:${seconds}`
-  } else {
-    const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    const weekDay = weekDays[date.getDay()]
-    return `${month}/${day} ${weekDay}`
-  }
+  return formatMessageTimestamp(isoString)
 }
 
 function closeImageGenerationModal() {
@@ -6708,6 +6867,7 @@ void [
   openWorkflowConfig,
   startWorkflowPolling,
   viewWorkflowDetail,
+  handleCancelWorkflow,
   handleDeleteWorkflow,
   handleFinalizeWorkflow,
   handleRegenerateFeature,
@@ -10351,14 +10511,14 @@ void [
 }
 
 .workflow-item-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-right: 10px;
+  margin-right: 12px;
 }
 
 .workflow-item-icon.icon-purple {
@@ -10391,6 +10551,24 @@ void [
   color: var(--text-secondary);
 }
 
+.workflow-item-icon.source-quick-read {
+  background: linear-gradient(135deg, rgba(147, 197, 253, 0.5) 0%, rgba(96, 165, 250, 0.5) 100%);
+  color: #1d4ed8;
+}
+
+.workflow-item-icon.source-deep-dive {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.5) 0%, rgba(165, 180, 252, 0.5) 100%);
+  color: #4338ca;
+}
+
+.workflow-item-icon.source-custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  color: #0f766e;
+}
+
 .workflow-item-info {
   display: flex;
   flex-direction: column;
@@ -10399,9 +10577,57 @@ void [
   min-width: 0;
 }
 
+.workflow-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .workflow-item-name {
   font-size: 13px;
   color: var(--text-primary);
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-source-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  max-width: 118px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-source-chip.source-quick-read {
+  background: linear-gradient(135deg, rgba(147, 197, 253, 0.42) 0%, rgba(96, 165, 250, 0.28) 100%);
+  color: #1d4ed8;
+}
+
+.workflow-source-chip.source-deep-dive {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.55) 0%, rgba(165, 180, 252, 0.38) 100%);
+  color: #4338ca;
+}
+
+.workflow-source-chip.source-custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(250, 204, 21, 0.28) 100%),
+    radial-gradient(circle at 86% 12%, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 36%);
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  color: #0f766e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0;
 }
 
 .workflow-item-time {
@@ -10433,6 +10659,12 @@ void [
   animation: workflowBreathing 1.6s ease-in-out infinite;
 }
 
+.workflow-status-badge.status-cancelling {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  position: relative;
+}
+
 .workflow-status-badge.status-completed {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
@@ -10448,7 +10680,19 @@ void [
   color: #f59e0b;
 }
 
+.workflow-status-badge.status-cancelled {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+}
+
 .workflow-status-badge.status-processing::after {
+  content: '...';
+  display: inline-block;
+  margin-left: 2px;
+  animation: workflowDots 1.2s steps(4, end) infinite;
+}
+
+.workflow-status-badge.status-cancelling::after {
   content: '...';
   display: inline-block;
   margin-left: 2px;
@@ -10471,12 +10715,15 @@ void [
   }
 }
 
+.workflow-stop-btn,
 .workflow-delete-btn {
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -10486,8 +10733,18 @@ void [
   transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
 
+.workflow-item:hover .workflow-stop-btn,
 .workflow-item:hover .workflow-delete-btn {
   opacity: 1;
+}
+
+.workflow-stop-btn {
+  opacity: 1;
+}
+
+.workflow-stop-btn:hover {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
 }
 
 .workflow-delete-btn:hover {

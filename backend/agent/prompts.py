@@ -73,6 +73,7 @@ FEATURE_AGENT_EVIDENCE_PROMPT = """
 - Default evidence workflow: first use `query_knowledge_base` to locate candidate evidence, then use `read_segments` to verify key facts, exact wording, numbers, names, relationships, and claims before writing.
 - Do not rely only on summaries for important factual claims when original text is available through `read_segments`.
 - Use `list_files` or `get_file_meta` when you need to understand source scope, file details, or image descriptions before searching.
+- If this section depends on upstream workflow steps, use `list_workflow_step_results` and `get_workflow_step_results` to inspect those completed upstream results before writing. Dependency result citations can be verified with `read_segments`.
 - Never fabricate. Every factual claim must carry the original citation marker returned by tools, in `[citation_X]` format. If a tool result has no citation marker, that result may be used without a citation marker.
 - If the source materials do not support a point, say that the source materials do not mention it. Do not force unsupported content.
 - Do not expose internal IDs such as `file_id`, `segment_id`, or `image_id` to the user.
@@ -118,6 +119,7 @@ def build_feature_task_prompt(
     step_name: str,
     instruction: str,
     custom_prompt: str = "",
+    depends_on: list[str] | None = None,
 ) -> str:
     lines = [
         f"Report title: {report_title}",
@@ -125,6 +127,11 @@ def build_feature_task_prompt(
         f"Writing instruction for this section: {instruction or 'Use the source materials to write around the current section name.'}",
         "Language requirement: Follow the explicit language rule in the section instruction. If it is missing, use the same language as the user's requirements.",
     ]
+    if depends_on:
+        lines.append(
+            "Upstream dependency step_ids available through workflow step result tools: "
+            + ", ".join(depends_on)
+        )
     if custom_prompt and custom_prompt.strip():
         lines.append(f"User requirements for the full report: {custom_prompt.strip()}")
     lines.append("")

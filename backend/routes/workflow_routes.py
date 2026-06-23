@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -25,6 +26,8 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 class WorkflowCustomConfig(BaseModel):
     prompt: Optional[str] = None
     file_ids: list[str] = []
+    preset_key: Optional[str] = None
+    output_language: Optional[str] = None
 
 
 class GenerateWorkflowRequest(BaseModel):
@@ -41,7 +44,9 @@ class TitleUpdateRequest(BaseModel):
     title: str
 
 
-# ---------- helpers ----------
+WORKFLOW_TERMINAL_STATUSES = {"completed", "failed", "partial", "cancelled"}
+WORKFLOW_CANCELLED_MESSAGE = "用户已停止生成"
+
 
 async def _get_workflow_with_features(db: AsyncSession, workflow_id: str) -> Optional[Workflow]:
     result = await db.execute(
@@ -71,6 +76,12 @@ async def generate_workflow(
     custom_prompt = (cfg.prompt or "").strip()
     if not custom_prompt:
         raise HTTPException(status_code=400, detail="请输入工作流要求")
+    workflow_type = (cfg.preset_key or "").strip()
+    if not workflow_type:
+        raise HTTPException(status_code=400, detail="缺少工作流类型")
+    output_language = (cfg.output_language or "").strip()
+    if not output_language:
+        raise HTTPException(status_code=400, detail="缺少输出语言")
 
     requested_title = (body.title or "").strip()
     workflow_title = (
@@ -81,7 +92,7 @@ async def generate_workflow(
 
     wf = Workflow(
         project_id=body.project_id,
-        workflow_type="custom",
+        workflow_type=workflow_type,
         title=workflow_title,
         status="pending",
         custom_prompt=custom_prompt,
@@ -98,7 +109,7 @@ async def generate_workflow(
         await db.commit()
         raise HTTPException(status_code=503, detail="后台任务服务不可用，无法生成报告")
 
-    await redis.enqueue_job("generate_workflow_task", wf.id)
+    await redis.enqueue_job("generate_workflow_task", wf.id, output_language)
 
     return {
         "workflow_id": wf.id,
@@ -151,6 +162,43 @@ async def get_workflow_status(
     wf = await _get_workflow_with_features(db, workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    return wf.to_status_dict()
+
+
+@router.post("/{workflow_id}/cancel")
+async def cancel_workflow(
+    workflow_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> dict:
+    wf = await _get_workflow_with_features(db, workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    if wf.status in WORKFLOW_TERMINAL_STATUSES:
+        return wf.to_status_dict()
+
+    if wf.status == "pending":
+        wf.status = "cancelled"
+        wf.error_message = WORKFLOW_CANCELLED_MESSAGE
+        wf.finished_at = datetime.now(timezone.utc)
+        for feature in wf.features or []:
+            if feature.status in {"pending", "processing"}:
+                feature.status = "cancelled"
+                feature.error_message = WORKFLOW_CANCELLED_MESSAGE
+                feature.finished_at = datetime.now(timezone.utc)
+    else:
+        wf.status = "cancelling"
+        wf.error_message = WORKFLOW_CANCELLED_MESSAGE
+        for feature in wf.features or []:
+            if feature.status == "pending":
+                feature.status = "cancelled"
+                feature.error_message = WORKFLOW_CANCELLED_MESSAGE
+                feature.finished_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(wf)
+    logger.info("[workflow] cancel requested workflow_id=%s status=%s", workflow_id, wf.status)
     return wf.to_status_dict()
 
 

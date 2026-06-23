@@ -207,6 +207,7 @@ import { useRouter } from 'vue-router'
 import { getProjects, createProject, deleteProject, updateProject, checkPreflight } from '../services/api'
 import type { Project, ProjectColor } from '../types'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
+import { formatDate } from '../utils/format'
 
 const router = useRouter()
 
@@ -448,12 +449,6 @@ async function handleRenameProject() {
 function goToProject(projectId: string) {
   router.push(`/project/${projectId}`)
 }
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr)
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
-}
-
 
 const colorMap: Record<ProjectColor, string> = {
   blue: '#3B82F6',

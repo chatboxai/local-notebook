@@ -1,6 +1,23 @@
 import { computed, ref, watch } from 'vue'
 
-export type Locale = 'zh' | 'en'
+export const localeConfig = {
+  zh: {
+    htmlLang: 'zh-CN',
+    modelOutputLanguage: 'Chinese',
+    relativeNow: '刚刚',
+    matchesBrowserLanguage: (language: string) => language.startsWith('zh'),
+  },
+  en: {
+    htmlLang: 'en',
+    modelOutputLanguage: 'English',
+    relativeNow: 'Just now',
+    matchesBrowserLanguage: () => true,
+  },
+} as const
+
+export type Locale = keyof typeof localeConfig
+
+const supportedLocales = Object.keys(localeConfig) as Locale[]
 
 const STORAGE_KEY = 'local-notebook-locale'
 
@@ -249,6 +266,7 @@ const zhToEn: Record<string, string> = {
   '工作流': 'Workflow',
   '自定义工作流': 'Custom workflow',
   '正在生成标题': 'Generating title',
+  '正在生成标题...': 'Generating title...',
   '标题生成后可重命名': 'You can rename it after the title is generated',
   '内容速读': 'Quick read',
   '核心详解': 'Core deep dive',
@@ -299,9 +317,17 @@ const zhToEn: Record<string, string> = {
   '正在生成，请稍候': 'Generating, please wait',
   '正在重新生成，请稍候': 'Regenerating, please wait',
   '生成失败，请点击“重新生成”按钮重试': 'Generation failed. Click "Regenerate" to try again.',
+  '规划中': 'Planning',
   '生成中': 'Generating',
+  '取消中': 'Cancelling',
   '已完成': 'Completed',
+  '已取消': 'Cancelled',
   '部分完成': 'Partially completed',
+  '停止生成': 'Stop generation',
+  '停止': 'Stop',
+  '正在停止生成': 'Stopping generation',
+  '已停止生成': 'Generation stopped',
+  '停止生成失败，请稍后重试': 'Failed to stop generation. Try again later.',
   '目录': 'Contents',
   '目录导航': 'Contents navigation',
   '点击重命名': 'Click to rename',
@@ -390,12 +416,20 @@ interface LocalizedValueRecord {
 const textNodeValues = new WeakMap<Node, LocalizedValueRecord>()
 const attributeValues = new WeakMap<Element, Map<string, LocalizedValueRecord>>()
 
+function isSupportedLocale(value: string | null): value is Locale {
+  return Boolean(value && supportedLocales.includes(value as Locale))
+}
+
+function detectBrowserLocale(browserLanguage: string): Locale {
+  const normalized = browserLanguage.toLowerCase()
+  return supportedLocales.find((item) => localeConfig[item].matchesBrowserLanguage(normalized)) || 'en'
+}
+
 function getInitialLocale(): Locale {
   if (typeof window === 'undefined') return 'zh'
   const stored = window.localStorage.getItem(STORAGE_KEY)
-  if (stored === 'zh' || stored === 'en') return stored
-  const browserLanguage = window.navigator.language.toLowerCase()
-  return browserLanguage.startsWith('zh') ? 'zh' : 'en'
+  if (isSupportedLocale(stored)) return stored
+  return detectBrowserLocale(window.navigator.language)
 }
 
 export const locale = ref<Locale>(getInitialLocale())
@@ -404,6 +438,10 @@ export const isEnglish = computed(() => locale.value === 'en')
 
 export function setLocale(nextLocale: Locale) {
   locale.value = nextLocale
+}
+
+export function getModelOutputLanguage(targetLocale: Locale = locale.value): string {
+  return localeConfig[targetLocale].modelOutputLanguage
 }
 
 export function t(key: keyof typeof messages.zh): string {
@@ -589,7 +627,7 @@ export function installDomI18n(root: ParentNode = document.body): DomI18nControl
     }
 
     isLocalizing = true
-    document.documentElement.lang = locale.value === 'zh' ? 'zh-CN' : 'en'
+    document.documentElement.lang = localeConfig[locale.value].htmlLang
     localizeNode(root as Node)
     releaseLocalizingSoon()
   }

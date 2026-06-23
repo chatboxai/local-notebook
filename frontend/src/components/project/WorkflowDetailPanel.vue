@@ -1,9 +1,28 @@
 <template>
-  <div class="workflow-detail-panel">
+  <div class="workflow-detail-panel" :class="workflowThemeClass">
     <div class="panel-header">
 
 
       <div class="panel-title-row">
+        <div class="panel-title-icon" aria-hidden="true">
+          <svg v-if="workflowPresetKey === 'quick_read'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/>
+          </svg>
+          <svg v-else-if="workflowPresetKey === 'deep_dive'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M9 3h6l1 2h4a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4l1-2zm1.24 2-.5 1H5v13h14V7h-4.74l-.5-1h-3.52zM7 10h10v2H7v-2zm0 4h7v2H7v-2z"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 21v-7"/>
+            <path d="M4 10V3"/>
+            <path d="M12 21v-9"/>
+            <path d="M12 8V3"/>
+            <path d="M20 21v-5"/>
+            <path d="M20 12V3"/>
+            <path d="M2 14h4"/>
+            <path d="M10 8h4"/>
+            <path d="M18 16h4"/>
+          </svg>
+        </div>
         <input
           v-if="isEditingTitle"
           ref="titleInputRef"
@@ -22,8 +41,19 @@
         >{{ workflowTitleText }}</span>
       </div>
       <span class="workflow-status-badge" :class="getWorkflowStatusClass(workflow.status)">
-        {{ getWorkflowStatusText(workflow.status) }}
+        {{ getWorkflowDisplayStatusText() }}
       </span>
+      <button
+        v-if="canCancelWorkflow"
+        class="panel-stop-btn"
+        @click="$emit('cancel', workflow.id)"
+        :title="uiText('停止生成')"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+          <path d="M6 6h12v12H6z"/>
+        </svg>
+        <span>{{ uiText('停止') }}</span>
+      </button>
 
 
       <!-- MVP: 导出(/export)尚未实现，暂时隐藏 -->
@@ -50,7 +80,7 @@
     </div>
     <div ref="contentRef" class="workflow-report-content" @click="handleContentClick">
 
-      <div class="floating-toc" :class="{ expanded: tocExpanded, 'locale-en': locale === 'en' }">
+      <div class="floating-toc" :class="{ expanded: tocExpanded }">
         <button class="toc-toggle" @click="tocExpanded = !tocExpanded" :title="uiText('目录导航')">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
@@ -65,7 +95,8 @@
             :class="{ active: activeTocIndex === fi }"
             @click="scrollToSection(fi)"
           >
-            {{ feature.step_name }}
+            <span class="toc-item-index">{{ formatSectionIndex(fi) }}</span>
+            <span class="toc-item-label">{{ feature.step_name }}</span>
           </div>
         </div>
       </div>
@@ -75,25 +106,8 @@
 
         <div :id="'workflow-section-' + fi" class="workflow-feature-section">
           <div class="workflow-feature-header">
-            <div class="feature-section-icon" :class="getFeatureIconColorClass(feature.feature_type)">
-
-              <svg v-if="feature.feature_type === 'content_summary'" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-              </svg>
-
-              <svg v-else-if="feature.feature_type === 'expert_recommendation'" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-              </svg>
-
-              <svg v-else-if="feature.feature_type === 'golden_quotes'" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/>
-              </svg>
-
-              <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-              </svg>
-            </div>
             <div class="feature-title-row">
+              <span class="feature-section-index">{{ formatSectionIndex(fi) }}</span>
               <span class="feature-section-title">{{ feature.step_name }}</span>
               <!-- MVP: 单栏目重新生成(/steps/regenerate)尚未实现，暂时隐藏 -->
               <button
@@ -304,6 +318,9 @@
             <div v-else-if="feature.status === 'failed'" class="workflow-feature-error">
               {{ feature.error_message || uiText('生成失败，请点击“重新生成”按钮重试') }}
             </div>
+            <div v-else-if="feature.status === 'cancelled'" class="empty-placeholder">
+              {{ uiText('已停止生成') }}
+            </div>
             <div v-else class="empty-placeholder">
               {{ uiText('暂无内容') }}
             </div>
@@ -339,7 +356,7 @@ import type { WorkflowDetail, WorkflowStatus, WorkflowContentFeature } from '../
 import type { FeatureBlock, CitationMetadata } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
 import { getAssetUrl, exportWorkflowToWord } from '../../services/api'
-import { locale, translateText } from '../../i18n'
+import { translateText } from '../../i18n'
 
 import WebCitationTooltip from '../common/WebCitationTooltip.vue'
 
@@ -355,6 +372,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'cancel', workflowId: string): void
   (e: 'citationClick', part: any, feature: WorkflowContentFeature): void
   (e: 'clearCitation'): void
 
@@ -382,6 +400,23 @@ const canEditTitle = computed(() => {
   const title = (props.workflow.title || '').trim()
   return Boolean(title && title !== 'custom')
 })
+
+const workflowPresetKey = computed(() => {
+  const workflowType = (props.workflow.workflow_type || '').trim()
+  if (workflowType === 'quick_read') return 'quick_read'
+  if (workflowType === 'deep_dive') return 'deep_dive'
+  return 'custom'
+})
+
+const workflowThemeClass = computed(() => {
+  if (workflowPresetKey.value === 'quick_read') return 'theme-quick-read'
+  if (workflowPresetKey.value === 'deep_dive') return 'theme-deep-dive'
+  return 'theme-custom'
+})
+
+function formatSectionIndex(index: number): string {
+  return String(index + 1).padStart(2, '0')
+}
 
 function startEditTitle() {
   if (!canEditTitle.value) return
@@ -413,6 +448,12 @@ const isExporting = ref(false)
 function canRegenerate(status: string) {
   return status === 'completed' || status === 'failed'
 }
+
+const canCancelWorkflow = computed(() => {
+  return props.workflow.status === 'pending' ||
+    props.workflow.status === 'processing' ||
+    props.workflow.status === 'cancelling'
+})
 
 function handleRegenerateStep(stepIndex: number) {
   emit('regenerateStep', stepIndex)
@@ -620,11 +661,22 @@ function getWorkflowStatusText(status: WorkflowStatus): string {
   const map: Record<WorkflowStatus, string> = {
     pending: '等待中',
     processing: '生成中',
+    cancelling: '取消中',
     completed: '已完成',
     failed: '失败',
-    partial: '部分完成'
+    partial: '部分完成',
+    cancelled: '已取消'
   }
   return uiText(map[status] || status)
+}
+
+function isWorkflowPlanning(): boolean {
+  return props.workflow.status === 'processing' && (props.workflow.progress?.total ?? 0) === 0
+}
+
+function getWorkflowDisplayStatusText(): string {
+  if (isWorkflowPlanning()) return uiText('规划中')
+  return getWorkflowStatusText(props.workflow.status)
 }
 
 
@@ -632,34 +684,13 @@ function getWorkflowStatusClass(status: WorkflowStatus): string {
   const map: Record<WorkflowStatus, string> = {
     pending: 'status-pending',
     processing: 'status-processing',
+    cancelling: 'status-cancelling',
     completed: 'status-completed',
     failed: 'status-failed',
-    partial: 'status-partial'
+    partial: 'status-partial',
+    cancelled: 'status-cancelled'
   }
   return map[status] || ''
-}
-
-
-function getFeatureIconColorClass(featureType: string): string {
-  const colorMap: Record<string, string> = {
-    content_summary: 'icon-blue',
-    expert_recommendation: 'icon-orange',
-    golden_quotes: 'icon-cream',
-    research_evaluation: 'icon-green',
-    mind_map: 'icon-purple',
-    text_to_image: 'icon-brown',
-    reference_to_image: 'icon-teal',
-    text_to_video: 'icon-indigo',
-    image_to_video: 'icon-rose',
-    start_end_to_video: 'icon-amber',
-    reference_to_video: 'icon-emerald',
-
-    communication_highlights: 'icon-pink',
-    communication_assets: 'icon-cyan',
-    general_communication: 'icon-lime',
-    social_copy: 'icon-red'
-  }
-  return colorMap[featureType] || 'icon-default'
 }
 
 
@@ -742,7 +773,7 @@ function getTableContent(block: any): string {
     return block.content_parts
       .map((p: any) => {
         if (p.type === 'text') return p.content || ''
-        if (p.type === 'citation_ref') return `[citation_${p.citation_id}]`
+        if (p.type === 'citation_ref') return `[${p.citation_id}]`
         return ''
       })
       .join('')
@@ -754,7 +785,7 @@ function getTableContent(block: any): string {
 function parseTableCellContent(cellText: string, feature: WorkflowContentFeature): TableCellPart[] {
   const parts: TableCellPart[] = []
 
-  const regex = /\[citation_(\d+_\d+)\]/g
+  const regex = /\[(citation_[a-zA-Z0-9_]+)\]/g
   let lastIndex = 0
   let match
 
@@ -768,8 +799,7 @@ function parseTableCellContent(cellText: string, feature: WorkflowContentFeature
     }
 
 
-    const matchId = match[1] as string
-    const citationId = `citation_${matchId}`
+    const citationId = match[1] as string
     const citation = feature.citations?.[citationId]
     parts.push({
       type: 'citation_ref',
@@ -847,6 +877,35 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   display: flex;
   flex-direction: column;
   height: 100%;
+  --workflow-accent: #0f766e;
+  --workflow-accent-strong: #0f766e;
+  --workflow-accent-soft: rgba(20, 184, 166, 0.16);
+  --workflow-accent-softer: rgba(20, 184, 166, 0.08);
+  --workflow-accent-border: rgba(13, 148, 136, 0.24);
+}
+
+.workflow-detail-panel.theme-quick-read {
+  --workflow-accent: #2563eb;
+  --workflow-accent-strong: #1d4ed8;
+  --workflow-accent-soft: rgba(147, 197, 253, 0.34);
+  --workflow-accent-softer: rgba(96, 165, 250, 0.1);
+  --workflow-accent-border: rgba(37, 99, 235, 0.24);
+}
+
+.workflow-detail-panel.theme-deep-dive {
+  --workflow-accent: #4f46e5;
+  --workflow-accent-strong: #4338ca;
+  --workflow-accent-soft: rgba(199, 210, 254, 0.5);
+  --workflow-accent-softer: rgba(99, 102, 241, 0.1);
+  --workflow-accent-border: rgba(79, 70, 229, 0.24);
+}
+
+.workflow-detail-panel.theme-custom {
+  --workflow-accent: #0f766e;
+  --workflow-accent-strong: #0f766e;
+  --workflow-accent-soft: rgba(20, 184, 166, 0.2);
+  --workflow-accent-softer: rgba(250, 204, 21, 0.11);
+  --workflow-accent-border: rgba(13, 148, 136, 0.26);
 }
 
 .panel-header {
@@ -955,7 +1014,19 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   animation: breathing 1.6s ease-in-out infinite;
 }
 
+.workflow-status-badge.status-cancelling {
+  background: #fef3c7;
+  color: #d97706;
+}
+
 .workflow-status-badge.status-processing::after {
+  content: '...';
+  display: inline-block;
+  margin-left: 2px;
+  animation: workflowDots 1.2s steps(4, end) infinite;
+}
+
+.workflow-status-badge.status-cancelling::after {
   content: '...';
   display: inline-block;
   margin-left: 2px;
@@ -975,6 +1046,33 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 .workflow-status-badge.status-partial {
   background: #fef3c7;
   color: #d97706;
+}
+
+.workflow-status-badge.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.panel-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.panel-stop-btn:hover {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #92400e;
 }
 
 .loading-dots {
@@ -1024,7 +1122,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 .workflow-report-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 12px 24px 24px;
   position: relative;
 }
 
@@ -1072,7 +1170,7 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   position: absolute;
   top: 100%;
   right: 0;
-  min-width: 140px;
+  min-width: 200px;
   max-width: min(260px, calc(100vw - 48px));
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -1083,11 +1181,10 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   overflow-y: auto;
 }
 
-.floating-toc.locale-en .toc-list {
-  min-width: 200px;
-}
-
 .toc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
   font-size: 13px;
   color: #6b7280;
@@ -1102,10 +1199,32 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 }
 
 .toc-item.active {
-  background: #eff6ff;
-  color: #3b82f6;
-  border-left-color: #3b82f6;
+  background: var(--workflow-accent-softer);
+  color: var(--workflow-accent-strong);
+  border-left-color: var(--workflow-accent);
   font-weight: 500;
+}
+
+.toc-item-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 28px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--workflow-accent-softer);
+  border: 1px solid var(--workflow-accent-border);
+  color: var(--workflow-accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.toc-item-label {
+  min-width: 0;
+  line-height: 1.5;
 }
 
 .toc-item:last-child {
@@ -1116,23 +1235,42 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   margin-bottom: 32px;
 }
 
+.workflow-feature-section:first-of-type .workflow-feature-header {
+  padding-top: 0;
+}
+
 .workflow-feature-section.failed {
   opacity: 0.8;
 }
 
 .workflow-feature-header {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 14px;
+  min-width: 0;
+  margin: 0 0 20px 0;
+  padding: 12px 0 16px 0;
+  border-bottom: 1px solid var(--workflow-accent-border);
+}
+
+.workflow-feature-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: min(128px, 36%);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--workflow-accent);
 }
 
 .feature-title-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .step-regenerate-btn {
@@ -1180,100 +1318,32 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   background: #f9fafb;
 }
 
-.feature-section-icon {
-  display: flex;
+.feature-section-index {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
   flex-shrink: 0;
-}
-
-.feature-section-icon.icon-blue {
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.feature-section-icon.icon-orange {
-  background: #ffedd5;
-  color: #ea580c;
-}
-
-.feature-section-icon.icon-cream {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.feature-section-icon.icon-green {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.feature-section-icon.icon-purple {
-  background: #f3e8ff;
-  color: #9333ea;
-}
-
-.feature-section-icon.icon-brown {
-  background: #fde68a;
-  color: #92400e;
-}
-
-.feature-section-icon.icon-teal {
-  background: #ccfbf1;
-  color: #0d9488;
-}
-
-.feature-section-icon.icon-indigo {
-  background: #e0e7ff;
-  color: #4f46e5;
-}
-
-.feature-section-icon.icon-rose {
-  background: #fce7f3;
-  color: #db2777;
-}
-
-.feature-section-icon.icon-amber {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.feature-section-icon.icon-emerald {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.feature-section-icon.icon-red {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.feature-section-icon.icon-pink {
-  background: #fce7f3;
-  color: #ec4899;
-}
-
-.feature-section-icon.icon-cyan {
-  background: #cffafe;
-  color: #06b6d4;
-}
-
-.feature-section-icon.icon-lime {
-  background: #ecfccb;
-  color: #84cc16;
-}
-
-.feature-section-icon.icon-default {
-  background: #f3f4f6;
-  color: #6b7280;
+  height: 22px;
+  min-width: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--workflow-accent-softer);
+  border: 1px solid var(--workflow-accent-border);
+  color: var(--workflow-accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .feature-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 21px;
+  font-weight: 750;
+  line-height: 1.3;
+  color: #1f2937;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .report-body {
@@ -1283,25 +1353,26 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 .feature-heading {
   color: #111827;
   margin: 0 0 16px 0;
-  line-height: 1.4;
+  line-height: 1.38;
+  font-weight: 700;
 }
 
 h1.feature-heading {
-  font-size: 24px;
-}
-
-h2.feature-heading {
   font-size: 20px;
 }
 
-h3.feature-heading {
+h2.feature-heading {
   font-size: 18px;
+}
+
+h3.feature-heading {
+  font-size: 16.5px;
 }
 
 h4.feature-heading,
 h5.feature-heading,
 h6.feature-heading {
-  font-size: 16px;
+  font-size: 15.5px;
 }
 
 .feature-paragraph {
@@ -1675,10 +1746,23 @@ h6.feature-heading {
 .panel-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
+}
+
+.panel-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--workflow-accent-soft);
+  color: var(--workflow-accent-strong);
+  box-shadow: inset 0 0 0 1px var(--workflow-accent-border);
 }
 
 .panel-title-row .panel-title {

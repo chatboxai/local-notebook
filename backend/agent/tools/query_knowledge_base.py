@@ -21,6 +21,11 @@ class CitationState:
         self.citations_map: dict = {}
         self.segment_to_citation: dict[str, str] = {}
         self.image_to_citation: dict[str, str] = {}
+        self.workflow_id: str = ""
+        self.current_step_id: str = ""
+        self.current_feature_id: str = ""
+        self.depends_on: list[str] = []
+        self.workflow_citation_to_local: dict[str, str] = {}
 
 
 

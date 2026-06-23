@@ -1022,6 +1022,7 @@ export interface WorkflowProgress {
   total: number
   completed: number
   failed: number
+  cancelled?: number
   current_step: string | null
 }
 
@@ -1032,13 +1033,13 @@ export interface WorkflowStep {
   feature_id: string | null
   feature_type: string
   display_name: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   title: string | null
   error_message: string | null
 }
 
 
-export type WorkflowStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'partial'
+export type WorkflowStatus = 'pending' | 'processing' | 'cancelling' | 'completed' | 'failed' | 'partial' | 'cancelled'
 
 
 export interface CreateWorkflowResponse {
@@ -1103,6 +1104,8 @@ export async function createWorkflow(
   customConfig?: {
     prompt?: string
     file_ids?: string[]
+    preset_key?: string
+    output_language?: string
   }
 ): Promise<CreateWorkflowResponse> {
   const response = await api.post('/api/workflows/generate', {
@@ -1138,6 +1141,12 @@ export async function getWorkflowDetail(workflowId: string): Promise<WorkflowDet
 
 export async function getProjectWorkflows(projectId: string): Promise<{ workflows: WorkflowListItem[] }> {
   const response = await api.get(`/api/workflows/project/${projectId}`)
+  return response.data
+}
+
+
+export async function cancelWorkflow(workflowId: string): Promise<WorkflowStatusResponse> {
+  const response = await api.post(`/api/workflows/${workflowId}/cancel`)
   return response.data
 }
 

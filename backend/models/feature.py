@@ -34,7 +34,7 @@ class Feature(Base):
     step_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    # pending / processing / completed / failed
+    # pending / processing / completed / failed / cancelled
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 
     blocks_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

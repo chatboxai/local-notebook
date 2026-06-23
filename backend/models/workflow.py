@@ -25,11 +25,11 @@ class Workflow(Base):
         String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    # 自定义工作流统一为 custom；字段保留用于兼容历史数据和后续筛选。
+    # 展示来源类型；仅用于前端区分内置 prompt / 自定义入口。
     workflow_type: Mapped[str] = mapped_column(String(50), nullable=False, default="custom")
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    # pending / processing / completed / partial / failed
+    # pending / processing / cancelling / completed / partial / failed / cancelled
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 
     # Plan 模型产出的结构化规划(steps 列表)
@@ -100,11 +100,13 @@ class Workflow(Base):
         total = len(feats)
         completed = sum(1 for f in feats if f.status == "completed")
         failed = sum(1 for f in feats if f.status == "failed")
+        cancelled = sum(1 for f in feats if f.status == "cancelled")
         current = next((f.step_name for f in feats if f.status == "processing"), None)
         return {
             "total": total,
             "completed": completed,
             "failed": failed,
+            "cancelled": cancelled,
             "current_step": current,
         }
 

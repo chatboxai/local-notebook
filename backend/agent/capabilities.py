@@ -12,16 +12,30 @@ from agent.tools.file_tools import AskImageTool, GetFileMetaTool, ListFilesTool
 from agent.tools.query_knowledge_base import QueryKnowledgeBaseTool
 from agent.tools.read_segments import ReadSegmentsTool
 from agent.tools.web_search import WebSearchTool
+from agent.tools.workflow_step_results import (
+    GetWorkflowStepResultsTool,
+    ListWorkflowStepResultsTool,
+)
 from kosong.tooling import Tool
 
 
-SECTION_TOOL_CLASSES: List[Type[Tool]] = [
+SOURCE_TOOL_CLASSES: List[Type[Tool]] = [
     QueryKnowledgeBaseTool,
     ReadSegmentsTool,
     ListFilesTool,
     GetFileMetaTool,
     AskImageTool,
     WebSearchTool,
+]
+
+WORKFLOW_STEP_TOOL_CLASSES: List[Type[Tool]] = [
+    ListWorkflowStepResultsTool,
+    GetWorkflowStepResultsTool,
+]
+
+SECTION_TOOL_CLASSES: List[Type[Tool]] = [
+    *SOURCE_TOOL_CLASSES,
+    *WORKFLOW_STEP_TOOL_CLASSES,
 ]
 
 TOOL_CLASS_BY_NAME = {tool_cls.name: tool_cls for tool_cls in SECTION_TOOL_CLASSES}
@@ -32,6 +46,8 @@ TOOL_LIST_FILES = ListFilesTool.name
 TOOL_GET_FILE_META = GetFileMetaTool.name
 TOOL_ASK_IMAGE = AskImageTool.name
 TOOL_WEB_SEARCH = WebSearchTool.name
+TOOL_LIST_WORKFLOW_STEP_RESULTS = ListWorkflowStepResultsTool.name
+TOOL_GET_WORKFLOW_STEP_RESULTS = GetWorkflowStepResultsTool.name
 
 
 @dataclass(frozen=True)
