@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 
 from arq.connections import RedisSettings
+from arq.worker import func
 
 logger = logging.getLogger(__name__)
 
@@ -1103,7 +1104,11 @@ async def generate_workflow_task(
 
 
 class WorkerSettings:
-    functions = [parse_file_task, generate_workflow_task]
+    functions = [
+        parse_file_task,
+        # Workflow generation is not idempotent yet; avoid ARQ replay appending duplicate steps.
+        func(generate_workflow_task, max_tries=1),
+    ]
     on_startup = on_startup
     on_shutdown = on_shutdown
     redis_settings = RedisSettings.from_dsn(REDIS_URL)
