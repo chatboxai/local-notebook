@@ -9,6 +9,8 @@
 ## Demo
 
 ![Demo screenshot](./docs/screenshots/demo-en.png)
+![Demo screenshot](./docs/screenshots/book-demo-en-1.png)
+![Demo screenshot](./docs/screenshots/book-demo-en-2.png)
 
 > Video demo coming later.
 
