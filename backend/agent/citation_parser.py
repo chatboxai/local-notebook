@@ -4,21 +4,22 @@ from typing import Generator, Dict, Any
 
 class CitationParser:
 
-    CITATION_PATTERN = re.compile(r'\[citation_(\d+)(?:-citation_(\d+))?\]')
+    CITATION_TOKEN = r'(?:\d+|[a-z][a-z0-9_]*_\d+)'
+    CITATION_PATTERN = re.compile(rf'\[citation_({CITATION_TOKEN})(?:-citation_({CITATION_TOKEN}))?\]')
 
     POTENTIAL_PATTERNS = [
-        re.compile(r'^\[citation_\d*$'),
-        re.compile(r'^\[citation_\d+-$'),
-        re.compile(r'^\[citation_\d+-c$'),
-        re.compile(r'^\[citation_\d+-ci$'),
-        re.compile(r'^\[citation_\d+-cit$'),
-        re.compile(r'^\[citation_\d+-cita$'),
-        re.compile(r'^\[citation_\d+-citat$'),
-        re.compile(r'^\[citation_\d+-citati$'),
-        re.compile(r'^\[citation_\d+-citatio$'),
-        re.compile(r'^\[citation_\d+-citation$'),
-        re.compile(r'^\[citation_\d+-citation_$'),
-        re.compile(r'^\[citation_\d+-citation_\d*$'),
+        re.compile(r'^\[citation_[a-z0-9_]*$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-c$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-ci$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-cit$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-cita$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citat$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citati$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citatio$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citation$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citation_$'),
+        re.compile(r'^\[citation_[a-z0-9_]+-citation_[a-z0-9_]*$'),
     ]
 
     CITATION_PREFIXES = ['[', '[c', '[ci', '[cit', '[cita', '[citat',
@@ -42,14 +43,14 @@ class CitationParser:
                 if before_text:
                     yield {"type": "text", "content": before_text}
 
-                start_num = int(match.group(1))
-                end_num = int(match.group(2)) if match.group(2) else None
+                start_token = match.group(1)
+                end_token = match.group(2)
 
-                if end_num:
-                    for num in range(start_num, end_num + 1):
-                        yield from self._emit_citation_ref(f"citation_{num}")
+                if end_token:
+                    for citation_id in self._expand_range(start_token, end_token):
+                        yield from self._emit_citation_ref(citation_id)
                 else:
-                    yield from self._emit_citation_ref(f"citation_{start_num}")
+                    yield from self._emit_citation_ref(f"citation_{start_token}")
 
                 self.buffer = self.buffer[match.end():]
                 continue
@@ -87,6 +88,30 @@ class CitationParser:
             if pattern.match(s):
                 return True
         return False
+
+    def _expand_range(self, start_token: str, end_token: str) -> list[str]:
+        """Expand citation ranges while keeping malformed mixed ranges literal."""
+        if start_token.isdigit() and end_token.isdigit():
+            start = int(start_token)
+            end = int(end_token)
+            if end >= start:
+                return [f"citation_{num}" for num in range(start, end + 1)]
+
+        start_prefix, _, start_num = start_token.rpartition("_")
+        end_prefix, _, end_num = end_token.rpartition("_")
+        if (
+            start_prefix
+            and start_prefix == end_prefix
+            and start_num.isdigit()
+            and end_num.isdigit()
+            and int(end_num) >= int(start_num)
+        ):
+            return [
+                f"citation_{start_prefix}_{num}"
+                for num in range(int(start_num), int(end_num) + 1)
+            ]
+
+        return [f"citation_{start_token}", f"citation_{end_token}"]
 
     def _emit_citation_ref(self, citation_id: str) -> Generator[Dict[str, Any], None, None]:
         metadata = self.citation_map.get(citation_id, {})

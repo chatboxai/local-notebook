@@ -131,6 +131,7 @@ def create_app() -> FastAPI:
         project_router,
         session_router,
         settings_router,
+        workflow_router,
     )
 
     app.include_router(auth_router,        prefix="/api")
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(direct_file_router, prefix="/api")
     app.include_router(session_router,     prefix="/api")
     app.include_router(chat_router,        prefix="/api")
+    app.include_router(workflow_router,    prefix="/api")
 
     @app.get("/health", tags=["health"])
     async def health() -> dict:

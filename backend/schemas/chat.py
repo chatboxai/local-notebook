@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Any, Optional
 from pydantic import BaseModel
 
+from schemas.base import UTCDateTimeModel
+
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -25,7 +27,7 @@ class CitationItem(BaseModel):
     content_snippet: str
 
 
-class MessageResponse(BaseModel):
+class MessageResponse(UTCDateTimeModel):
     id: str
     session_id: str
     role: str

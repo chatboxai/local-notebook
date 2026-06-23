@@ -15,6 +15,7 @@ from models.message import Message
 from models.project import Project
 from models.session import Session
 from schemas.session import SessionCreate, SessionResponse
+from utils.time import utc_isoformat
 
 logger = logging.getLogger("session_routes")
 router = APIRouter(tags=["sessions"])
@@ -37,7 +38,7 @@ def _brief_message(m: Message) -> dict:
     return {
         "id": m.id,
         "role": m.role,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
+        "created_at": utc_isoformat(m.created_at),
         "parent_message_id": m.parent_message_id,
     }
 
@@ -47,9 +48,9 @@ def _full_message(m: Message) -> dict:
         "id": m.id,
         "role": m.role,
         "content": m.content,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
-        "started_at": m.started_at.isoformat() if m.started_at else None,
-        "finished_at": m.finished_at.isoformat() if m.finished_at else None,
+        "created_at": utc_isoformat(m.created_at),
+        "started_at": utc_isoformat(m.started_at),
+        "finished_at": utc_isoformat(m.finished_at),
         "reasoning_content": m.reasoning_content,
         "agent_role": m.agent_role,
         "parent_message_id": m.parent_message_id,
@@ -127,8 +128,8 @@ async def create_session(
             "id": empty_session.id,
             "project_id": project_id,
             "title": empty_session.title,
-            "created_at": empty_session.created_at.isoformat() if empty_session.created_at else None,
-            "updated_at": empty_session.updated_at.isoformat() if empty_session.updated_at else None,
+            "created_at": utc_isoformat(empty_session.created_at),
+            "updated_at": utc_isoformat(empty_session.updated_at),
             "reused": True
         }
 
@@ -141,8 +142,8 @@ async def create_session(
         "id": session.id,
         "project_id": project_id,
         "title": session.title,
-        "created_at": session.created_at.isoformat() if session.created_at else None,
-        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        "created_at": utc_isoformat(session.created_at),
+        "updated_at": utc_isoformat(session.updated_at),
         "reused": False
     }
 
@@ -219,8 +220,8 @@ async def get_session(
         "id": session.id,
         "project_id": session.project_id,
         "title": session.title,
-        "created_at": session.created_at.isoformat() if session.created_at else None,
-        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        "created_at": utc_isoformat(session.created_at),
+        "updated_at": utc_isoformat(session.updated_at),
         "messages": processed_messages,
         "total_messages": total_messages,
         "raw_fetched": raw_fetched,

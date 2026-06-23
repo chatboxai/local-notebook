@@ -1018,17 +1018,11 @@ export async function findBlockByPosition(
 }
 
 
-export interface WorkflowType {
-  type: string
-  display_name: string
-  description?: string
-}
-
-
 export interface WorkflowProgress {
   total: number
   completed: number
   failed: number
+  cancelled?: number
   current_step: string | null
 }
 
@@ -1039,13 +1033,13 @@ export interface WorkflowStep {
   feature_id: string | null
   feature_type: string
   display_name: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   title: string | null
   error_message: string | null
 }
 
 
-export type WorkflowStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'partial'
+export type WorkflowStatus = 'pending' | 'processing' | 'cancelling' | 'completed' | 'failed' | 'partial' | 'cancelled'
 
 
 export interface CreateWorkflowResponse {
@@ -1092,12 +1086,6 @@ export interface WorkflowListItem {
 }
 
 
-export async function getWorkflowTypes(): Promise<{ types: WorkflowType[] }> {
-  const response = await api.get('/api/workflows/types')
-  return response.data
-}
-
-
 export async function renameWorkflow(workflowId: string, title: string): Promise<WorkflowListItem> {
   const response = await api.put(`/api/workflows/${workflowId}/title`, { title })
   return response.data
@@ -1112,16 +1100,16 @@ export async function finalizeWorkflow(workflowId: string): Promise<{ success: b
 
 export async function createWorkflow(
   projectId: string,
-  workflowType: string,
   title: string,
   customConfig?: {
     prompt?: string
     file_ids?: string[]
+    preset_key?: string
+    output_language?: string
   }
 ): Promise<CreateWorkflowResponse> {
   const response = await api.post('/api/workflows/generate', {
     project_id: projectId,
-    workflow_type: workflowType,
     title,
     custom_config: customConfig
   }, { timeout: 60000 })
@@ -1151,8 +1139,15 @@ export async function getWorkflowDetail(workflowId: string): Promise<WorkflowDet
 }
 
 
-export async function getProjectWorkflows(_projectId: string): Promise<{ workflows: WorkflowListItem[] }> {
-  return { workflows: [] }
+export async function getProjectWorkflows(projectId: string): Promise<{ workflows: WorkflowListItem[] }> {
+  const response = await api.get(`/api/workflows/project/${projectId}`)
+  return response.data
+}
+
+
+export async function cancelWorkflow(workflowId: string): Promise<WorkflowStatusResponse> {
+  const response = await api.post(`/api/workflows/${workflowId}/cancel`)
+  return response.data
 }
 
 
