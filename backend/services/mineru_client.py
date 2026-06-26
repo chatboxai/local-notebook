@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from typing import Optional, List
@@ -10,6 +11,17 @@ from typing import Optional, List
 import httpx
 
 logger = logging.getLogger("mineru_client")
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
+
+MINERU_PDF_CHUNK_PAGES = _env_int("MINERU_PDF_CHUNK_PAGES", 100)
 
 
 def _make_minimal_pdf() -> bytes:
@@ -39,6 +51,136 @@ class MinerUResult:
     images: dict = None
 
 
+@dataclass(frozen=True)
+class PDFChunk:
+    file_path: str
+    start_page: int
+    end_page: int
+
+
+def _safe_file_stem(file_path: str) -> str:
+    stem = os.path.splitext(os.path.basename(file_path))[0]
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in stem)
+    return safe[:80] or "document"
+
+
+def _get_pdf_page_count_sync(file_path: str) -> int:
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(file_path)
+        return len(reader.pages)
+    except Exception:
+        return 0
+
+
+async def _get_pdf_page_count(file_path: str) -> int:
+    return await asyncio.to_thread(_get_pdf_page_count_sync, file_path)
+
+
+def _split_pdf_sync(file_path: str, output_dir: str, pages_per_chunk: int) -> list[PDFChunk]:
+    from pypdf import PdfReader, PdfWriter
+
+    reader = PdfReader(file_path)
+    total_pages = len(reader.pages)
+    stem = _safe_file_stem(file_path)
+    chunks: list[PDFChunk] = []
+
+    for start in range(0, total_pages, pages_per_chunk):
+        end = min(start + pages_per_chunk, total_pages)
+        writer = PdfWriter()
+        for page_index in range(start, end):
+            writer.add_page(reader.pages[page_index])
+
+        chunk_name = f"{stem}_p{start + 1:04d}-{end:04d}.pdf"
+        chunk_path = os.path.join(output_dir, chunk_name)
+        with open(chunk_path, "wb") as f:
+            writer.write(f)
+
+        chunks.append(PDFChunk(file_path=chunk_path, start_page=start, end_page=end))
+
+    return chunks
+
+
+async def _split_pdf(file_path: str, output_dir: str, pages_per_chunk: int) -> list[PDFChunk]:
+    return await asyncio.to_thread(_split_pdf_sync, file_path, output_dir, pages_per_chunk)
+
+
+def _prefix_image_path(image_path: str, prefix: str) -> str:
+    normalized = str(image_path).replace("\\", "/")
+    image_name = os.path.basename(normalized)
+    if not image_name:
+        return normalized
+
+    directory = os.path.dirname(normalized).replace("\\", "/")
+    prefixed_name = f"{prefix}{image_name}"
+    return f"{directory}/{prefixed_name}" if directory else prefixed_name
+
+
+def _add_prefixed_image_aliases(target: dict, key: str, value, prefix: str) -> None:
+    prefixed_key = _prefix_image_path(key, prefix)
+    target[prefixed_key] = value
+
+    prefixed_basename = os.path.basename(prefixed_key)
+    if prefixed_basename:
+        target[prefixed_basename] = value
+        target[f"images/{prefixed_basename}"] = value
+
+
+def _offset_content_list(content_list: list, page_offset: int, image_prefix: str) -> list:
+    adjusted = []
+
+    for item in content_list or []:
+        if not isinstance(item, dict):
+            adjusted.append(item)
+            continue
+
+        copied = dict(item)
+        page_idx = copied.get("page_idx")
+        if isinstance(page_idx, int):
+            copied["page_idx"] = page_idx + page_offset
+
+        for key in ("page", "start_page", "end_page"):
+            value = copied.get(key)
+            if isinstance(value, int):
+                copied[key] = value + page_offset
+
+        img_path = copied.get("img_path")
+        if img_path:
+            copied["img_path"] = _prefix_image_path(str(img_path), image_prefix)
+
+        adjusted.append(copied)
+
+    return adjusted
+
+
+def _merge_chunk_results(chunk_results: list[tuple[PDFChunk, MinerUResult]], page_count: int) -> MinerUResult:
+    markdown_parts: list[str] = []
+    content_list: list = []
+    images: dict = {}
+
+    for index, (chunk, result) in enumerate(chunk_results, start=1):
+        image_prefix = f"part_{index:03d}_"
+
+        if result.markdown:
+            markdown_parts.append(result.markdown.strip())
+
+        content_list.extend(
+            _offset_content_list(result.content_list or [], chunk.start_page, image_prefix)
+        )
+
+        for key, value in (result.images or {}).items():
+            _add_prefixed_image_aliases(images, str(key), value, image_prefix)
+
+    return MinerUResult(
+        markdown="\n\n".join(part for part in markdown_parts if part),
+        content_list=content_list,
+        success=True,
+        page_count=page_count,
+        images=images,
+    )
+
+
 class MinerUClient:
 
     MAX_RETRIES = 10
@@ -63,6 +205,78 @@ class MinerUClient:
             )
 
         page_count = await self._get_pdf_page_count(file_path)
+        if page_count > MINERU_PDF_CHUNK_PAGES:
+            return await self._parse_pdf_in_page_chunks(
+                file_path=file_path,
+                page_count=page_count,
+                parse_method=parse_method,
+                return_content_list=return_content_list,
+            )
+
+        return await self._parse_pdf_single(
+            file_path=file_path,
+            page_count=page_count,
+            parse_method=parse_method,
+            return_content_list=return_content_list,
+        )
+
+    async def _parse_pdf_in_page_chunks(
+        self,
+        file_path: str,
+        page_count: int,
+        parse_method: str,
+        return_content_list: bool,
+    ) -> MinerUResult:
+        logger.info(
+            f"PDF 页数 {page_count} 超过 {MINERU_PDF_CHUNK_PAGES}，"
+            "按页切片调用 MinerU"
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mineru_chunks_") as temp_dir:
+            chunks = await _split_pdf(file_path, temp_dir, MINERU_PDF_CHUNK_PAGES)
+            chunk_results: list[tuple[PDFChunk, MinerUResult]] = []
+
+            for index, chunk in enumerate(chunks, start=1):
+                logger.info(
+                    f"MinerU 切片 {index}/{len(chunks)}: "
+                    f"pages {chunk.start_page + 1}-{chunk.end_page}"
+                )
+                result = await self._parse_pdf_single(
+                    file_path=chunk.file_path,
+                    page_count=chunk.end_page - chunk.start_page,
+                    parse_method=parse_method,
+                    return_content_list=return_content_list,
+                )
+
+                if not result.success:
+                    return MinerUResult(
+                        markdown="",
+                        content_list=[],
+                        success=False,
+                        error_message=(
+                            f"第 {chunk.start_page + 1}-{chunk.end_page} 页解析失败: "
+                            f"{result.error_message or '未知错误'}"
+                        ),
+                        page_count=page_count,
+                    )
+
+                chunk_results.append((chunk, result))
+
+        merged = _merge_chunk_results(chunk_results, page_count)
+        logger.info(
+            f"MinerU 切片合并完成: chunks={len(chunk_results)}, "
+            f"markdown={len(merged.markdown)} chars, "
+            f"content_list={len(merged.content_list)}, pages={page_count}"
+        )
+        return merged
+
+    async def _parse_pdf_single(
+        self,
+        file_path: str,
+        page_count: int,
+        parse_method: str,
+        return_content_list: bool,
+    ) -> MinerUResult:
 
         try:
             logger.info(f"调用 MinerU 服务: {self.base_url}/file_parse")
@@ -177,12 +391,7 @@ class MinerUClient:
             )
 
     async def _get_pdf_page_count(self, file_path: str) -> int:
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            return len(reader.pages)
-        except Exception:
-            return 0
+        return await _get_pdf_page_count(file_path)
 
     async def health_check(self) -> bool:
         pdf_bytes = _make_minimal_pdf()
@@ -220,8 +429,6 @@ class MinerUCloudClient:
         existing_batch_id: str | None = None,
         batch_created_at: "datetime | None" = None,
     ) -> tuple[MinerUResult, str | None]:
-        from datetime import datetime, timezone
-
         if not os.path.exists(file_path):
             return MinerUResult(
                 markdown="", content_list=[], success=False,
@@ -229,6 +436,76 @@ class MinerUCloudClient:
             ), None
 
         page_count = await self._get_pdf_page_count(file_path)
+        if page_count > MINERU_PDF_CHUNK_PAGES:
+            return await self._parse_pdf_in_page_chunks(file_path, page_count)
+
+        return await self._parse_pdf_single(
+            file_path=file_path,
+            page_count=page_count,
+            existing_batch_id=existing_batch_id,
+            batch_created_at=batch_created_at,
+        )
+
+    async def _parse_pdf_in_page_chunks(
+        self,
+        file_path: str,
+        page_count: int,
+    ) -> tuple[MinerUResult, str | None]:
+        logger.info(
+            f"[cloud] PDF 页数 {page_count} 超过 {MINERU_PDF_CHUNK_PAGES}，"
+            "按页切片上传 MinerU"
+        )
+
+        with tempfile.TemporaryDirectory(prefix="mineru_chunks_") as temp_dir:
+            chunks = await _split_pdf(file_path, temp_dir, MINERU_PDF_CHUNK_PAGES)
+            chunk_results: list[tuple[PDFChunk, MinerUResult]] = []
+
+            for index, chunk in enumerate(chunks, start=1):
+                image_prefix = f"part_{index:03d}_"
+                logger.info(
+                    f"[cloud] 切片 {index}/{len(chunks)}: "
+                    f"pages {chunk.start_page + 1}-{chunk.end_page}"
+                )
+
+                result, _batch_id = await self._parse_pdf_single(
+                    file_path=chunk.file_path,
+                    page_count=chunk.end_page - chunk.start_page,
+                    image_output_file_path=file_path,
+                    image_prefix=image_prefix,
+                )
+
+                if not result.success:
+                    return MinerUResult(
+                        markdown="",
+                        content_list=[],
+                        success=False,
+                        error_message=(
+                            f"第 {chunk.start_page + 1}-{chunk.end_page} 页解析失败: "
+                            f"{result.error_message or '未知错误'}"
+                        ),
+                        page_count=page_count,
+                    ), None
+
+                chunk_results.append((chunk, result))
+
+        merged = _merge_chunk_results(chunk_results, page_count)
+        logger.info(
+            f"[cloud] 切片合并完成: chunks={len(chunk_results)}, "
+            f"markdown={len(merged.markdown)} chars, "
+            f"content_list={len(merged.content_list)}, pages={page_count}"
+        )
+        return merged, None
+
+    async def _parse_pdf_single(
+        self,
+        file_path: str,
+        page_count: int,
+        existing_batch_id: str | None = None,
+        batch_created_at: "datetime | None" = None,
+        image_output_file_path: str | None = None,
+        image_prefix: str = "",
+    ) -> tuple[MinerUResult, str | None]:
+        from datetime import datetime, timezone
 
         try:
             batch_id = None
@@ -268,7 +545,12 @@ class MinerUCloudClient:
                     error_message=f"下载结果失败: HTTP {resp.status_code}"
                 ), batch_id
 
-            return self._parse_zip(resp.content, page_count, file_path), batch_id
+            return self._parse_zip(
+                resp.content,
+                page_count,
+                image_output_file_path or file_path,
+                image_prefix=image_prefix,
+            ), batch_id
 
         except httpx.ConnectError:
             return MinerUResult(
@@ -356,7 +638,13 @@ class MinerUCloudClient:
         logger.error(f"[cloud] 轮询超时 ({TASK_TIMEOUT_SECONDS}s)")
         return None
 
-    def _parse_zip(self, zip_bytes: bytes, page_count: int, file_path: str) -> MinerUResult:
+    def _parse_zip(
+        self,
+        zip_bytes: bytes,
+        page_count: int,
+        file_path: str,
+        image_prefix: str = "",
+    ) -> MinerUResult:
         markdown = ""
         content_list = []
         images_dict = {}
@@ -374,13 +662,14 @@ class MinerUCloudClient:
                     content_list = json.loads(raw)
 
                 elif name.startswith("images/") and not name.endswith("/"):
-                    img_name = os.path.basename(name)
+                    original_img_name = os.path.basename(name)
+                    img_name = f"{image_prefix}{original_img_name}"
                     local_path = os.path.join(img_dir, img_name)
                     with open(local_path, "wb") as f:
                         f.write(zf.read(name))
                     images_dict[name] = local_path
-                    images_dict[img_name] = local_path
-                    images_dict[f"images/{img_name}"] = local_path
+                    images_dict[original_img_name] = local_path
+                    images_dict[f"images/{original_img_name}"] = local_path
 
         type_counts = {}
         for item in content_list:
@@ -400,12 +689,7 @@ class MinerUCloudClient:
         )
 
     async def _get_pdf_page_count(self, file_path: str) -> int:
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            return len(reader.pages)
-        except Exception:
-            return 0
+        return await _get_pdf_page_count(file_path)
 
     async def health_check(self) -> bool:
         try:
