@@ -78,17 +78,8 @@ async def _delete_project_rows(db: AsyncSession, project_id: str, project: Proje
     from models.session import Session
     from models.workflow import Workflow
 
-    file_ids = set(
+    project_file_ids = set(
         (await db.execute(select(File.id).where(File.project_id == project_id)))
-        .scalars()
-        .all()
-    )
-    file_ids.update(
-        (
-            await db.execute(
-                select(Segment.file_id).where(Segment.project_id == project_id)
-            )
-        )
         .scalars()
         .all()
     )
@@ -115,16 +106,13 @@ async def _delete_project_rows(db: AsyncSession, project_id: str, project: Proje
     await db.execute(sa_delete(Workflow).where(Workflow.project_id == project_id))
 
     segment_filters = [Segment.project_id == project_id]
-    if file_ids:
-        segment_filters.append(Segment.file_id.in_(file_ids))
-        await db.execute(sa_delete(Block).where(Block.file_id.in_(file_ids)))
-        await db.execute(sa_delete(Image).where(Image.file_id.in_(file_ids)))
+    if project_file_ids:
+        segment_filters.append(Segment.file_id.in_(project_file_ids))
+        await db.execute(sa_delete(Block).where(Block.file_id.in_(project_file_ids)))
+        await db.execute(sa_delete(Image).where(Image.file_id.in_(project_file_ids)))
     await db.execute(sa_delete(Segment).where(or_(*segment_filters)))
 
-    file_filters = [File.project_id == project_id]
-    if file_ids:
-        file_filters.append(File.id.in_(file_ids))
-    await db.execute(sa_delete(File).where(or_(*file_filters)))
+    await db.execute(sa_delete(File).where(File.project_id == project_id))
 
     await db.delete(project)
 
