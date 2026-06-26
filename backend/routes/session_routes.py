@@ -312,8 +312,10 @@ def _process_messages_citations(messages: list) -> list:
                         ref_item["file_name"] = event.get("file_name", "")
                         if event.get("image_name"):
                             ref_item["image_name"] = event.get("image_name", "")
-                            ref_item["image_index"] = event.get("image_index", 0)
-                            ref_item["page"] = event.get("page", 0)
+                        if event.get("image_index") is not None:
+                            ref_item["image_index"] = event.get("image_index")
+                        if event.get("page") is not None:
+                            ref_item["page"] = event.get("page")
                     elif citation_type == "web":
                         ref_item["citation_type"] = "web"
                         ref_item["title"] = event.get("title", "")

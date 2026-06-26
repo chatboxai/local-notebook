@@ -134,14 +134,16 @@ class CitationParser:
             "citation_id": citation_id,
         }
 
-        if citation_type == "image":
+        if citation_type in {"image", "pdf_image"}:
             event["citation_type"] = "image"
             event["file_id"] = metadata.get("file_id", "")
             event["file_name"] = metadata.get("file_name", "")
             if metadata.get("image_name"):
                 event["image_name"] = metadata.get("image_name", "")
-                event["image_index"] = metadata.get("image_index", 0)
-                event["page"] = metadata.get("page", 0)
+            if metadata.get("image_index") is not None:
+                event["image_index"] = metadata.get("image_index")
+            if metadata.get("page") is not None:
+                event["page"] = metadata.get("page")
         elif citation_type == "web":
             event["citation_type"] = "web"
             event["title"] = metadata.get("title", "")

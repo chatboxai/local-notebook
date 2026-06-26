@@ -153,6 +153,7 @@ export interface Block {
     
     is_image?: boolean
     image_index?: number
+    image_name?: string
   }
 }
 
@@ -197,7 +198,7 @@ export interface CitationMetadata {
   file_id?: string
   summary?: string
   display_num: number
-  type?: 'segment' | 'image' | 'web'
+  type?: 'segment' | 'image' | 'pdf_image' | 'web'
   
   image_name?: string
   image_index?: number

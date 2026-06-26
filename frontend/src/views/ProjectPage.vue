@@ -194,6 +194,21 @@
                       </div>
 
                       <div
+                        v-else-if="block.extra?.is_image"
+                        :data-block-id="block.block_id"
+                        class="preview-block image-block"
+                        :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
+                      >
+                        <img
+                          v-if="getBlockImagePreviewUrl(block)"
+                          :src="getBlockImagePreviewUrl(block)"
+                          :alt="previewingFileName"
+                          class="parsed-block-image"
+                        />
+                        <span v-else v-html="renderLatexOnly(block.content)"></span>
+                      </div>
+
+                      <div
                         v-else
                         :data-block-id="block.block_id"
                         class="preview-block"
@@ -231,6 +246,21 @@
                     <div v-if="block.extra?.table_caption" class="table-caption">{{ block.extra.table_caption }}</div>
                     <div class="table-content" v-html="block.extra?.table_html || renderLatexOnly(block.content)"></div>
                     <div v-if="block.extra?.table_footnote" class="table-footnote">{{ block.extra.table_footnote }}</div>
+                  </div>
+
+                  <div
+                    v-else-if="block.extra?.is_image"
+                    :data-block-id="block.block_id"
+                    class="preview-block image-block"
+                    :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
+                  >
+                    <img
+                      v-if="getBlockImagePreviewUrl(block)"
+                      :src="getBlockImagePreviewUrl(block)"
+                      :alt="previewingFileName"
+                      class="parsed-block-image"
+                    />
+                    <span v-else v-html="renderLatexOnly(block.content)"></span>
                   </div>
 
                   <div
@@ -1166,15 +1196,6 @@
       @insert-text="handleInsertText"
     />
 
-
-    <ImageCitationModal
-      :visible="imageCitationModal.visible"
-      :file-name="imageCitationModal.fileName"
-      :preview-url="imageCitationModal.previewUrl"
-      @close="closeImageCitationModal"
-    />
-
-
     <ToolConfigModal
       :visible="toolConfigModal.visible"
       :tool-type="toolConfigModal.toolType"
@@ -1309,7 +1330,6 @@ import FeatureConfigModal from '../components/common/FeatureConfigModal.vue'
 import UploadSourceModal from '../components/common/UploadSourceModal.vue'
 import ToolConfigModal from '../components/common/ToolConfigModal.vue'
 import WorkflowConfigModal from '../components/common/WorkflowConfigModal.vue'
-import ImageCitationModal from '../components/common/ImageCitationModal.vue'
 import ImageGenerationModal, { type ImageFile } from '../components/common/ImageGenerationModal.vue'
 import VideoGenerationModal, { type VideoFile, type VideoGenerationMode, type VideoGenerationConfig } from '../components/common/VideoGenerationModal.vue'
 import FeatureDetailPanel from '../components/project/FeatureDetailPanel.vue'
@@ -1335,6 +1355,7 @@ import {
   editMessageAndRegenerate,
   type AgentRole,
   getImagePreviewUrl,
+  getEmbeddedImagePreviewUrl,
   getBlocksLocation,
   getFile,
   type CitationRef,
@@ -2006,25 +2027,16 @@ async function handleFeatureCitationClick(part: FeatureCitationRefPart) {
   const citationType = citationMeta?.type
 
 
-  if (citationType === 'image') {
+  if (citationType === 'image' || citationType === 'pdf_image') {
     const fileId = citationMeta?.file_id
-    const imageName = citationMeta?.image_name
 
-    if (imageName && fileId) {
-
-      await jumpToPdfImageLocation({
+    if (fileId) {
+      await openImageCitationSource({
         fileId,
         fileName: citationMeta?.file_name || '',
-        imageName,
+        imageName: citationMeta?.image_name,
         imageIndex: citationMeta?.image_index,
         page: citationMeta?.page
-      })
-    } else if (fileId) {
-
-      openImageCitationModal({
-        fileId,
-        fileName: citationMeta?.file_name || '',
-        previewUrl: getImagePreviewUrl(fileId)
       })
     }
     return
@@ -2580,30 +2592,6 @@ function hasEditableWorkflowTitle(workflow: WorkflowListItem | WorkflowDetail): 
 }
 
 
-const imageCitationModal = reactive({
-  visible: false,
-  fileId: '',
-  fileName: '',
-  previewUrl: ''
-})
-
-
-function openImageCitationModal(data: {
-  fileId: string
-  fileName: string
-  previewUrl: string
-}) {
-  imageCitationModal.fileId = data.fileId
-  imageCitationModal.fileName = data.fileName
-  imageCitationModal.previewUrl = data.previewUrl
-  imageCitationModal.visible = true
-}
-
-
-function closeImageCitationModal() {
-  imageCitationModal.visible = false
-}
-
 const projectId = route.params.id as string
 
 
@@ -2731,26 +2719,13 @@ async function handleCitationClickEvent(event: MouseEvent) {
       const imageIndexStr = citationEl.dataset.imageIndex || ''
       const pageStr = citationEl.dataset.page || ''
 
-
-      const isPdfImage = !!imageName
-
-      if (isPdfImage && fileId) {
-
-        const imageIndex = imageIndexStr ? parseInt(imageIndexStr, 10) : undefined
-        const page = pageStr ? parseInt(pageStr, 10) : undefined
-        await jumpToPdfImageLocation({
+      if (fileId) {
+        await openImageCitationSource({
           fileId,
           fileName,
-          imageName,
-          imageIndex,
-          page
-        })
-      } else if (fileId) {
-
-        openImageCitationModal({
-          fileId,
-          fileName,
-          previewUrl: getImagePreviewUrl(fileId)
+          imageName: imageName || undefined,
+          imageIndex: parseOptionalInt(imageIndexStr),
+          page: parseOptionalInt(pageStr)
         })
       }
     } else {
@@ -3416,23 +3391,46 @@ async function openFilePreview(fileId: string, segmentId?: string) {
 }
 
 
-interface PdfImageCitation {
+interface ImageCitationSource {
   fileId: string
-  fileName: string
-  imageName: string
+  fileName?: string
+  imageName?: string
   imageIndex?: number
   page?: number
 }
 
-async function jumpToPdfImageLocation(citation: PdfImageCitation) {
+function parseOptionalInt(value?: string): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function imageBlockMatches(extra: any, citation: ImageCitationSource) {
+  if (!extra?.is_image) return false
+  if (citation.imageIndex !== undefined && extra.image_index === citation.imageIndex) return true
+  if (citation.imageName && extra.image_name === citation.imageName) return true
+  return false
+}
+
+async function openImageCitationSource(citation: ImageCitationSource) {
+  await jumpToPdfImageLocation(citation)
+}
+
+async function jumpToPdfImageLocation(citation: ImageCitationSource) {
 
   await openFilePreview(citation.fileId)
 
-
   await nextTick()
 
+  const pageInfoImageBlock = pdfPageInfo.value?.blocks?.find(block =>
+    imageBlockMatches(block.extra, citation)
+  )
+  const targetPage = citation.page && citation.page > 0
+    ? citation.page
+    : pageInfoImageBlock?.page || 0
+  const targetBbox = pageInfoImageBlock?.extra?.bbox
 
-  if (isRawViewMode.value && pdfPageInfo.value && citation.page) {
+  if (isRawViewMode.value && pdfPageInfo.value && targetPage > 0) {
 
     await nextTick()
 
@@ -3452,26 +3450,13 @@ async function jumpToPdfImageLocation(citation: PdfImageCitation) {
     await waitForLayoutStable()
 
 
-    let bbox: number[] | undefined
-    if (pdfPageInfo.value.blocks && citation.imageIndex !== undefined) {
-      const imageBlock = pdfPageInfo.value.blocks.find((block: any) =>
-        block.extra?.is_image &&
-        block.extra?.image_index === citation.imageIndex
-      )
-      if (imageBlock?.extra?.bbox) {
-        bbox = imageBlock.extra.bbox
-      }
-    }
-
-
     if (pdfViewerRef.value) {
-      await pdfViewerRef.value.scrollToPageAndHighlightBbox(citation.page, bbox)
+      await pdfViewerRef.value.scrollToPageAndHighlightBbox(targetPage, targetBbox)
     }
-  } else if (previewingFileContent.value && citation.imageIndex !== undefined) {
+  } else if (previewingFileContent.value) {
 
     const imageBlock = previewingFileContent.value.blocks.find(block =>
-      block.extra?.is_image &&
-      block.extra?.image_index === citation.imageIndex
+      imageBlockMatches(block.extra, citation)
     )
 
     if (imageBlock) {
@@ -3479,11 +3464,18 @@ async function jumpToPdfImageLocation(citation: PdfImageCitation) {
       currentBlockIds.value = [imageBlock.block_id]
       await nextTick()
       scrollToBlock(imageBlock.block_id)
-    } else if (citation.page) {
-
-
+    } else if (targetPage > 0) {
+      const pageSection = previewContentRef.value?.querySelector(`[data-page="${targetPage}"]`) as HTMLElement
+      pageSection?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
+}
+
+function getBlockImagePreviewUrl(block: FileContent['blocks'][number]): string {
+  if (!previewingFile.value) return ''
+  const imageIndex = block.extra?.image_index
+  if (typeof imageIndex !== 'number') return ''
+  return getEmbeddedImagePreviewUrl(previewingFile.value.id, imageIndex)
 }
 
 
@@ -4741,7 +4733,10 @@ async function submitEditMessage(msg: Message) {
             citation_type: 'image',
             display_num: citation.display_num,
             file_id: citation.file_id,
-            file_name: citation.file_name
+            file_name: citation.file_name,
+            image_name: citation.image_name,
+            image_index: citation.image_index,
+            page: citation.page
           } as any)
         } else {
           streamingParts.value.push({
@@ -5858,23 +5853,16 @@ async function handleWorkflowCitationClick(part: FeatureCitationRefPart, feature
   const citationMeta = feature.citations?.[part.citation_id]
   const citationType = citationMeta?.type
 
-  if (citationType === 'image') {
+  if (citationType === 'image' || citationType === 'pdf_image') {
     const fileId = citationMeta?.file_id
-    const imageName = citationMeta?.image_name
 
-    if (imageName && fileId) {
-      await jumpToPdfImageLocation({
+    if (fileId) {
+      await openImageCitationSource({
         fileId,
         fileName: citationMeta?.file_name || '',
-        imageName,
+        imageName: citationMeta?.image_name,
         imageIndex: citationMeta?.image_index,
         page: citationMeta?.page
-      })
-    } else if (fileId) {
-      openImageCitationModal({
-        fileId,
-        fileName: citationMeta?.file_name || '',
-        previewUrl: getImagePreviewUrl(fileId)
       })
     }
     return
@@ -8052,6 +8040,26 @@ void [
   margin: 16px 0;
   padding: 0;
   overflow-x: auto;
+}
+
+.preview-block.image-block {
+  margin: 16px 0;
+  padding: 0;
+}
+
+.parsed-block-image {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.preview-block.image-block.highlighted {
+  padding: 8px;
+  background: rgba(216, 180, 254, 0.2);
 }
 
 .table-caption {

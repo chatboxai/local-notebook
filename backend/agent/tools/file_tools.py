@@ -332,7 +332,7 @@ class AskImageTool(CallableTool2[AskImageParams]):
 
         citation_id = f"citation_{state.citation_counter}"
         state.citations_map[citation_id] = {
-            "type": "pdf_image",
+            "type": "image",
             "file_id": file_id,
             "file_name": file_name,
             "image_id": image_id,

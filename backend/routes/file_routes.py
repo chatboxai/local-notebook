@@ -254,21 +254,35 @@ async def get_file_content(
         for s in segments_raw
     ]
 
+    serialized_blocks = []
+    fallback_image_index = 0
+    for b in blocks:
+        extra = b.get_extra()
+        if isinstance(extra, dict) and extra.get("is_image"):
+            extra = dict(extra)
+            image_index = extra.get("image_index")
+            if image_index is None:
+                extra["image_index"] = fallback_image_index
+                image_index = fallback_image_index
+            try:
+                fallback_image_index = max(fallback_image_index, int(image_index) + 1)
+            except (TypeError, ValueError):
+                fallback_image_index += 1
+
+        serialized_blocks.append({
+            "block_id": b.block_id,
+            "block_type": b.block_type,
+            "content": b.content,
+            "page": b.page,
+            "extra": extra,
+        })
+
     return {
         "file_id": file_id,
         "file_name": db_file.file_name,
         "summary": "",
         "keywords": [],
-        "blocks": [
-            {
-                "block_id": b.block_id,
-                "block_type": b.block_type,
-                "content": b.content,
-                "page": b.page,
-                "extra": b.get_extra(),
-            }
-            for b in blocks
-        ],
+        "blocks": serialized_blocks,
         "segments": segments
     }
 
@@ -307,7 +321,8 @@ async def get_file_pages(
             "has_pages": False,
             "total_pages": 0,
             "pages": [],
-            "segments": []
+            "segments": [],
+            "blocks": [],
         }
 
     result = await db.execute(
@@ -361,6 +376,40 @@ async def get_file_pages(
         for s in segments_raw
     ]
 
+    result = await db.execute(
+        select(Block.block_id, Block.page, Block.extra)
+        .where(Block.file_id == file_id)
+        .order_by(asc(Block.page), asc(Block.block_index))
+    )
+    image_blocks = []
+    fallback_image_index = 0
+    for row in result.all():
+        extra = None
+        if row.extra:
+            try:
+                extra = json.loads(row.extra) if isinstance(row.extra, str) else row.extra
+            except (json.JSONDecodeError, TypeError):
+                extra = None
+
+        if not isinstance(extra, dict) or not extra.get("is_image"):
+            continue
+
+        extra = dict(extra)
+        image_index = extra.get("image_index")
+        if image_index is None:
+            extra["image_index"] = fallback_image_index
+            image_index = fallback_image_index
+        try:
+            fallback_image_index = max(fallback_image_index, int(image_index) + 1)
+        except (TypeError, ValueError):
+            fallback_image_index += 1
+
+        image_blocks.append({
+            "block_id": row.block_id,
+            "page": row.page or 0,
+            "extra": extra,
+        })
+
     return {
         "file_id": file_id,
         "file_name": db_file.file_name,
@@ -368,7 +417,8 @@ async def get_file_pages(
         "has_pages": True,
         "total_pages": total_pages,
         "pages": page_list,
-        "segments": segments
+        "segments": segments,
+        "blocks": image_blocks,
     }
 
 
@@ -429,6 +479,36 @@ async def preview_file(
         return FileResponse(str(file_path), media_type=media_type)
 
     raise HTTPException(status_code=400, detail="Preview only available for image files")
+
+
+@file_router.get("/{file_id}/images/{image_index}/preview")
+async def preview_embedded_image(
+    file_id: str,
+    image_index: int,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user_query_or_header),
+):
+    from fastapi.responses import FileResponse
+    import mimetypes
+
+    if image_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid image index")
+
+    db_file = await _get_file_or_404(db, file_id)
+    image_dir = Path(db_file.file_path).parent / "images"
+    if not image_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Images not found")
+
+    image_files = sorted(
+        path for path in image_dir.iterdir()
+        if path.is_file() and path.suffix.lower().lstrip(".") in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}
+    )
+    if image_index >= len(image_files):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    image_path = image_files[image_index]
+    media_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
+    return FileResponse(str(image_path), media_type=media_type)
 
 
 @file_router.post("/{file_id}/blocks/bbox")

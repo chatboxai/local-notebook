@@ -53,6 +53,7 @@ class ImageParser(BaseParser):
             extra={
                 "is_image": True,
                 "vlm_model": vlm_model,
+                "image_index": 1,
                 "image_path": file_path,
             },
         )
