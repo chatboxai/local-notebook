@@ -81,11 +81,12 @@ async def _mark_workflow_cancelled(
 
 
 async def on_startup(ctx: dict) -> None:
-    from database import AsyncSessionLocal, engine, Base
+    from database import AsyncSessionLocal, engine, Base, ensure_runtime_schema
     import models
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await ensure_runtime_schema(conn, logger)
 
     ctx["session_factory"] = AsyncSessionLocal
 
@@ -144,7 +145,11 @@ async def on_shutdown(ctx: dict) -> None:
     logger.info("ARQ worker stopped")
 
 
-async def parse_file_task(ctx: dict, file_id: str) -> dict:
+async def parse_file_task(
+    ctx: dict,
+    file_id: str,
+    output_language: str | None = None,
+) -> dict:
     from models.file import File
 
     session_factory = ctx["session_factory"]
@@ -190,11 +195,15 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
 
             logger.info(f"[{file_name}] step 1/5: extracting text & creating blocks")
             text, blocks, raw_images = await _extract_text_and_blocks(
-                file_type, file_path, file_id=file_id, db=db
+                file_type,
+                file_path,
+                file_id=file_id,
+                db=db,
+                output_language=output_language,
             )
             logger.info(f"[{file_name}] extracted {len(text)} chars, {len(blocks)} blocks, {len(raw_images)} raw images")
 
-            images_meta = await _describe_images(file_name, raw_images)
+            images_meta = await _describe_images(file_name, raw_images, output_language=output_language)
 
             if not blocks:
                 logger.warning(f"[{file_name}] no blocks produced, marking ready")
@@ -222,15 +231,31 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
             segment_summaries: dict[int, str] = {}
             llm_cfg = None
             try:
-                from services.summary_service import _resolve_llm, generate_segment_summaries
+                from services.summary_service import (
+                    _resolve_llm,
+                    generate_segment_summaries,
+                    normalize_output_language,
+                )
                 import config as _config
                 llm_cfg = await _resolve_llm()
                 if llm_cfg:
                     ak, bu, md, fmt = llm_cfg
+                    summary_language = normalize_output_language(output_language)
                     economy = await _config.is_easy_task_llm_configured()
-                    logger.info(f"[{file_name}] step 2.5: generating summaries for {len(segments)} segments (model={md}, format={fmt}, economy={economy})")
+                    logger.info(
+                        f"[{file_name}] step 2.5: generating summaries for {len(segments)} "
+                        f"segments (model={md}, format={fmt}, economy={economy}, "
+                        f"language={summary_language})"
+                    )
                     seg_inputs = [{"segment_index": s.segment_index, "content": s.content} for s in segments]
-                    segment_summaries = await generate_segment_summaries(seg_inputs, ak, bu, md, api_format=fmt)
+                    segment_summaries = await generate_segment_summaries(
+                        seg_inputs,
+                        ak,
+                        bu,
+                        md,
+                        api_format=fmt,
+                        output_language=summary_language,
+                    )
                     logger.info(f"[{file_name}] summaries generated: {len(segment_summaries)}/{len(segments)}")
                 else:
                     logger.info(f"[{file_name}] LLM not configured, skipping segment summaries")
@@ -360,7 +385,15 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
                     logger.info(f"[{file_name}] step 5.1: generating file summary")
                     ordered = [segment_summaries[s.segment_index]
                                for s in segments if s.segment_index in segment_summaries]
-                    file_result = await generate_file_summary(file_name, ordered, ak, bu, md, api_format=fmt)
+                    file_result = await generate_file_summary(
+                        file_name,
+                        ordered,
+                        ak,
+                        bu,
+                        md,
+                        api_format=fmt,
+                        output_language=output_language,
+                    )
                     if file_result["summary"]:
                         db_file.summary = file_result["summary"]
                     if file_result["keywords"]:
@@ -379,7 +412,15 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
                 if llm_cfg and segment_summaries:
                     ak, bu, md, fmt = llm_cfg
                     logger.info(f"[{file_name}] step 5.2: generating project summary")
-                    await _update_project_summary(db, project_id, ak, bu, md, fmt)
+                    await _update_project_summary(
+                        db,
+                        project_id,
+                        ak,
+                        bu,
+                        md,
+                        fmt,
+                        output_language=output_language,
+                    )
             except Exception as e:
                 logger.warning(f"[{file_name}] project summary failed, continuing: {e}")
 
@@ -406,11 +447,12 @@ async def _update_project_summary(
     base_url: str | None,
     model: str,
     api_format: str,
+    output_language: str | None = None,
 ) -> None:
     from sqlalchemy import select
     from models.file import File
     from models.project import Project
-    from services.summary_service import generate_project_summary
+    from services.summary_service import generate_project_overview
 
     result = await db.execute(
         select(File).where(File.project_id == project_id, File.status == "ready", File.summary.isnot(None))
@@ -422,6 +464,7 @@ async def _update_project_summary(
         await db.commit()
         return
     project_name = project.name
+    project_description = project.description
 
     file_summaries = [
         {"file_name": f.file_name, "summary": f.summary}
@@ -433,25 +476,39 @@ async def _update_project_summary(
     if not file_summaries:
         return
 
-    summary = await generate_project_summary(
+    overview = await generate_project_overview(
         project_name,
         file_summaries,
         api_key,
         base_url,
         model,
         api_format=api_format,
+        project_description=project_description,
+        output_language=output_language,
     )
-    if summary:
+    summary = overview.get("summary")
+    color = overview.get("color")
+    if summary or color:
         project = await db.get(Project, project_id)
         if not project:
             await db.commit()
             return
-        project.summary = summary
+        if summary:
+            project.summary = summary
+        if color:
+            project.color = color
         await db.commit()
-        logger.info(f"Project {project_id} summary updated ({len(summary)} chars)")
+        logger.info(
+            f"Project {project_id} overview updated "
+            f"({len(summary or '')} chars, color={color or 'unchanged'})"
+        )
 
 
-async def _describe_images(file_name: str, raw_images: list) -> list:
+async def _describe_images(
+    file_name: str,
+    raw_images: list,
+    output_language: str | None = None,
+) -> list:
     if not raw_images:
         return []
 
@@ -468,11 +525,15 @@ async def _describe_images(file_name: str, raw_images: list) -> list:
 
     logger.info(f"[{file_name}] step 1.5/5: VLM 描述 {len(raw_images)} 张图片（model={model}，并发=2）")
 
+    from services.summary_service import normalize_output_language
+    summary_language = normalize_output_language(output_language)
+
     PROMPT = (
-        "Briefly describe this image in English. Focus on:\n"
+        "Briefly describe this image. Focus on:\n"
         "1. The image's main subject and content.\n"
         "2. Key visual elements such as chart data, visible text, objects, or scenes.\n"
-        "Use 50-100 English words."
+        "Use 50-100 words.\n\n"
+        f"Output language: {summary_language}"
     )
 
     semaphore = asyncio.Semaphore(5)
@@ -494,6 +555,7 @@ async def _describe_images(file_name: str, raw_images: list) -> list:
 async def _extract_text_and_blocks(
     file_type: str | None, file_path: str,
     file_id: str | None = None, db=None,
+    output_language: str | None = None,
 ) -> tuple[str, list, list]:
     from workers.parsers import get_parser_for_file
 
@@ -520,7 +582,7 @@ async def _extract_text_and_blocks(
 
     elif file_type in {"jpg", "jpeg", "png"}:
         parser = get_parser_for_file(file_path)
-        result = await parser.parse(file_path)
+        result = await parser.parse(file_path, output_language=output_language)
 
         blocks = [
             {

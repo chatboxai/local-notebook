@@ -31,27 +31,11 @@ logger = logging.getLogger("local_notebook")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from database import engine, Base
+    from database import engine, Base, ensure_runtime_schema
     import models
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        migrate_columns = [
-            ("sessions", "last_total_tokens", "INTEGER"),
-            ("sessions", "compact_summary", "TEXT"),
-            ("sessions", "compact_citations_json", "TEXT"),
-            ("sessions", "compact_message_id", "VARCHAR(36)"),
-            ("messages", "deleted_at", "TIMESTAMP"),
-        ]
-        for table, col, col_type in migrate_columns:
-            try:
-                await conn.execute(
-                    __import__("sqlalchemy").text(
-                        f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"
-                    )
-                )
-                logger.info(f"Migration: added {table}.{col}")
-            except Exception:
-                pass
+        await ensure_runtime_schema(conn, logger)
     logger.info("Database tables verified")
 
     from database import AsyncSessionLocal

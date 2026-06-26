@@ -9,11 +9,22 @@ logger = logging.getLogger(__name__)
 
 class ImageParser(BaseParser):
 
-    async def parse(self, file_path: str) -> ParseResult:
+    async def parse(self, file_path: str, output_language: str | None = None) -> ParseResult:
         logger.info(f"Parsing image: {file_path}")
 
         try:
-            description, vlm_model = await describe_image(file_path)
+            from services.summary_service import normalize_output_language
+
+            summary_language = normalize_output_language(output_language)
+            prompt = (
+                "Describe this image. Include:\n"
+                "1. The main subject and overall content.\n"
+                "2. Key visual elements such as objects, people, scenes, text, or charts.\n"
+                "3. The overall style and atmosphere.\n"
+                "Be detailed but concise.\n\n"
+                f"Output language: {summary_language}"
+            )
+            description, vlm_model = await describe_image(file_path, prompt=prompt)
             logger.info(f"Image description generated, length={len(description)}, model={vlm_model}")
         except Exception as e:
             logger.error(f"Failed to describe image: {e}")

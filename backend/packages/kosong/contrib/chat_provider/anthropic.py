@@ -178,9 +178,7 @@ class Anthropic:
             system = [system_block]
         else:
             system = omit
-        messages: list[MessageParam] = []
-        for message in history:
-            messages.append(self._convert_message(message))
+        messages = self._convert_messages(history)
         if messages:
             last_message = messages[-1]
             last_content = last_message["content"]
@@ -287,6 +285,37 @@ class Anthropic:
         model_parameters: dict[str, Any] = {"base_url": str(self._client.base_url)}
         model_parameters.update(self._generation_kwargs)
         return model_parameters
+
+    def _convert_messages(self, history: Sequence[Message]) -> list[MessageParam]:
+        messages: list[MessageParam] = []
+        i = 0
+        while i < len(history):
+            message = history[i]
+            if message.role != "tool":
+                messages.append(self._convert_message(message))
+                i += 1
+                continue
+
+            blocks: list[ContentBlockParam] = []
+            while i < len(history) and history[i].role == "tool":
+                tool_message = history[i]
+                if tool_message.tool_call_id is None:
+                    raise ChatProviderError("Tool message missing `tool_call_id`.")
+                if self._tool_message_conversion == "extract_text":
+                    content = tool_message.extract_text(sep="\n")
+                else:
+                    content = tool_message.content
+                blocks.append(
+                    cast(
+                        ContentBlockParam,
+                        _tool_result_message_to_block(tool_message.tool_call_id, content),
+                    )
+                )
+                i += 1
+
+            messages.append(MessageParam(role="user", content=blocks))
+
+        return messages
 
     def _convert_message(self, message: Message) -> MessageParam:
         """Convert a single internal message into Anthropic wire format."""

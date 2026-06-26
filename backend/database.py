@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -39,3 +39,26 @@ AsyncSessionLocal = async_sessionmaker(
 
 class Base(DeclarativeBase):
     pass
+
+
+RUNTIME_SCHEMA_COLUMNS = [
+    ("projects", "summary", "TEXT"),
+    ("projects", "color", "VARCHAR(20)"),
+    ("sessions", "last_total_tokens", "INTEGER"),
+    ("sessions", "compact_summary", "TEXT"),
+    ("sessions", "compact_citations_json", "TEXT"),
+    ("sessions", "compact_message_id", "VARCHAR(36)"),
+    ("messages", "deleted_at", "TIMESTAMP"),
+]
+
+
+async def ensure_runtime_schema(conn, logger=None) -> None:
+    for table, col, col_type in RUNTIME_SCHEMA_COLUMNS:
+        try:
+            await conn.execute(
+                text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+            )
+            if logger:
+                logger.info(f"Migration: added {table}.{col}")
+        except Exception:
+            pass

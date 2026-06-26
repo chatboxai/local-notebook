@@ -19,6 +19,9 @@ class ProjectResponse(UTCDateTimeModel):
     id: str
     name: str
     description: Optional[str]
+    summary: Optional[str] = None
+    color: Optional[str] = None
+    file_count: int = 0
     created_at: datetime
     updated_at: datetime
 

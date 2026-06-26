@@ -71,14 +71,14 @@
                 </div>
                 <div class="card-content">
                   <h3 class="card-title">{{ project.name }}</h3>
-                  <div v-if="project.summary" class="card-summary-wrapper">
+                  <div class="card-summary-wrapper" :class="{ placeholder: !project.summary }">
                     <p class="card-summary">{{ truncateSummary(project.summary) }}</p>
-                    <div class="summary-tooltip">
+                    <div v-if="project.summary" class="summary-tooltip">
                       <div class="tooltip-content">{{ project.summary }}</div>
                     </div>
                   </div>
                   <p class="card-meta">
-                    {{ formatDate(project.created_at) }} · {{ project.file_count }} 个来源
+                    {{ formatDate(project.created_at) }} · {{ formatFileCount(project.file_count) }}
                   </p>
                 </div>
                 <div class="card-menu-wrapper">
@@ -208,6 +208,7 @@ import { getProjects, createProject, deleteProject, updateProject, checkPrefligh
 import type { Project, ProjectColor } from '../types'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 import { formatDate } from '../utils/format'
+import { usePollingTask } from '../composables/usePollingTask'
 
 const router = useRouter()
 
@@ -217,6 +218,9 @@ const showCreateModal = ref(false)
 const newProjectName = ref('')
 const creating = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
+
+const ACTIVE_PROJECT_REFRESH_MS = 10000
+const IDLE_PROJECT_REFRESH_MS = 30000
 
 
 const activeProjectMenu = ref<string | null>(null)
@@ -303,12 +307,33 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+function needsActiveProjectRefresh(project: Project): boolean {
+  return project.file_count > 0 && (!project.summary || !project.color)
+}
+
+function getProjectRefreshDelay(): number {
+  return projects.value.some(needsActiveProjectRefresh)
+    ? ACTIVE_PROJECT_REFRESH_MS
+    : IDLE_PROJECT_REFRESH_MS
+}
+
+const projectRefresh = usePollingTask({
+  run: () => loadProjects({ silent: true }),
+  getDelay: getProjectRefreshDelay,
+  retryDelay: ACTIVE_PROJECT_REFRESH_MS,
+  canRun: () => !loading.value,
+  pauseWhenHidden: true,
+  refreshOnVisible: true,
+  onError: (error) => console.error('Failed to refresh projects:', error),
+})
+
 onMounted(() => {
-  loadProjects()
+  void loadProjects().finally(() => projectRefresh.start())
   document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
+  projectRefresh.stop()
   document.removeEventListener('click', handleClickOutside)
 })
 
@@ -329,14 +354,14 @@ watch(showRenameModal, (val) => {
   }
 })
 
-async function loadProjects() {
+async function loadProjects(options: { silent?: boolean } = {}) {
   try {
-    loading.value = true
+    if (!options.silent) loading.value = true
     projects.value = await getProjects()
   } catch (error) {
     console.error('Failed to load projects:', error)
   } finally {
-    loading.value = false
+    if (!options.silent) loading.value = false
   }
 }
 
@@ -467,7 +492,14 @@ function getProjectColor(color: ProjectColor | null): string {
 }
 
 
-function truncateSummary(summary: string, maxLength: number = 30): string {
+function formatFileCount(fileCount: number | null | undefined): string {
+  if (!Number.isFinite(fileCount)) return '个文件'
+  return `${fileCount} 个文件`
+}
+
+
+function truncateSummary(summary: string | null | undefined, maxLength: number = 30): string {
+  if (!summary) return ''
   if (summary.length <= maxLength) return summary
   return summary.slice(0, maxLength) + '...'
 }
@@ -765,14 +797,15 @@ function truncateSummary(summary: string, maxLength: number = 30): string {
 .card-summary-wrapper {
   position: relative;
   margin-bottom: 6px;
+  min-height: 17px;
 }
 
-.card-summary-wrapper:hover {
+.card-summary-wrapper:not(.placeholder):hover {
   z-index: 100;
 }
 
 
-.project-card:has(.card-summary-wrapper:hover) {
+.project-card:has(.card-summary-wrapper:not(.placeholder):hover) {
   z-index: 100;
 }
 
@@ -782,6 +815,10 @@ function truncateSummary(summary: string, maxLength: number = 30): string {
   font-weight: 300;
   line-height: 1.4;
   cursor: default;
+}
+
+.card-summary-wrapper.placeholder .card-summary {
+  visibility: hidden;
 }
 
 .summary-tooltip {
