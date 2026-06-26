@@ -112,19 +112,6 @@
                   :alt="previewingFileName"
                   class="preview-image"
                 />
-
-                <div v-if="previewingImageInfo?.description" class="image-description-card">
-                  <div class="image-description-header">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    <span>图片描述</span>
-                    <span v-if="previewingImageInfo.vlm_model" class="vlm-model-tag">
-                      {{ previewingImageInfo.vlm_model }}
-                    </span>
-                  </div>
-                  <div class="image-description-content">{{ previewingImageInfo.description }}</div>
-                </div>
               </div>
             </div>
           </template>
@@ -1348,7 +1335,6 @@ import {
   editMessageAndRegenerate,
   type AgentRole,
   getImagePreviewUrl,
-  getImageInfo,
   getBlocksLocation,
   getFile,
   type CitationRef,
@@ -1393,7 +1379,7 @@ import {
   type FeatureEditCitationRef,
   type FeatureEditHistoryMessage,
 } from '../services/api'
-import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, FileContent, Feature, FeatureCitationRefPart, ImageInfo } from '../types'
+import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, FileContent, Feature, FeatureCitationRefPart } from '../types'
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
@@ -2108,7 +2094,6 @@ const isPreviewMode = ref(false)
 const previewingFileContent = ref<FileContent | null>(null)
 const previewingFileName = ref<string>('')
 const previewingFile = ref<FileInfo | null>(null)
-const previewingImageInfo = ref<ImageInfo | null>(null)
 const highlightBlockIds = ref<string[]>([])
 const activeChatCitationNum = ref<number | null>(null)
 const activeFeatureCitationNum = ref<number | null>(null)
@@ -3369,18 +3354,7 @@ async function openFilePreview(fileId: string, segmentId?: string) {
       }
     }
 
-    if (isImage) {
-
-      try {
-        const imageInfo = await getImageInfo(fileId)
-        if (imageInfo.images && imageInfo.images.length > 0) {
-          previewingImageInfo.value = imageInfo.images[0] ?? null
-        }
-      } catch (error) {
-        console.error('[Preview] Failed to get image info:', error)
-
-      }
-    } else {
+    if (!isImage) {
 
       try {
 
@@ -3691,7 +3665,6 @@ function closePreview() {
   previewingFileContent.value = null
   previewingFileName.value = ''
   previewingFile.value = null
-  previewingImageInfo.value = null
   highlightBlockIds.value = []
 
 
@@ -8022,45 +7995,6 @@ void [
   to {
     transform: rotate(360deg);
   }
-}
-
-
-.image-description-card {
-  margin-top: 20px;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-}
-
-.image-description-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.image-description-header svg {
-  color: var(--primary-color);
-}
-
-.vlm-model-tag {
-  margin-left: auto;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-}
-
-.image-description-content {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
 }
 
 

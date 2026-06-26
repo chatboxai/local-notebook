@@ -59,6 +59,7 @@ class ImageParser(BaseParser):
 
         image_meta = {
             "image_index": 1,
+            "file_path": file_path,
             "description": description,
             "vlm_model": vlm_model,
         }
