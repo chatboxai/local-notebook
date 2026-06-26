@@ -115,6 +115,15 @@ def delete_by_file(project_id: str, file_id: str) -> None:
         client.delete(collection_name=img_name, filter=f'file_id == "{file_id}"')
 
 
+def delete_project_collections(project_id: str) -> None:
+    client = _get_client()
+
+    for name in (_col(project_id), _img_col(project_id)):
+        if client.has_collection(name):
+            client.drop_collection(collection_name=name)
+            logger.info("Dropped Milvus collection '%s'", name)
+
+
 def search(
     project_id: str,
     query_vector: list[float],
@@ -219,5 +228,4 @@ def get_by_ids(project_id: str, segment_ids: list[str]) -> list[dict]:
         }
         for r in (results or [])
     ]
-
 
