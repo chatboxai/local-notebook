@@ -117,6 +117,7 @@ class PDFParser(BaseParser):
 
         os.makedirs(img_dir, exist_ok=True)
         mapping = {}
+        written_paths = set()
 
         for img_name, img_data in images_dict.items():
             try:
@@ -132,8 +133,10 @@ class PDFParser(BaseParser):
                 if not safe_name.lower().endswith(("." + ext)):
                     safe_name = safe_name + "." + ext
                 local_path = os.path.join(img_dir, safe_name)
-                with open(local_path, "wb") as f:
-                    f.write(raw)
+                if local_path not in written_paths:
+                    with open(local_path, "wb") as f:
+                        f.write(raw)
+                    written_paths.add(local_path)
                 mapping[img_name] = local_path
                 mapping[f"images/{img_name}"] = local_path
                 mapping[os.path.basename(img_name)] = local_path
@@ -379,9 +382,13 @@ class PDFParser(BaseParser):
         return "\n".join(md_rows)
 
     async def _get_pdf_page_count(self, file_path: str) -> int:
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            return len(reader.pages)
-        except Exception:
-            return 0
+        def _count_pages() -> int:
+            try:
+                from pypdf import PdfReader
+
+                reader = PdfReader(file_path)
+                return len(reader.pages)
+            except Exception:
+                return 0
+
+        return await asyncio.to_thread(_count_pages)

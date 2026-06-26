@@ -4,6 +4,7 @@ from pathlib import Path
 
 import aiofiles
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse as FastAPIFileResponse
 from pydantic import BaseModel
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from models.project import Project
 from schemas.file import FileResponse
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".epub", ".jpg", ".jpeg", ".png", ".wav", ".mp3", ".m4a"}
 
 router = APIRouter(prefix="/projects/{project_id}/files", tags=["files"])
@@ -25,6 +27,16 @@ def _file_type(filename: str) -> str:
     if ext in {"pdf", "docx", "doc", "txt", "epub", "jpg", "jpeg", "png", "wav", "mp3", "m4a"}:
         return ext
     return "unknown"
+
+
+def _get_pdf_page_count_sync(file_path: str) -> int:
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(file_path)
+        return len(reader.pages)
+    except Exception:
+        return 0
 
 
 async def _get_file_or_404(
@@ -99,16 +111,18 @@ async def upload_file(
     project_dir.mkdir(parents=True, exist_ok=True)
     dest = project_dir / file.filename
 
+    file_size = 0
     async with aiofiles.open(dest, "wb") as f:
-        content = await file.read()
-        await f.write(content)
+        while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+            file_size += len(chunk)
+            await f.write(chunk)
 
     db_file = File(
         project_id=project_id,
         file_name=file.filename,
         file_path=str(dest),
         file_type=_file_type(file.filename or ""),
-        file_size=len(content),
+        file_size=file_size,
         status="pending",
     )
     db.add(db_file)
@@ -315,11 +329,8 @@ async def get_file_pages(
         )
         block_count = result.scalar() or 0
 
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(db_file.file_path)
-            total_pages = len(reader.pages)
-        except Exception:
+        total_pages = await asyncio.to_thread(_get_pdf_page_count_sync, db_file.file_path)
+        if total_pages == 0:
             total_pages = 1
 
         if total_pages > 0 and not page_list:
@@ -365,17 +376,12 @@ async def get_file_raw(
     file_id: str,
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
-) -> dict:
+):
     db_file = await _get_file_or_404(db, file_id)
 
     file_path = Path(db_file.file_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
-
-    async with aiofiles.open(file_path, "rb") as f:
-        content = await f.read()
-
-    from fastapi.responses import Response
 
     content_type = "application/octet-stream"
     if db_file.file_type == "pdf":
@@ -389,8 +395,8 @@ async def get_file_raw(
 
     encoded_filename = quote(db_file.file_name, safe="")
 
-    return Response(
-        content=content,
+    return FastAPIFileResponse(
+        path=str(file_path),
         media_type=content_type,
         headers={
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"
