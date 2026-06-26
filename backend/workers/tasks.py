@@ -512,18 +512,32 @@ async def _describe_images(
     if not raw_images:
         return []
 
+    described_images = [img for img in raw_images if img.get("description")]
+    pending_images = [img for img in raw_images if not img.get("description")]
+    if not pending_images:
+        logger.info(
+            f"[{file_name}] step 1.5/5: 复用 {len(described_images)} "
+            "张已描述图片"
+        )
+        return described_images
+
     from services.vlm_client import describe_image, resolve_vlm_config
 
     try:
         api_key, base_url, model = await resolve_vlm_config()
         if not api_key or not model:
-            logger.warning(f"[{file_name}] VLM 未配置，跳过 {len(raw_images)} 张图片的描述")
-            return []
+            logger.warning(
+                f"[{file_name}] VLM 未配置，跳过 {len(pending_images)} 张图片的描述"
+            )
+            return described_images
     except Exception:
         logger.warning(f"[{file_name}] VLM 配置读取失败，跳过图片描述")
-        return []
+        return described_images
 
-    logger.info(f"[{file_name}] step 1.5/5: VLM 描述 {len(raw_images)} 张图片（model={model}，并发=2）")
+    logger.info(
+        f"[{file_name}] step 1.5/5: VLM 描述 {len(pending_images)} "
+        f"张图片（model={model}，并发=2）"
+    )
 
     from services.summary_service import normalize_output_language
     summary_language = normalize_output_language(output_language)
@@ -540,16 +554,27 @@ async def _describe_images(
 
     async def _describe_one(img: dict):
         async with semaphore:
+            image_path = img.get("file_path")
+            if not image_path:
+                logger.warning(
+                    f"[{file_name}] 图片 {img.get('image_index', '?')} 缺少 file_path，跳过"
+                )
+                return None
             try:
-                description, vlm_model = await describe_image(img["file_path"], prompt=PROMPT)
-                logger.info(f"[{file_name}] 图片 {img['image_index']} 描述完成（{len(description)} 字）")
+                description, vlm_model = await describe_image(image_path, prompt=PROMPT)
+                logger.info(
+                    f"[{file_name}] 图片 {img['image_index']} "
+                    f"描述完成（{len(description)} 字）"
+                )
                 return {**img, "description": description, "vlm_model": vlm_model}
             except Exception as exc:
-                logger.warning(f"[{file_name}] 图片 {img['image_index']} VLM 描述失败，跳过: {exc}")
+                logger.warning(
+                    f"[{file_name}] 图片 {img['image_index']} VLM 描述失败，跳过: {exc}"
+                )
                 return None
 
-    results = await asyncio.gather(*[_describe_one(img) for img in raw_images])
-    return [r for r in results if r is not None]
+    results = await asyncio.gather(*[_describe_one(img) for img in pending_images])
+    return described_images + [r for r in results if r is not None]
 
 
 async def _extract_text_and_blocks(

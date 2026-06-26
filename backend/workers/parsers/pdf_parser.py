@@ -49,11 +49,13 @@ class PDFParser(BaseParser):
                     existing_batch_id = db_file.mineru_batch_id
                     batch_created_at = db_file.mineru_batch_created
 
+            img_dir = os.path.join(os.path.dirname(file_path), "images", file_id) if file_id else None
             client = MinerUCloudClient(api_key)
             result, batch_id = await client.parse_pdf(
                 file_path,
                 existing_batch_id=existing_batch_id,
                 batch_created_at=batch_created_at,
+                image_output_dir=img_dir,
             )
 
             if batch_id and file_id:
@@ -73,7 +75,7 @@ class PDFParser(BaseParser):
             client = MinerUClient(base_url)
             result = await client.parse_pdf(file_path)
 
-            img_dir = os.path.join(os.path.dirname(file_path), "images")
+            img_dir = os.path.join(os.path.dirname(file_path), "images", file_id) if file_id else os.path.join(os.path.dirname(file_path), "images")
             img_path_mapping = {}
             if result.images:
                 img_path_mapping = await asyncio.to_thread(
@@ -162,6 +164,8 @@ class PDFParser(BaseParser):
                 continue
 
             item_type = item.get("type", "")
+            current_image_index = None
+            current_image_name = ""
 
             if item_type == "discarded":
                 continue
@@ -175,11 +179,13 @@ class PDFParser(BaseParser):
                 page_idx = item.get("page_idx", 0)
                 page = page_idx + 1 if isinstance(page_idx, int) else 1
                 if local_path:
+                    current_image_index = image_index
+                    current_image_name = os.path.basename(local_path)
                     extracted_images.append({
-                        "image_index": image_index,
+                        "image_index": current_image_index,
                         "file_path": local_path,
                         "page": page,
-                        "img_name": os.path.basename(local_path),
+                        "img_name": current_image_name,
                     })
                     image_index += 1
                 text = "[Image]"
@@ -227,6 +233,10 @@ class PDFParser(BaseParser):
             elif item_type == "image":
                 block_type = "paragraph"
                 extra["is_image"] = True
+                if current_image_index is not None:
+                    extra["image_index"] = current_image_index
+                if current_image_name:
+                    extra["image_name"] = current_image_name
 
             elif item_type == "equation":
                 block_type = "paragraph"

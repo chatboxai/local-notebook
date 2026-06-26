@@ -1,5 +1,4 @@
 import asyncio
-import glob
 import json
 import logging
 import os
@@ -50,16 +49,53 @@ def _get_file_by_name(project_id: str, file_name: str, file_ids: Optional[list[s
     return row
 
 
-def _get_pdf_image_path(file_path: str, image_index: int) -> Optional[str]:
-    img_dir = os.path.join(os.path.dirname(file_path), "images")
-    if not os.path.isdir(img_dir):
+def _image_name_from_blocks(file_id: str, image_index: int) -> Optional[str]:
+    rows = _db_query(
+        "SELECT extra FROM blocks WHERE file_id = ? ORDER BY block_index",
+        (file_id,),
+    )
+
+    for row in rows:
+        try:
+            extra = json.loads(row["extra"]) if row.get("extra") else None
+        except (json.JSONDecodeError, TypeError):
+            extra = None
+
+        if not isinstance(extra, dict) or not extra.get("is_image"):
+            continue
+
+        current_index = extra.get("image_index")
+        if current_index is None:
+            continue
+
+        try:
+            current_index_int = int(current_index)
+        except (TypeError, ValueError):
+            continue
+
+        if current_index_int == image_index:
+            image_name = extra.get("image_name") or extra.get("img_name")
+            if image_name:
+                return os.path.basename(str(image_name))
+
+    return None
+
+
+def _get_pdf_image_path(file_path: str, image_index: int, file_id: Optional[str] = None) -> Optional[str]:
+    if not file_id:
         return None
-    image_files = sorted([
-        f for f in glob.glob(os.path.join(img_dir, "*"))
-        if os.path.isfile(f) and f.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
-    ])
-    if image_index < len(image_files):
-        return image_files[image_index]
+
+    image_name = _image_name_from_blocks(file_id, image_index)
+    if not image_name:
+        return None
+
+    candidate = os.path.join(os.path.dirname(file_path), "images", file_id, image_name)
+    if (
+        os.path.isfile(candidate)
+        and candidate.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
+    ):
+        return candidate
+
     return None
 
 
@@ -316,7 +352,7 @@ class AskImageTool(CallableTool2[AskImageParams]):
                 ensure_ascii=False,
             ))
 
-        img_path = await asyncio.to_thread(_get_pdf_image_path, file_path, image_index)
+        img_path = await asyncio.to_thread(_get_pdf_image_path, file_path, image_index, file_id)
         if not img_path:
             return ToolOk(output=json.dumps({
                 "error": f"No image file found for image_index={image_index}",
@@ -332,7 +368,7 @@ class AskImageTool(CallableTool2[AskImageParams]):
 
         citation_id = f"citation_{state.citation_counter}"
         state.citations_map[citation_id] = {
-            "type": "pdf_image",
+            "type": "image",
             "file_id": file_id,
             "file_name": file_name,
             "image_id": image_id,

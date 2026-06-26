@@ -184,9 +184,12 @@ export interface FilePageInfo {
   }>
 
   blocks?: Array<{
+    block_id: string
+    page: number
     extra?: {
       is_image?: boolean
       image_index?: number
+      image_name?: string
       bbox?: number[]
     }
   }>
@@ -881,6 +884,12 @@ export function getImagePreviewUrl(fileId: string): string {
   return `${API_BASE}/api/files/${fileId}/preview${query}`
 }
 
+export function getEmbeddedImagePreviewUrl(fileId: string, imageIndex: number): string {
+  const token = getToken()
+  const query = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${API_BASE}/api/files/${fileId}/images/${imageIndex}/preview${query}`
+}
+
 
 export function getAssetUrl(path: string): string {
   if (!path) return ''
@@ -1353,7 +1362,7 @@ export interface WorkflowCitation {
   summary?: string
   start_page?: number
   content?: string
-  type?: 'image' | 'web' | 'segment'
+  type?: 'image' | 'pdf_image' | 'web' | 'segment'
   image_name?: string
   image_index?: number
   page?: number
