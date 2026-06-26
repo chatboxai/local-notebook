@@ -611,7 +611,7 @@ class ChatAgent:
         summary_result = await generate(
             chat_provider=chat_provider,
             system_prompt=compact_system_prompt,
-            tools=None,
+            tools=[],
             history=[Message(role="user", content=compact_prompt)],
         )
         summary_text = ""
