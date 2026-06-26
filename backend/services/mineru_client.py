@@ -428,6 +428,7 @@ class MinerUCloudClient:
         file_path: str,
         existing_batch_id: str | None = None,
         batch_created_at: "datetime | None" = None,
+        image_output_dir: str | None = None,
     ) -> tuple[MinerUResult, str | None]:
         if not os.path.exists(file_path):
             return MinerUResult(
@@ -437,19 +438,21 @@ class MinerUCloudClient:
 
         page_count = await self._get_pdf_page_count(file_path)
         if page_count > MINERU_PDF_CHUNK_PAGES:
-            return await self._parse_pdf_in_page_chunks(file_path, page_count)
+            return await self._parse_pdf_in_page_chunks(file_path, page_count, image_output_dir)
 
         return await self._parse_pdf_single(
             file_path=file_path,
             page_count=page_count,
             existing_batch_id=existing_batch_id,
             batch_created_at=batch_created_at,
+            image_output_dir=image_output_dir,
         )
 
     async def _parse_pdf_in_page_chunks(
         self,
         file_path: str,
         page_count: int,
+        image_output_dir: str | None = None,
     ) -> tuple[MinerUResult, str | None]:
         logger.info(
             f"[cloud] PDF 页数 {page_count} 超过 {MINERU_PDF_CHUNK_PAGES}，"
@@ -471,6 +474,7 @@ class MinerUCloudClient:
                     file_path=chunk.file_path,
                     page_count=chunk.end_page - chunk.start_page,
                     image_output_file_path=file_path,
+                    image_output_dir=image_output_dir,
                     image_prefix=image_prefix,
                 )
 
@@ -503,6 +507,7 @@ class MinerUCloudClient:
         existing_batch_id: str | None = None,
         batch_created_at: "datetime | None" = None,
         image_output_file_path: str | None = None,
+        image_output_dir: str | None = None,
         image_prefix: str = "",
     ) -> tuple[MinerUResult, str | None]:
         from datetime import datetime, timezone
@@ -549,6 +554,7 @@ class MinerUCloudClient:
                 resp.content,
                 page_count,
                 image_output_file_path or file_path,
+                image_output_dir=image_output_dir,
                 image_prefix=image_prefix,
             ), batch_id
 
@@ -643,13 +649,14 @@ class MinerUCloudClient:
         zip_bytes: bytes,
         page_count: int,
         file_path: str,
+        image_output_dir: str | None = None,
         image_prefix: str = "",
     ) -> MinerUResult:
         markdown = ""
         content_list = []
         images_dict = {}
 
-        img_dir = os.path.join(os.path.dirname(file_path), "images")
+        img_dir = image_output_dir or os.path.join(os.path.dirname(file_path), "images")
         os.makedirs(img_dir, exist_ok=True)
 
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
