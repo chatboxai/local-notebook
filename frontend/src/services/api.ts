@@ -131,10 +131,14 @@ export type UploadProgressCallback = (progress: number) => void
 export async function uploadFile(
   projectId: string,
   file: File,
-  onProgress?: UploadProgressCallback
+  onProgress?: UploadProgressCallback,
+  outputLanguage?: string
 ): Promise<FileInfo> {
   const formData = new FormData()
   formData.append('file', file)
+  if (outputLanguage) {
+    formData.append('output_language', outputLanguage)
+  }
 
   const response = await api.post(`/api/projects/${projectId}/files`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

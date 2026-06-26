@@ -9,29 +9,26 @@ from services.llm_provider import create_llm_chat_provider
 
 logger = logging.getLogger("service.summary")
 
-SEGMENT_SUMMARY_PROMPT = """Generate a concise English summary for the following text. The summary will be used for document retrieval and synthesis.
+SEGMENT_SUMMARY_PROMPT = """Generate a concise summary for the following text. The summary will be used for document retrieval and synthesis.
 
 Requirements:
 1. Preserve key entities such as names, places, technical terms, and numbers.
 2. Highlight the core claim, topic, or finding.
 3. Use direct declarative sentences; avoid low-information phrases such as "this text discusses".
-4. Write in English. Keep exact source terms, titles, names, and quoted wording unchanged when translation would lose precision.
+4. Keep exact source terms, titles, names, and quoted wording unchanged when translation would lose precision.
 5. Output only the summary, with no extra explanation.
+
+Output language: {output_language}
 
 Text:
 {content}
 
 Summary:"""
 
-FILE_SUMMARY_PROMPT = """Using the following file information, generate an overall English summary and keywords.
-
-File name: {filename}
-
-Segment summaries:
-{segment_summaries}
+FILE_SUMMARY_PROMPT = """Using the following file information, generate an overall summary and keywords.
 
 === Summary Requirements ===
-1. Write no more than 120 English words. Combine the key information from the segment summaries and extract the file's main purpose.
+1. Write no more than 120 words. Combine the key information from the segment summaries and extract the file's main purpose.
 2. Use concise, information-dense declarative sentences.
 3. Bold marking rules (use **bold**):
    - Bold the document's **core claim** or **main conclusion**.
@@ -39,27 +36,80 @@ Segment summaries:
    - Do not bold names, places, or concrete examples unless they are the document's main topic.
 
 === Keyword Requirements ===
-1. Extract 5 keywords, each 1-4 English words.
+1. Extract 5 keywords, each 1-4 words or one short phrase.
 2. Keywords should reflect the document's core themes rather than isolated examples.
 3. Prefer disciplines, methods, core concepts, and main viewpoints.
+4. Write keywords in the output language, unless a keyword is a source-specific proper noun or technical term.
 
 Return strict JSON only:
-{{"summary": "Overall file summary...", "keywords": ["keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5"]}}"""
+{{"summary": "Overall file summary...", "keywords": ["keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5"]}}
 
-PROJECT_SUMMARY_PROMPT = """Using the following project information and file summaries, generate an overall English project summary in no more than 120 words.
+Output language: {output_language}
+
+File name: {filename}
+
+Segment summaries:
+{segment_summaries}"""
+
+PROJECT_SUMMARY_PROMPT = """Using the following project information and file summaries, generate an overall project summary in no more than 120 words.
+
+Requirements:
+1. Combine the topics and content across all files.
+2. Explain the relationships among the files.
+3. Highlight the project's core value.
+4. Write in the output language and output only the summary, with no extra explanation.
+
+Output language: {output_language}
 
 Project name: {project_name}
 
 File summaries:
 {file_summaries}
 
-Requirements:
-1. Combine the topics and content across all files.
-2. Explain the relationships among the files.
-3. Highlight the project's core value.
-4. Write in English and output only the summary, with no extra explanation.
-
 Project summary:"""
+
+PROJECT_OVERVIEW_PROMPT = """Using the following project information and file summaries, generate an overall project summary and one theme color.
+
+Summary requirements:
+1. Write no more than 120 words in the output language.
+2. Combine the topics and content across all files.
+3. Explain the relationships among the files.
+4. Highlight the project's core value.
+
+Theme color requirements:
+Choose exactly one color from this list:
+- blue: technology, business, finance, law, academic research
+- green: environment, agriculture, health, medicine, biology
+- orange: creativity, design, marketing, entertainment, education
+- red: history, politics, social issues
+- purple: art, philosophy, psychology, religion
+- cyan: science communication, children, social science
+- pink: fashion, beauty, lifestyle, emotion
+- brown: classics, traditional culture, archaeology, historical documents
+
+Return strict JSON only:
+{{"summary": "Project summary...", "color": "blue"}}
+
+Output language: {output_language}
+
+Project name: {project_name}
+Project description: {project_description}
+
+File summaries:
+{file_summaries}"""
+
+PROJECT_COLORS = {"blue", "green", "orange", "red", "purple", "cyan", "pink", "brown"}
+DEFAULT_OUTPUT_LANGUAGE = "English"
+
+
+def normalize_output_language(output_language: str | None) -> str:
+    value = (output_language or "").strip()
+    normalized = value.lower().replace("_", "-")
+    if normalized in {"zh", "zh-cn", "chinese", "中文", "简体中文"}:
+        return "Chinese"
+    if normalized in {"en", "en-us", "en-gb", "english"}:
+        return "English"
+    return value or DEFAULT_OUTPUT_LANGUAGE
 
 
 async def _llm_complete(
@@ -104,11 +154,15 @@ async def generate_segment_summary(
     base_url: str | None,
     model: str,
     api_format: str = "openai",
+    output_language: str | None = None,
 ) -> str:
     if not content or len(content) < 20:
         return content[:200] if content else ""
 
-    prompt = SEGMENT_SUMMARY_PROMPT.format(content=content[:2000])
+    prompt = SEGMENT_SUMMARY_PROMPT.format(
+        content=content[:2000],
+        output_language=normalize_output_language(output_language),
+    )
     summary = await _llm_complete(prompt, api_key, base_url, model, api_format=api_format)
 
     if len(summary) > 500:
@@ -123,6 +177,7 @@ async def generate_segment_summaries(
     model: str,
     api_format: str = "openai",
     concurrency: int = 30,
+    output_language: str | None = None,
 ) -> dict[int, str]:
     if not segments:
         return {}
@@ -141,6 +196,7 @@ async def generate_segment_summaries(
                     base_url,
                     model,
                     api_format=api_format,
+                    output_language=output_language,
                 )
                 results[idx] = summary
                 logger.info(f"segment {idx} summary done ({len(summary)} chars)")
@@ -158,6 +214,7 @@ async def generate_file_summary(
     base_url: str | None,
     model: str,
     api_format: str = "openai",
+    output_language: str | None = None,
 ) -> dict:
     if not segment_summaries:
         return {"summary": "", "keywords": []}
@@ -174,7 +231,11 @@ async def generate_file_summary(
         sampled = segment_summaries
 
     numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sampled))
-    prompt = FILE_SUMMARY_PROMPT.format(filename=file_name, segment_summaries=numbered)
+    prompt = FILE_SUMMARY_PROMPT.format(
+        filename=file_name,
+        segment_summaries=numbered,
+        output_language=normalize_output_language(output_language),
+    )
 
     try:
         raw = await _llm_complete(
@@ -212,6 +273,7 @@ async def generate_project_summary(
     base_url: str | None,
     model: str,
     api_format: str = "openai",
+    output_language: str | None = None,
 ) -> str:
     if not file_summaries:
         return ""
@@ -226,6 +288,7 @@ async def generate_project_summary(
     prompt = PROJECT_SUMMARY_PROMPT.format(
         project_name=project_name,
         file_summaries=lines,
+        output_language=normalize_output_language(output_language),
     )
 
     try:
@@ -242,3 +305,63 @@ async def generate_project_summary(
     except Exception as e:
         logger.warning(f"Project summary generation failed: {e}")
         return ""
+
+
+async def generate_project_overview(
+    project_name: str,
+    file_summaries: list[dict],
+    api_key: str,
+    base_url: str | None,
+    model: str,
+    api_format: str = "openai",
+    project_description: str | None = None,
+    output_language: str | None = None,
+) -> dict:
+    if not file_summaries:
+        return {"summary": "", "color": None}
+
+    lines = "\n".join(
+        f"- {fs['file_name']}: {fs['summary']}"
+        for fs in file_summaries if fs.get("summary")
+    )
+    if not lines:
+        return {"summary": "", "color": None}
+
+    prompt = PROJECT_OVERVIEW_PROMPT.format(
+        project_name=project_name or "(untitled)",
+        project_description=project_description or "(none)",
+        file_summaries=lines,
+        output_language=normalize_output_language(output_language),
+    )
+
+    raw = ""
+    try:
+        raw = await _llm_complete(
+            prompt,
+            api_key,
+            base_url,
+            model,
+            api_format=api_format,
+            max_tokens=768,
+            temperature=0.3,
+        )
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+        parsed = json.loads(text)
+        color = parsed.get("color")
+        if color not in PROJECT_COLORS:
+            color = "blue"
+        return {
+            "summary": parsed.get("summary", "")[:500],
+            "color": color,
+        }
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning(f"Project overview JSON parse failed: {e}, using raw text")
+        return {"summary": raw[:500] if raw else "", "color": None}
+    except Exception as e:
+        logger.warning(f"Project overview generation failed: {e}")
+        return {"summary": "", "color": None}

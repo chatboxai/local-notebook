@@ -470,6 +470,8 @@ class ChatAgent:
                 else:
                     messages.append(Message(role=role, content=content))
 
+        messages = self._sanitize_tool_history(messages)
+
         for cid, meta in self._citation_state.citations_map.items():
             ctype = meta.get("type", "segment")
             if ctype == "segment" and meta.get("segment_id"):
@@ -485,6 +487,85 @@ class ChatAgent:
             f"compact={'yes' if has_compact else 'no'}"
         )
         return messages
+
+    @staticmethod
+    def _message_has_text(message: Message) -> bool:
+        return any(
+            isinstance(part, TextPart) and bool(part.text.strip())
+            for part in message.content
+        )
+
+    @staticmethod
+    def _message_without_tool_calls(message: Message) -> Message | None:
+        if not ChatAgent._message_has_text(message):
+            return None
+        return Message(role=message.role, content=message.content)
+
+    @staticmethod
+    def _sanitize_tool_history(messages: list[Message]) -> list[Message]:
+        sanitized: list[Message] = []
+        i = 0
+
+        while i < len(messages):
+            message = messages[i]
+            role = message.role if isinstance(message.role, str) else str(message.role)
+
+            if role == "tool":
+                logger.warning("[load_history] dropping orphan tool result from model history")
+                i += 1
+                continue
+
+            if role != "assistant" or not message.tool_calls:
+                sanitized.append(message)
+                i += 1
+                continue
+
+            required_ids = [tc.id for tc in message.tool_calls]
+            required_set = set(required_ids)
+            tool_messages: list[Message] = []
+            seen_ids: set[str] = set()
+            j = i + 1
+
+            while j < len(messages):
+                next_message = messages[j]
+                next_role = (
+                    next_message.role
+                    if isinstance(next_message.role, str)
+                    else str(next_message.role)
+                )
+                if next_role != "tool":
+                    break
+
+                if next_message.tool_call_id in required_set:
+                    tool_messages.append(next_message)
+                    seen_ids.add(next_message.tool_call_id)
+                else:
+                    logger.warning(
+                        "[load_history] dropping unmatched tool result "
+                        f"id={next_message.tool_call_id}"
+                    )
+                j += 1
+
+            if required_set.issubset(seen_ids):
+                sanitized.append(message)
+                by_id = {tool_message.tool_call_id: tool_message for tool_message in tool_messages}
+                for tool_call_id in required_ids:
+                    tool_message = by_id.get(tool_call_id)
+                    if tool_message:
+                        sanitized.append(tool_message)
+            else:
+                missing = sorted(required_set - seen_ids)
+                logger.warning(
+                    "[load_history] dropping incomplete assistant tool call block "
+                    f"missing_results={missing}"
+                )
+                fallback = ChatAgent._message_without_tool_calls(message)
+                if fallback:
+                    sanitized.append(fallback)
+
+            i = j
+
+        return sanitized
 
     def _sync_display_nums(self, parser: CitationParser):
         for citation_id, display_num in parser.id_to_display.items():

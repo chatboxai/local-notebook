@@ -3121,9 +3121,14 @@ async function handleUploadFiles(fileList: File[]) {
     const file = validFiles[i]!
     const uploadItem = uploadingFiles.value[i]!
     try {
-      const uploaded = await uploadFile(projectId, file, (progress) => {
-        uploadItem.progress = progress
-      })
+      const uploaded = await uploadFile(
+        projectId,
+        file,
+        (progress) => {
+          uploadItem.progress = progress
+        },
+        getModelOutputLanguage()
+      )
       files.value.push(uploaded)
       uploadItem.status = 'success'
       uploadItem.progress = 100
@@ -3171,7 +3176,7 @@ async function handleInsertText(content: string) {
 
   isUploading.value = true
   try {
-    const uploaded = await uploadFile(projectId, file)
+    const uploaded = await uploadFile(projectId, file, undefined, getModelOutputLanguage())
     files.value.push(uploaded)
 
     if (uploaded.status !== 'ready' && uploaded.status !== 'failed') {

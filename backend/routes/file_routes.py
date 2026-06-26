@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse as FastAPIFileResponse
 from pydantic import BaseModel
 from sqlalchemy import delete as sa_delete, select
@@ -93,6 +93,7 @@ async def upload_file(
     project_id: str,
     file: UploadFile,
     request: Request,
+    output_language: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> FileResponse:
@@ -134,7 +135,7 @@ async def upload_file(
         await db.refresh(db_file)
         return db_file
 
-    job = await redis.enqueue_job("parse_file_task", db_file.id)
+    job = await redis.enqueue_job("parse_file_task", db_file.id, output_language)
     db_file.job_id = job.job_id
     await db.commit()
     await db.refresh(db_file)
