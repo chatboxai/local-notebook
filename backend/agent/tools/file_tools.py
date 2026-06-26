@@ -1,5 +1,4 @@
 import asyncio
-import glob
 import json
 import logging
 import os
@@ -50,13 +49,11 @@ def _get_file_by_name(project_id: str, file_name: str, file_ids: Optional[list[s
     return row
 
 
-def _safe_image_name_from_blocks(file_id: str, image_index: int) -> tuple[Optional[str], int]:
+def _image_name_from_blocks(file_id: str, image_index: int) -> Optional[str]:
     rows = _db_query(
         "SELECT extra FROM blocks WHERE file_id = ? ORDER BY block_index",
         (file_id,),
     )
-    fallback_index = 0
-    image_block_count = 0
 
     for row in rows:
         try:
@@ -69,66 +66,36 @@ def _safe_image_name_from_blocks(file_id: str, image_index: int) -> tuple[Option
 
         current_index = extra.get("image_index")
         if current_index is None:
-            current_index = fallback_index
+            continue
 
         try:
             current_index_int = int(current_index)
         except (TypeError, ValueError):
-            current_index_int = fallback_index
+            continue
 
         if current_index_int == image_index:
             image_name = extra.get("image_name") or extra.get("img_name")
             if image_name:
-                return os.path.basename(str(image_name)), image_block_count + 1
+                return os.path.basename(str(image_name))
 
-        fallback_index = max(fallback_index, current_index_int + 1)
-        image_block_count += 1
-
-    return None, image_block_count
-
-
-def _list_image_files(image_dir: str) -> list[str]:
-    if not os.path.isdir(image_dir):
-        return []
-    return sorted([
-        f for f in glob.glob(os.path.join(image_dir, "*"))
-        if os.path.isfile(f) and f.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
-    ])
+    return None
 
 
 def _get_pdf_image_path(file_path: str, image_index: int, file_id: Optional[str] = None) -> Optional[str]:
-    img_root = os.path.join(os.path.dirname(file_path), "images")
-    image_name = None
-    image_block_count = 0
-
-    if file_id:
-        image_name, image_block_count = _safe_image_name_from_blocks(file_id, image_index)
-
-    image_dirs = []
-    if file_id:
-        image_dirs.append(os.path.join(img_root, file_id))
-    image_dirs.append(img_root)
-
-    if image_name:
-        for image_dir in image_dirs:
-            candidate = os.path.join(image_dir, image_name)
-            if (
-                os.path.isfile(candidate)
-                and candidate.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
-            ):
-                return candidate
+    if not file_id:
         return None
 
-    if file_id:
-        scoped_files = _list_image_files(os.path.join(img_root, file_id))
-        if image_index < len(scoped_files):
-            return scoped_files[image_index]
+    image_name = _image_name_from_blocks(file_id, image_index)
+    if not image_name:
+        return None
 
-    root_files = _list_image_files(img_root)
-    if not file_id and image_index < len(root_files):
-        return root_files[image_index]
-    if file_id and image_block_count > 0 and len(root_files) == image_block_count and image_index < len(root_files):
-        return root_files[image_index]
+    candidate = os.path.join(os.path.dirname(file_path), "images", file_id, image_name)
+    if (
+        os.path.isfile(candidate)
+        and candidate.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
+    ):
+        return candidate
+
     return None
 
 

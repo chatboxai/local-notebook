@@ -254,28 +254,16 @@ async def get_file_content(
         for s in segments_raw
     ]
 
-    serialized_blocks = []
-    fallback_image_index = 0
-    for b in blocks:
-        extra = b.get_extra()
-        if isinstance(extra, dict) and extra.get("is_image"):
-            extra = dict(extra)
-            image_index = extra.get("image_index")
-            if image_index is None:
-                extra["image_index"] = fallback_image_index
-                image_index = fallback_image_index
-            try:
-                fallback_image_index = max(fallback_image_index, int(image_index) + 1)
-            except (TypeError, ValueError):
-                fallback_image_index += 1
-
-        serialized_blocks.append({
+    serialized_blocks = [
+        {
             "block_id": b.block_id,
             "block_type": b.block_type,
             "content": b.content,
             "page": b.page,
-            "extra": extra,
-        })
+            "extra": b.get_extra(),
+        }
+        for b in blocks
+    ]
 
     return {
         "file_id": file_id,
@@ -382,7 +370,6 @@ async def get_file_pages(
         .order_by(asc(Block.page), asc(Block.block_index))
     )
     image_blocks = []
-    fallback_image_index = 0
     for row in result.all():
         extra = None
         if row.extra:
@@ -395,14 +382,8 @@ async def get_file_pages(
             continue
 
         extra = dict(extra)
-        image_index = extra.get("image_index")
-        if image_index is None:
-            extra["image_index"] = fallback_image_index
-            image_index = fallback_image_index
-        try:
-            fallback_image_index = max(fallback_image_index, int(image_index) + 1)
-        except (TypeError, ValueError):
-            fallback_image_index += 1
+        if extra.get("image_index") is None:
+            continue
 
         image_blocks.append({
             "block_id": row.block_id,
@@ -498,10 +479,8 @@ async def preview_embedded_image(
         raise HTTPException(status_code=400, detail="Invalid image index")
 
     db_file = await _get_file_or_404(db, file_id)
-    image_root = Path(db_file.file_path).parent / "images"
-    scoped_image_dir = image_root / file_id
-    image_dirs = [scoped_image_dir, image_root]
-    if not any(image_dir.is_dir() for image_dir in image_dirs):
+    image_dir = Path(db_file.file_path).parent / "images" / file_id
+    if not image_dir.is_dir():
         raise HTTPException(status_code=404, detail="Images not found")
 
     result = await db.execute(
@@ -510,8 +489,6 @@ async def preview_embedded_image(
         .order_by(asc(Block.block_index))
     )
     target_extra = None
-    image_block_count = 0
-    fallback_image_index = 0
     for row in result.all():
         extra = None
         if row.extra:
@@ -526,46 +503,32 @@ async def preview_embedded_image(
         extra = dict(extra)
         current_index = extra.get("image_index")
         if current_index is None:
-            current_index = fallback_image_index
+            continue
 
         try:
             current_index_int = int(current_index)
         except (TypeError, ValueError):
-            current_index_int = fallback_image_index
+            continue
 
         if current_index_int == image_index:
             target_extra = extra
-
-        fallback_image_index = max(fallback_image_index, current_index_int + 1)
-        image_block_count += 1
+            break
 
     if target_extra is None:
         raise HTTPException(status_code=404, detail="Image not found")
 
     allowed_extensions = {"jpg", "jpeg", "png", "gif", "webp", "bmp"}
     image_name = target_extra.get("image_name") or target_extra.get("img_name")
-    if image_name:
-        safe_name = Path(str(image_name)).name
-        for image_dir in image_dirs:
-            image_path = image_dir / safe_name
-            if image_path.is_file() and image_path.suffix.lower().lstrip(".") in allowed_extensions:
-                media_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
-                return FileResponse(str(image_path), media_type=media_type)
+    if not image_name:
+        raise HTTPException(status_code=404, detail="Image metadata missing")
+
+    safe_name = Path(str(image_name)).name
+    image_path = image_dir / safe_name
+    if not image_path.is_file() or image_path.suffix.lower().lstrip(".") not in allowed_extensions:
         raise HTTPException(status_code=404, detail="Image file not found")
 
-    for image_dir in image_dirs:
-        if not image_dir.is_dir():
-            continue
-        image_files = sorted(
-            path for path in image_dir.iterdir()
-            if path.is_file() and path.suffix.lower().lstrip(".") in allowed_extensions
-        )
-        if len(image_files) == image_block_count and image_index < len(image_files):
-            image_path = image_files[image_index]
-            media_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
-            return FileResponse(str(image_path), media_type=media_type)
-
-    raise HTTPException(status_code=404, detail="Image metadata missing")
+    media_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
+    return FileResponse(str(image_path), media_type=media_type)
 
 
 @file_router.post("/{file_id}/blocks/bbox")
