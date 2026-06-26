@@ -21,9 +21,9 @@ from agent.tools.query_knowledge_base import CitationState
 
 import kosong
 from kosong.chat_provider import ChatProviderError
-from kosong.contrib.chat_provider.openai_legacy import OpenAILegacy
 from kosong.message import Message, TextPart
 from kosong.tooling.simple import SimpleToolset
+from services.llm_provider import create_llm_chat_provider
 
 logger = logging.getLogger("feature_agent")
 
@@ -93,16 +93,17 @@ class FeatureAgent:
 
         失败时抛异常，由调用方标记该栏目 failed。
         """
-        api_key, base_url, model = await config.resolve_llm_config()
-        if not api_key or not base_url or not model:
+        api_key, base_url, model, api_format = await config.resolve_llm_provider_config()
+        if not api_key or not model:
             raise RuntimeError("LLM 未配置")
 
-        chat_provider = OpenAILegacy(
+        chat_provider = create_llm_chat_provider(
             model=model,
             api_key=api_key,
             base_url=base_url,
-            reasoning_key="reasoning_content",
-        ).with_generation_kwargs(max_tokens=MAX_OUTPUT_TOKENS)
+            api_format=api_format,
+            max_tokens=MAX_OUTPUT_TOKENS,
+        )
 
         capability = get_capability(feature_type)
         # 联网工具仅在已配置时启用
