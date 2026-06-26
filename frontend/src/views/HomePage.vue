@@ -78,7 +78,7 @@
                     </div>
                   </div>
                   <p class="card-meta">
-                    {{ formatDate(project.created_at) }} · {{ project.file_count }} 个来源
+                    {{ formatDate(project.created_at) }} · {{ formatFileCount(project.file_count) }}
                   </p>
                 </div>
                 <div class="card-menu-wrapper">
@@ -464,6 +464,12 @@ const colorMap: Record<ProjectColor, string> = {
 
 function getProjectColor(color: ProjectColor | null): string {
   return color ? colorMap[color] : '#4a90a4'
+}
+
+
+function formatFileCount(fileCount: number | null | undefined): string {
+  if (!Number.isFinite(fileCount)) return '个文件'
+  return `${fileCount} 个文件`
 }
 
 
