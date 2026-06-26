@@ -20,9 +20,9 @@ from agent.capabilities import (
     TOOL_WEB_SEARCH,
 )
 from agent.tools.query_knowledge_base import CitationState
-from kosong.contrib.chat_provider.openai_legacy import OpenAILegacy
 from kosong.message import Message
 from kosong.tooling.simple import SimpleToolset
+from services.llm_provider import create_llm_chat_provider
 
 logger = logging.getLogger("service.workflow_planner")
 
@@ -190,8 +190,8 @@ async def generate_workflow_title(
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> str:
     """根据用户要求和所选来源生成 workflow 标题。"""
-    api_key, base_url, model = await config.resolve_llm_config()
-    if not api_key or not base_url or not model:
+    api_key, base_url, model, api_format = await config.resolve_llm_provider_config()
+    if not api_key or not model:
         raise RuntimeError("LLM 未配置，无法生成报告标题")
 
     user_req = (custom_prompt or "").strip()
@@ -216,12 +216,14 @@ async def generate_workflow_title(
         except Exception as exc:
             logger.warning("[planner] failed to gather title source overview: %s", exc)
 
-    chat_provider = OpenAILegacy(
+    chat_provider = create_llm_chat_provider(
         model=model,
         api_key=api_key,
         base_url=base_url,
-        reasoning_key="reasoning_content",
-    ).with_generation_kwargs(max_tokens=_TITLE_MAX_TOKENS, temperature=0.2)
+        api_format=api_format,
+        max_tokens=_TITLE_MAX_TOKENS,
+        temperature=0.2,
+    )
 
     retry_note = ""
     for attempt in range(1, _TITLE_MAX_ATTEMPTS + 1):
@@ -280,8 +282,9 @@ async def _build_planner_tools(citation_state: CitationState):
 async def _llm_plan_turn(
     history: List[Message],
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str,
     *,
     project_id: str,
     file_ids: List[str],
@@ -289,12 +292,14 @@ async def _llm_plan_turn(
     enable_tools: bool = True,
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> str:
-    chat_provider = OpenAILegacy(
+    chat_provider = create_llm_chat_provider(
         model=model,
         api_key=api_key,
         base_url=base_url,
-        reasoning_key="reasoning_content",
-    ).with_generation_kwargs(max_tokens=_PLANNER_MAX_TOKENS, temperature=0.1)
+        api_format=api_format,
+        max_tokens=_PLANNER_MAX_TOKENS,
+        temperature=0.1,
+    )
 
     toolset = SimpleToolset(await _build_planner_tools(citation_state)) if enable_tools else SimpleToolset([])
 
@@ -607,8 +612,8 @@ async def plan_workflow(
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> Dict[str, Any]:
     """规划报告。返回 {"steps": [...]}。"""
-    api_key, base_url, model = await config.resolve_llm_config()
-    if not api_key or not base_url or not model:
+    api_key, base_url, model, api_format = await config.resolve_llm_provider_config()
+    if not api_key or not model:
         raise RuntimeError("LLM 未配置，无法规划报告")
 
     if cancellation_check:
@@ -663,6 +668,7 @@ Plan the report section structure first. Use tools first if the source overview 
                 api_key,
                 base_url,
                 model,
+                api_format,
                 project_id=project_id,
                 file_ids=file_ids,
                 citation_state=citation_state,
@@ -709,6 +715,7 @@ Now plan generation prerequisites between these steps.
                 api_key,
                 base_url,
                 model,
+                api_format,
                 project_id=project_id,
                 file_ids=file_ids,
                 citation_state=citation_state,
@@ -779,6 +786,7 @@ Now plan generation prerequisites between these steps.
                     api_key,
                     base_url,
                     model,
+                    api_format,
                     project_id=project_id,
                     file_ids=file_ids,
                     citation_state=citation_state,

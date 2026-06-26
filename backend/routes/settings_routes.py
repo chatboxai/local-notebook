@@ -7,10 +7,15 @@ import config
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
 from schemas.settings import (
+    SETTING_DEFAULTS,
     SETTING_KEYS,
     SettingsResponse,
     SettingsUpdate,
 )
+from kosong._generate import generate
+from kosong.chat_provider import ChatProviderError
+from kosong.message import Message
+from services.llm_provider import create_llm_chat_provider, normalize_llm_api_format
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -20,7 +25,7 @@ async def _full_settings() -> dict[str, str | None]:
     cached = config.get_all_cached()
     merged: dict[str, str | None] = {}
     for key in SETTING_KEYS:
-        merged[key] = cached.get(key) or os.getenv(key.upper()) or None
+        merged[key] = cached.get(key) or os.getenv(key.upper()) or SETTING_DEFAULTS.get(key) or None
     return merged
 
 
@@ -153,6 +158,7 @@ class ChatModelTestRequest(BaseModel):
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
+    api_format: str | None = None
 
 
 class EmbeddingTestRequest(BaseModel):
@@ -191,10 +197,49 @@ async def _test_chat_completions(
         return {"ok": False, "msg": str(exc)}
 
 
-def _require_chat_params(api_key: str | None, base_url: str | None, model: str | None) -> None:
+async def _test_llm_provider(
+    api_key: str,
+    base_url: str | None,
+    model: str,
+    api_format: str,
+    verified_key: str,
+    db: AsyncSession,
+) -> dict:
+    try:
+        chat_provider = create_llm_chat_provider(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            api_format=api_format,
+            max_tokens=1,
+            stream=False,
+        )
+        await generate(
+            chat_provider=chat_provider,
+            system_prompt="",
+            tools=[],
+            history=[Message(role="user", content="hi")],
+        )
+        await _mark_verified(verified_key, True, db)
+        return {"ok": True, "msg": "连接成功", "verified": True}
+    except ChatProviderError as exc:
+        await _mark_verified(verified_key, False, db)
+        return {"ok": False, "msg": str(exc)}
+    except Exception as exc:
+        await _mark_verified(verified_key, False, db)
+        return {"ok": False, "msg": str(exc)}
+
+
+def _require_chat_params(
+    api_key: str | None,
+    base_url: str | None,
+    model: str | None,
+    *,
+    require_base_url: bool = True,
+) -> None:
     if not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
-    if not base_url:
+    if require_base_url and not base_url:
         raise HTTPException(status_code=400, detail="Base URL is required")
     if not model:
         raise HTTPException(status_code=400, detail="Model is required")
@@ -203,25 +248,28 @@ def _require_chat_params(api_key: str | None, base_url: str | None, model: str |
 async def _resolve_test_config(
     body: ChatModelTestRequest,
     kind: str,  # "llm" | "vlm"
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, str | None, str | None, str]:
     """按 body.source 独立计算 api_key/base_url/model,不依赖 DB 里已保存的 source,
     让用户在切了 radio 但还没点保存时也能用新配置做测试。"""
     if body.source == "bailian":
         api_key = body.api_key or await config.get_setting("bailian_api_key", "")
         base_url = config.BAILIAN_BASE_URL
         model = body.model
-        return api_key, base_url, model
+        return api_key, base_url, model, "openai"
     if body.source == "custom":
-        return body.api_key, body.base_url, body.model
+        api_format = normalize_llm_api_format(body.api_format) if kind == "llm" else "openai"
+        return body.api_key, body.base_url, body.model, api_format
     # source 未指定 — 兼容老调用方,按 DB 当前状态解析
     if kind == "vlm":
         default_key, default_url, default_model = await config.resolve_vlm_config()
+        default_format = "openai"
     else:
-        default_key, default_url, default_model = await config.resolve_llm_config()
+        default_key, default_url, default_model, default_format = await config.resolve_llm_provider_config()
     return (
         body.api_key or default_key,
         body.base_url or default_url,
         body.model or default_model,
+        normalize_llm_api_format(body.api_format or default_format),
     )
 
 
@@ -231,14 +279,10 @@ async def test_llm(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> dict:
-    api_key, base_url, model = await _resolve_test_config(body, kind="llm")
+    api_key, base_url, model, api_format = await _resolve_test_config(body, kind="llm")
     _require_chat_params(api_key, base_url, model)
 
-    return await _test_chat_completions(
-        api_key, base_url, model,
-        [{"role": "user", "content": "hi"}],
-        "llm_verified", db,
-    )
+    return await _test_llm_provider(api_key, base_url, model, api_format, "llm_verified", db)
 
 
 @router.post("/test/easy-task-llm")
@@ -247,14 +291,10 @@ async def test_easy_task_llm(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> dict:
-    api_key, base_url, model = await _resolve_test_config(body, kind="llm")
+    api_key, base_url, model, api_format = await _resolve_test_config(body, kind="llm")
     _require_chat_params(api_key, base_url, model)
 
-    return await _test_chat_completions(
-        api_key, base_url, model,
-        [{"role": "user", "content": "hi"}],
-        "easy_task_llm_verified", db,
-    )
+    return await _test_llm_provider(api_key, base_url, model, api_format, "easy_task_llm_verified", db)
 
 
 @router.post("/test/vlm")
@@ -263,7 +303,7 @@ async def test_vlm(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> dict:
-    api_key, base_url, model = await _resolve_test_config(body, kind="vlm")
+    api_key, base_url, model, _ = await _resolve_test_config(body, kind="vlm")
     _require_chat_params(api_key, base_url, model)
 
     return await _test_chat_completions(

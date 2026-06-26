@@ -128,6 +128,7 @@ class Anthropic:
         tool_message_conversion: ToolMessageConversion | None = None,
         # Must provide a max_tokens. Can be overridden by .with_generation_kwargs()
         default_max_tokens: int,
+        prompt_cache: bool = True,
         metadata: MetadataParam | None = None,
         **client_kwargs: Any,
     ):
@@ -136,6 +137,7 @@ class Anthropic:
         self._client = AsyncAnthropic(api_key=api_key, base_url=base_url, **client_kwargs)
         self._tool_message_conversion: ToolMessageConversion | None = tool_message_conversion
         self._metadata = metadata
+        self._prompt_cache = prompt_cache
         self._generation_kwargs: Anthropic.GenerationKwargs = {
             "max_tokens": default_max_tokens,
             "beta_features": ["interleaved-thinking-2025-05-14"],
@@ -169,17 +171,13 @@ class Anthropic:
     ) -> "AnthropicStreamedMessage":
         # https://docs.claude.com/en/api/messages#body-messages
         # Anthropic API does not support system roles, but just a system prompt.
-        system = (
-            [
-                TextBlockParam(
-                    text=system_prompt,
-                    type="text",
-                    cache_control=CacheControlEphemeralParam(type="ephemeral"),
-                )
-            ]
-            if system_prompt
-            else omit
-        )
+        if system_prompt:
+            system_block = TextBlockParam(text=system_prompt, type="text")
+            if self._prompt_cache:
+                system_block["cache_control"] = CacheControlEphemeralParam(type="ephemeral")
+            system = [system_block]
+        else:
+            system = omit
         messages: list[MessageParam] = []
         for message in history:
             messages.append(self._convert_message(message))
@@ -189,7 +187,7 @@ class Anthropic:
 
             # inject cache control in the last content.
             # https://docs.claude.com/en/docs/build-with-claude/prompt-caching
-            if isinstance(last_content, list) and last_content:
+            if self._prompt_cache and isinstance(last_content, list) and last_content:
                 content_blocks = cast(list[ContentBlockParam], last_content)
                 last_block = content_blocks[-1]
                 match last_block["type"]:
@@ -209,13 +207,12 @@ class Anthropic:
         generation_kwargs: dict[str, Any] = {}
         generation_kwargs.update(self._generation_kwargs)
         betas = generation_kwargs.pop("beta_features", [])
-        extra_headers = {
-            **{"anthropic-beta": ",".join(str(e) for e in betas)},
-            **(generation_kwargs.pop("extra_headers", {})),
-        }
+        extra_headers = dict(generation_kwargs.pop("extra_headers", {}))
+        if betas:
+            extra_headers["anthropic-beta"] = ",".join(str(e) for e in betas)
 
         tools_ = [_convert_tool(tool) for tool in tools]
-        if tools:
+        if self._prompt_cache and tools:
             tools_[-1]["cache_control"] = CacheControlEphemeralParam(type="ephemeral")
         try:
             response = await self._client.messages.create(

@@ -1746,6 +1746,7 @@ export interface SettingsMap {
   llm_api_key?: string
   llm_base_url?: string
   llm_model?: string
+  llm_api_format?: string
   easy_task_llm?: string
   easy_task_llm_verified?: string
   vlm_source?: string

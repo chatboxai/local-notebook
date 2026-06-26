@@ -75,6 +75,7 @@
                 <p class="overview-card-detail">
                   {{ saved.llm_source === 'custom' ? '自定义' : '百炼' }}
                   · {{ saved.llm_source === 'custom' ? (saved.llm_model || '未设置模型') : (saved.llm_bailian_model || '未设置模型') }}
+                  <template v-if="saved.llm_source === 'custom'">· {{ apiFormatLabel(saved.llm_api_format) }}</template>
                 </p>
               </div>
 
@@ -196,7 +197,7 @@
                 </label>
                 <label class="radio-item">
                   <input type="radio" v-model="draft.llm_source" value="custom" />
-                  <span>自定义（OpenAI / DeepSeek / Ollama / 兼容接口）</span>
+                  <span>自定义（OpenAI / Anthropic / DeepSeek / Ollama / 兼容接口）</span>
                 </label>
               </div>
             </div>
@@ -235,8 +236,29 @@
               </div>
 
               <div class="form-group">
-                <label>Base URL <span class="optional">（可选）</span></label>
-                <input v-model="draft.llm_base_url" placeholder="https://api.openai.com/v1" class="input" />
+                <div class="label-row">
+                  <label>Base URL</label>
+                  <BaseUrlHelpTooltip />
+                </div>
+                <input
+                  v-model="draft.llm_base_url"
+                  :placeholder="draft.llm_api_format === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'"
+                  class="input"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>请求格式</label>
+                <div class="radio-group">
+                  <label class="radio-item">
+                    <input type="radio" v-model="draft.llm_api_format" value="openai" />
+                    <span>OpenAI Chat Completions</span>
+                  </label>
+                  <label class="radio-item">
+                    <input type="radio" v-model="draft.llm_api_format" value="anthropic" />
+                    <span>Anthropic Messages</span>
+                  </label>
+                </div>
               </div>
 
               <div class="form-group">
@@ -621,6 +643,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getSettings, updateSettings, type SettingsMap } from '../services/api'
 import { getToken } from '../services/auth'
+import BaseUrlHelpTooltip from '../components/common/BaseUrlHelpTooltip.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 
 const router = useRouter()
@@ -714,6 +737,7 @@ const DEFAULT_SETTINGS: SettingsMap = {
   llm_api_key: '',
   llm_base_url: '',
   llm_model: '',
+  llm_api_format: 'openai',
   easy_task_llm: '',
 
   vlm_source: '',
@@ -787,7 +811,7 @@ onMounted(async () => {
 
 const SECTION_KEYS: Record<string, (keyof SettingsMap)[]> = {
   bailian: ['bailian_api_key'],
-  llm: ['llm_source', 'llm_bailian_model', 'llm_api_key', 'llm_base_url', 'llm_model'],
+  llm: ['llm_source', 'llm_bailian_model', 'llm_api_key', 'llm_base_url', 'llm_model', 'llm_api_format'],
   easytask: ['easy_task_llm'],
   vlm: ['vlm_source', 'vlm_bailian_model', 'vlm_api_key', 'vlm_base_url', 'vlm_model'],
   embedding: ['embedding_source', 'embedding_bailian_model', 'embedding_model', 'embedding_api_key', 'embedding_base_url'],
@@ -797,6 +821,11 @@ const SECTION_KEYS: Record<string, (keyof SettingsMap)[]> = {
 }
 
 async function save(section: string, force = false) {
+
+  if (section === 'llm' && draft.llm_source === 'custom' && !draft.llm_base_url) {
+    showToast('自定义 LLM 需要填写 Base URL', 'error')
+    return
+  }
 
   if (section === 'embedding' && !force) {
     const oldSource = savedEmbeddingSource.value
@@ -836,6 +865,10 @@ function sourceLabel(source: string): string {
   return { bailian: '百炼模型', local: '本地服务', custom: '自定义' }[source] || source
 }
 
+function apiFormatLabel(format?: string): string {
+  return format === 'anthropic' ? 'Anthropic Messages' : 'OpenAI Chat'
+}
+
 function confirmForceSave() {
   confirmDialog.show = false
   save('embedding', true)
@@ -853,11 +886,16 @@ async function testLlm() {
 
     let body: Record<string, string | undefined>
     if (draft.llm_source === 'custom') {
+      if (!draft.llm_base_url) {
+        testResult.llm = { ok: false, msg: '请填写 Base URL' }
+        return
+      }
       body = {
         source: 'custom',
         api_key: draft.llm_api_key,
         base_url: draft.llm_base_url,
         model: draft.llm_model,
+        api_format: draft.llm_api_format || 'openai',
       }
     } else {
       // 传 source=bailian 让后端走百炼分支,不依赖 DB 里旧的 llm_source。
@@ -889,11 +927,16 @@ async function testEasyTask() {
   try {
     let body: Record<string, string | undefined>
     if (draft.llm_source === 'custom') {
+      if (!draft.llm_base_url) {
+        testResult.easytask = { ok: false, msg: '请填写 Base URL' }
+        return
+      }
       body = {
         source: 'custom',
         api_key: draft.llm_api_key,
         base_url: draft.llm_base_url,
         model: draft.easy_task_llm,
+        api_format: draft.llm_api_format || 'openai',
       }
     } else {
       body = {
@@ -1256,6 +1299,15 @@ label {
   font-weight: 500;
   color: #333;
   margin-bottom: 6px;
+}
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.label-row label {
+  margin-bottom: 0;
 }
 .optional {
   font-weight: 400;

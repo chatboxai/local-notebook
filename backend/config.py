@@ -113,6 +113,16 @@ async def resolve_llm_config() -> tuple[str | None, str | None, str | None]:
     return api_key or None, BAILIAN_BASE_URL, model or None
 
 
+async def resolve_llm_provider_config() -> tuple[str | None, str | None, str | None, str]:
+    api_key, base_url, model = await resolve_llm_config()
+    source = await get_setting("llm_source", "")
+    if source == "custom":
+        api_format = await get_setting("llm_api_format", "openai")
+    else:
+        api_format = "openai"
+    return api_key, base_url, model, api_format or "openai"
+
+
 async def is_easy_task_llm_configured() -> bool:
     """用户是否单独配置了「简单任务模型」(节省计划开关是否实际生效)。
 
@@ -132,6 +142,14 @@ async def resolve_easy_task_llm_config() -> tuple[str | None, str | None, str | 
     if await is_easy_task_llm_configured():
         model = (await get_setting("easy_task_llm", "")).strip()
     return api_key, base_url, model
+
+
+async def resolve_easy_task_llm_provider_config() -> tuple[str | None, str | None, str | None, str]:
+    """Like resolve_easy_task_llm_config(), but includes the selected request format."""
+    api_key, base_url, model, api_format = await resolve_llm_provider_config()
+    if await is_easy_task_llm_configured():
+        model = (await get_setting("easy_task_llm", "")).strip()
+    return api_key, base_url, model, api_format
 
 
 async def resolve_vlm_config() -> tuple[str | None, str | None, str | None]:

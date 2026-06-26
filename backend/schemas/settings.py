@@ -9,6 +9,7 @@ SETTING_KEYS = {
     "llm_api_key",
     "llm_base_url",
     "llm_model",
+    "llm_api_format",
     "easy_task_llm",
     "easy_task_llm_verified",
     "vlm_source",
@@ -31,6 +32,11 @@ SETTING_KEYS = {
     "embedding_verified",
     "mineru_verified",
     "web_search_verified",
+}
+
+
+SETTING_DEFAULTS = {
+    "llm_api_format": "openai",
 }
 
 

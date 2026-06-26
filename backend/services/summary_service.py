@@ -1,11 +1,11 @@
 import asyncio
 import json
 import logging
-from typing import Optional
-
-import httpx
 
 import config
+from kosong._generate import generate
+from kosong.message import Message
+from services.llm_provider import create_llm_chat_provider
 
 logger = logging.getLogger("service.summary")
 
@@ -65,51 +65,51 @@ Project summary:"""
 async def _llm_complete(
     prompt: str,
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str = "openai",
     max_tokens: int = 1024,
     temperature: float = 0.2,
 ) -> str:
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+    chat_provider = create_llm_chat_provider(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        api_format=api_format,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        stream=False,
+    )
+    result = await generate(
+        chat_provider=chat_provider,
+        system_prompt="",
+        tools=[],
+        history=[Message(role="user", content=prompt)],
+    )
+    return result.message.extract_text().strip()
 
 
-async def _resolve_llm() -> tuple[str, str, str] | None:
+async def _resolve_llm() -> tuple[str, str | None, str, str] | None:
     # 解析任务的摘要生成属于「简单任务」,走节省计划:若配置了 easy_task_llm 则用更便宜的
     # 模型(复用主 LLM 的 key/url),否则与主 LLM 一致。
-    api_key, base_url, model = await config.resolve_easy_task_llm_config()
-    if not api_key or not base_url or not model:
+    api_key, base_url, model, api_format = await config.resolve_easy_task_llm_provider_config()
+    if not api_key or not model:
         return None
-    return api_key, base_url, model
+    return api_key, base_url, model, api_format
 
 
 async def generate_segment_summary(
     content: str,
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str = "openai",
 ) -> str:
     if not content or len(content) < 20:
         return content[:200] if content else ""
 
     prompt = SEGMENT_SUMMARY_PROMPT.format(content=content[:2000])
-    summary = await _llm_complete(prompt, api_key, base_url, model)
+    summary = await _llm_complete(prompt, api_key, base_url, model, api_format=api_format)
 
     if len(summary) > 500:
         summary = summary[:500] + "..."
@@ -119,8 +119,9 @@ async def generate_segment_summary(
 async def generate_segment_summaries(
     segments: list[dict],
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str = "openai",
     concurrency: int = 30,
 ) -> dict[int, str]:
     if not segments:
@@ -134,7 +135,13 @@ async def generate_segment_summaries(
         content = seg["content"]
         async with semaphore:
             try:
-                summary = await generate_segment_summary(content, api_key, base_url, model)
+                summary = await generate_segment_summary(
+                    content,
+                    api_key,
+                    base_url,
+                    model,
+                    api_format=api_format,
+                )
                 results[idx] = summary
                 logger.info(f"segment {idx} summary done ({len(summary)} chars)")
             except Exception as e:
@@ -148,8 +155,9 @@ async def generate_file_summary(
     file_name: str,
     segment_summaries: list[str],
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str = "openai",
 ) -> dict:
     if not segment_summaries:
         return {"summary": "", "keywords": []}
@@ -169,7 +177,15 @@ async def generate_file_summary(
     prompt = FILE_SUMMARY_PROMPT.format(filename=file_name, segment_summaries=numbered)
 
     try:
-        raw = await _llm_complete(prompt, api_key, base_url, model, max_tokens=1024, temperature=0.3)
+        raw = await _llm_complete(
+            prompt,
+            api_key,
+            base_url,
+            model,
+            api_format=api_format,
+            max_tokens=1024,
+            temperature=0.3,
+        )
         text = raw.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]
@@ -193,8 +209,9 @@ async def generate_project_summary(
     project_name: str,
     file_summaries: list[dict],
     api_key: str,
-    base_url: str,
+    base_url: str | None,
     model: str,
+    api_format: str = "openai",
 ) -> str:
     if not file_summaries:
         return ""
@@ -212,7 +229,15 @@ async def generate_project_summary(
     )
 
     try:
-        summary = await _llm_complete(prompt, api_key, base_url, model, max_tokens=1024, temperature=0.3)
+        summary = await _llm_complete(
+            prompt,
+            api_key,
+            base_url,
+            model,
+            api_format=api_format,
+            max_tokens=1024,
+            temperature=0.3,
+        )
         return summary[:500]
     except Exception as e:
         logger.warning(f"Project summary generation failed: {e}")

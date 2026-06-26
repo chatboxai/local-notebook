@@ -226,11 +226,11 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
                 import config as _config
                 llm_cfg = await _resolve_llm()
                 if llm_cfg:
-                    ak, bu, md = llm_cfg
+                    ak, bu, md, fmt = llm_cfg
                     economy = await _config.is_easy_task_llm_configured()
-                    logger.info(f"[{file_name}] step 2.5: generating summaries for {len(segments)} segments (model={md}, economy={economy})")
+                    logger.info(f"[{file_name}] step 2.5: generating summaries for {len(segments)} segments (model={md}, format={fmt}, economy={economy})")
                     seg_inputs = [{"segment_index": s.segment_index, "content": s.content} for s in segments]
-                    segment_summaries = await generate_segment_summaries(seg_inputs, ak, bu, md)
+                    segment_summaries = await generate_segment_summaries(seg_inputs, ak, bu, md, api_format=fmt)
                     logger.info(f"[{file_name}] summaries generated: {len(segment_summaries)}/{len(segments)}")
                 else:
                     logger.info(f"[{file_name}] LLM not configured, skipping segment summaries")
@@ -355,12 +355,12 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
             try:
                 if llm_cfg and segment_summaries:
                     from services.summary_service import generate_file_summary
-                    ak, bu, md = llm_cfg
+                    ak, bu, md, fmt = llm_cfg
 
                     logger.info(f"[{file_name}] step 5.1: generating file summary")
                     ordered = [segment_summaries[s.segment_index]
                                for s in segments if s.segment_index in segment_summaries]
-                    file_result = await generate_file_summary(file_name, ordered, ak, bu, md)
+                    file_result = await generate_file_summary(file_name, ordered, ak, bu, md, api_format=fmt)
                     if file_result["summary"]:
                         db_file.summary = file_result["summary"]
                     if file_result["keywords"]:
@@ -377,9 +377,9 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
 
             try:
                 if llm_cfg and segment_summaries:
-                    ak, bu, md = llm_cfg
+                    ak, bu, md, fmt = llm_cfg
                     logger.info(f"[{file_name}] step 5.2: generating project summary")
-                    await _update_project_summary(db, project_id, ak, bu, md)
+                    await _update_project_summary(db, project_id, ak, bu, md, fmt)
             except Exception as e:
                 logger.warning(f"[{file_name}] project summary failed, continuing: {e}")
 
@@ -399,7 +399,14 @@ async def parse_file_task(ctx: dict, file_id: str) -> dict:
             raise
 
 
-async def _update_project_summary(db, project_id: str, api_key: str, base_url: str, model: str) -> None:
+async def _update_project_summary(
+    db,
+    project_id: str,
+    api_key: str,
+    base_url: str | None,
+    model: str,
+    api_format: str,
+) -> None:
     from sqlalchemy import select
     from models.file import File
     from models.project import Project
@@ -426,7 +433,14 @@ async def _update_project_summary(db, project_id: str, api_key: str, base_url: s
     if not file_summaries:
         return
 
-    summary = await generate_project_summary(project_name, file_summaries, api_key, base_url, model)
+    summary = await generate_project_summary(
+        project_name,
+        file_summaries,
+        api_key,
+        base_url,
+        model,
+        api_format=api_format,
+    )
     if summary:
         project = await db.get(Project, project_id)
         if not project:

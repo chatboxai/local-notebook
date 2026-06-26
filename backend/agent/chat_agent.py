@@ -16,10 +16,10 @@ from agent.tools.file_tools import ListFilesTool, GetFileMetaTool, AskImageTool
 
 import kosong
 from kosong.chat_provider import ChatProviderError, StreamedMessagePart
-from kosong.contrib.chat_provider.openai_legacy import OpenAILegacy
 from kosong.message import Message, TextPart, ThinkPart, ToolCall
 from kosong.tooling import ToolResult
 from kosong.tooling.simple import SimpleToolset
+from services.llm_provider import create_llm_chat_provider
 
 logger = logging.getLogger("chat_agent")
 
@@ -54,18 +54,22 @@ class ChatAgent:
         file_ids: list[str] | None = None,
         enable_web_search: bool = False,
     ) -> AsyncGenerator[dict, None]:
-        api_key, base_url, model = await config.resolve_llm_config()
+        api_key, base_url, model, api_format = await config.resolve_llm_provider_config()
 
         if not api_key:
             yield {"type": "error", "message": "LLM API key 未配置，请前往「设置 → LLM」填写。"}
             return
+        if not model:
+            yield {"type": "error", "message": "LLM 模型未配置，请前往「设置 → LLM」填写。"}
+            return
 
-        chat_provider = OpenAILegacy(
+        chat_provider = create_llm_chat_provider(
             model=model,
             api_key=api_key,
             base_url=base_url,
-            reasoning_key="reasoning_content",
-        ).with_generation_kwargs(max_tokens=4000)
+            api_format=api_format,
+            max_tokens=4000,
+        )
 
         self._citation_state.project_id = project_id
         self._citation_state.file_ids = file_ids
@@ -120,7 +124,7 @@ class ChatAgent:
         )
 
         logger.info(
-            f"[LLM] model={model} base_url={base_url} "
+            f"[LLM] model={model} format={api_format} base_url={base_url} "
             f"tools={[t.name for t in toolset.tools]} messages_count={len(history)}"
         )
 
