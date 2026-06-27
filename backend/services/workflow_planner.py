@@ -48,7 +48,8 @@ You may use tools to inspect available files, search source material, read origi
 """
 
 _PLANNER_JSON_ONLY_RULE = """Return exactly one JSON object. Do not wrap it in Markdown or a code fence. Do not add a preface, explanation, or trailing text.
-The first non-whitespace character of your final response must be `{`; the last non-whitespace character must be `}`."""
+The first non-whitespace character of your final response must be `{`; the last non-whitespace character must be `}`.
+Inside JSON string values, do not use raw ASCII double quotes; use Chinese quotation marks or escape them as `\"`."""
 
 _STRUCTURE_OUTPUT_REQUIREMENTS = """Planner structure output requirements:
 1. Plan 4 to 9 sections in the final report display order. Cover the user's requirements and the core source material without duplication.
@@ -181,6 +182,95 @@ def _strip_citation_markers(text: str) -> str:
     """Planner citations belong to planning context and must not leak into feature prompts."""
     cleaned = CITATION_MARKER_RE.sub("", text or "")
     return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+
+
+def _strip_json_markdown_fence(text: str) -> str:
+    text = (text or "").strip()
+    if not text.startswith("```"):
+        return text
+    lines = text.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def _next_nonspace_index(text: str, start: int) -> int:
+    idx = start
+    while idx < len(text) and text[idx].isspace():
+        idx += 1
+    return idx
+
+
+def _quoted_token_is_object_key(text: str, quote_index: int) -> bool:
+    escaped = False
+    idx = quote_index + 1
+    while idx < len(text):
+        char = text[idx]
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            return _next_nonspace_index(text, idx + 1) < len(text) and text[_next_nonspace_index(text, idx + 1)] == ":"
+        idx += 1
+    return False
+
+
+def _json_quote_closes_string(text: str, quote_index: int) -> bool:
+    idx = _next_nonspace_index(text, quote_index + 1)
+    if idx >= len(text) or text[idx] in {"}", "]", ":"}:
+        return True
+    if text[idx] != ",":
+        return False
+
+    next_idx = _next_nonspace_index(text, idx + 1)
+    if next_idx >= len(text) or text[next_idx] in {"}", "]"}:
+        return True
+    if text[next_idx] == '"':
+        return _quoted_token_is_object_key(text, next_idx)
+    return text[next_idx] in "{["
+
+
+def _repair_unescaped_json_string_quotes(text: str) -> str:
+    """Escape common model-produced quotes inside JSON string values.
+
+    LLMs often return fenced JSON with natural-language values such as
+    `"instruction": "说明"黑盒"方案"`. Strict JSON rejects those inner quotes,
+    even though the surrounding object is otherwise usable.
+    """
+    out: list[str] = []
+    in_string = False
+    escaped = False
+
+    for idx, char in enumerate(text):
+        if escaped:
+            out.append(char)
+            escaped = False
+            continue
+
+        if in_string and char == "\\":
+            out.append(char)
+            escaped = True
+            continue
+
+        if char != '"':
+            out.append(char)
+            continue
+
+        if not in_string:
+            in_string = True
+            out.append(char)
+            continue
+
+        if _json_quote_closes_string(text, idx):
+            in_string = False
+            out.append(char)
+        else:
+            out.append('\\"')
+
+    return "".join(out)
 
 
 async def generate_workflow_title(
@@ -458,33 +548,46 @@ def _normalize_steps(raw_steps: Any, language: str) -> List[Dict[str, Any]]:
 
 
 def _parse_json_object(raw: str, preferred_keys: tuple[str, ...] = ()) -> Dict[str, Any]:
-    text = raw.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-
+    text = _strip_json_markdown_fence(raw)
     decoder = json.JSONDecoder()
-    first_object: Dict[str, Any] | None = None
-    for idx, char in enumerate(text):
-        if char != "{":
-            continue
-        try:
-            parsed, _ = decoder.raw_decode(text[idx:])
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        first_object = first_object or parsed
-        if preferred_keys and any(key in parsed for key in preferred_keys):
-            return parsed
-        if not preferred_keys:
-            return parsed
+
+    def _scan(candidate: str) -> tuple[Dict[str, Any] | None, Dict[str, Any] | None]:
+        first_object: Dict[str, Any] | None = None
+        preferred_object: Dict[str, Any] | None = None
+        for idx, char in enumerate(candidate):
+            if char != "{":
+                continue
+            try:
+                parsed, _ = decoder.raw_decode(candidate[idx:])
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            first_object = first_object or parsed
+            if preferred_keys and any(key in parsed for key in preferred_keys):
+                preferred_object = parsed
+                break
+            if not preferred_keys:
+                preferred_object = parsed
+                break
+        return first_object, preferred_object
+
+    first_object, preferred_object = _scan(text)
+    if preferred_object is not None:
+        return preferred_object
     if first_object is not None and not preferred_keys:
         return first_object
+
+    repaired = _repair_unescaped_json_string_quotes(text)
+    if repaired != text:
+        first_object, preferred_object = _scan(repaired)
+        if preferred_object is not None:
+            logger.info("[planner] parsed JSON after repairing unescaped quotes")
+            return preferred_object
+        if first_object is not None and not preferred_keys:
+            logger.info("[planner] parsed JSON after repairing unescaped quotes")
+            return first_object
+
     if preferred_keys:
         keys = ", ".join(preferred_keys)
         raise ValueError(f"规划结果中未找到包含 {keys} 的完整 JSON object")
