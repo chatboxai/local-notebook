@@ -151,6 +151,7 @@ async def parse_file_task(
     output_language: str | None = None,
 ) -> dict:
     from models.file import File
+    from models.project import Project
 
     session_factory = ctx["session_factory"]
 
@@ -164,6 +165,8 @@ async def parse_file_task(
         file_type = db_file.file_type
         file_path = db_file.file_path
         project_id = db_file.project_id
+        project = await db.get(Project, project_id)
+        user_id = project.owner_user_id if project else None
 
         try:
             logger.info(f"Parsing file {file_id} ({file_name}, type={file_type})")
@@ -255,6 +258,7 @@ async def parse_file_task(
                         md,
                         api_format=fmt,
                         output_language=summary_language,
+                        user_id=user_id,
                     )
                     logger.info(f"[{file_name}] summaries generated: {len(segment_summaries)}/{len(segments)}")
                 else:
@@ -393,6 +397,7 @@ async def parse_file_task(
                         md,
                         api_format=fmt,
                         output_language=output_language,
+                        user_id=user_id,
                     )
                     if file_result["summary"]:
                         db_file.summary = file_result["summary"]
@@ -420,6 +425,7 @@ async def parse_file_task(
                         md,
                         fmt,
                         output_language=output_language,
+                        user_id=user_id,
                     )
             except Exception as e:
                 logger.warning(f"[{file_name}] project summary failed, continuing: {e}")
@@ -448,6 +454,7 @@ async def _update_project_summary(
     model: str,
     api_format: str,
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     from sqlalchemy import select
     from models.file import File
@@ -485,6 +492,7 @@ async def _update_project_summary(
         api_format=api_format,
         project_description=project_description,
         output_language=output_language,
+        user_id=user_id,
     )
     summary = overview.get("summary")
     color = overview.get("color")
@@ -731,6 +739,7 @@ async def generate_workflow_task(
     from agent.capabilities import DEFAULT_FEATURE_TYPE
     from agent.tools.query_knowledge_base import CitationState
     from models.feature import Feature
+    from models.project import Project
     from models.workflow import Workflow
     from services.workflow_citations import (
         convert_local_feature_to_workflow,
@@ -759,6 +768,8 @@ async def generate_workflow_task(
             logger.info("[workflow] cancelled before start workflow_id=%s", workflow_id)
             return {"status": "cancelled", "workflow_id": workflow_id}
         project_id = wf.project_id
+        project = await db.get(Project, project_id)
+        user_id = project.owner_user_id if project else None
         workflow_type = wf.workflow_type
         custom_prompt = wf.custom_prompt or ""
         file_ids = wf.get_file_ids()
@@ -804,6 +815,7 @@ async def generate_workflow_task(
                 project_id=project_id,
                 file_ids=file_ids,
                 output_language=output_language,
+                user_id=user_id,
                 cancellation_check=lambda: _raise_if_workflow_cancelled(
                     session_factory,
                     workflow_id,
@@ -840,6 +852,7 @@ async def generate_workflow_task(
             file_ids=file_ids,
             report_title=user_title or "",
             output_language=output_language,
+            user_id=user_id,
             cancellation_check=lambda: _raise_if_workflow_cancelled(
                 session_factory,
                 workflow_id,
@@ -1024,6 +1037,7 @@ async def generate_workflow_task(
                 custom_prompt=custom_prompt,
                 citation_state=citation_state,
                 start_display_num=1,
+                user_id=user_id,
                 cancellation_check=lambda: _raise_if_workflow_cancelled(
                     session_factory,
                     workflow_id,

@@ -1,3 +1,4 @@
+from models.user import User
 from models.project import Project
 from models.file import File
 from models.session import Session
@@ -8,8 +9,9 @@ from models.block import Block
 from models.image import Image
 from models.workflow import Workflow
 from models.feature import Feature
+from models.usage import UserModelUsageDaily
 
 __all__ = [
-    "Project", "File", "Session", "Message", "Setting", "Segment", "Block",
-    "Image", "Workflow", "Feature",
+    "User", "Project", "File", "Session", "Message", "Setting", "Segment", "Block",
+    "Image", "Workflow", "Feature", "UserModelUsageDaily",
 ]

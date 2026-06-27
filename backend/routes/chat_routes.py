@@ -4,13 +4,15 @@ from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from dependencies.permissions import require_session
 from models.message import Message
 from models.session import Session
+from models.user import User
 from schemas.chat import ChatRequest, EditMessageRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -19,6 +21,7 @@ logger = logging.getLogger("chat_routes")
 
 async def _agent_sse(
     session: Session,
+    user_id: str,
     user_message: str,
     file_ids: list[str],
     db: AsyncSession,
@@ -42,6 +45,7 @@ async def _agent_sse(
             question=user_message,
             session_id=session.id,
             project_id=session.project_id,
+            user_id=user_id,
             file_ids=file_ids or None,
             enable_web_search=enable_web_search,
         ):
@@ -137,11 +141,9 @@ async def _agent_sse(
 async def chat_stream(
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    session = await db.get(Session, body.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, body.session_id, current_user)
 
     import json as _json
     user_msg = Message(
@@ -154,7 +156,7 @@ async def chat_stream(
     await db.commit()
 
     return StreamingResponse(
-        _agent_sse(session, body.message, body.file_ids, db, body.enable_web_search,
+        _agent_sse(session, current_user.id, body.message, body.file_ids, db, body.enable_web_search,
                    user_msg_id=user_msg.id),
         media_type="text/event-stream",
         headers={
@@ -170,11 +172,9 @@ async def edit_message_and_regenerate(
     message_id: str,
     body: EditMessageRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
 
     original_msg = await db.get(Message, message_id)
     if not original_msg:
@@ -215,7 +215,7 @@ async def edit_message_and_regenerate(
 
     return StreamingResponse(
         _agent_sse(
-            session, body.content, body.file_ids or [], db,
+            session, current_user.id, body.content, body.file_ids or [], db,
             enable_web_search=body.enable_web_search,
             user_msg_id=new_user_msg.id,
         ),

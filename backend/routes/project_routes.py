@@ -5,14 +5,16 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from dependencies.permissions import require_project
 from models.file import File
 from models.project import Project
+from models.user import User
 from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 def _project_response(project: Project, file_count: int = 0) -> ProjectResponse:
     return ProjectResponse(
         id=project.id,
+        user_id=project.owner_user_id,
         name=project.name,
         description=project.description,
         summary=project.summary,
@@ -120,7 +123,7 @@ async def _delete_project_rows(db: AsyncSession, project_id: str, project: Proje
 @router.get("", response_model=list[ProjectResponse])
 async def list_projects(
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[ProjectResponse]:
     file_counts = (
         select(
@@ -136,6 +139,7 @@ async def list_projects(
             func.coalesce(file_counts.c.file_count, 0).label("file_count"),
         )
         .outerjoin(file_counts, Project.id == file_counts.c.project_id)
+        .where(Project.owner_user_id == current_user.id)
         .order_by(Project.updated_at.desc())
     )
     return [_project_response(project, file_count) for project, file_count in result.all()]
@@ -145,9 +149,13 @@ async def list_projects(
 async def create_project(
     body: ProjectCreate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectResponse:
-    project = Project(name=body.name, description=body.description)
+    project = Project(
+        name=body.name,
+        description=body.description,
+        owner_user_id=current_user.id,
+    )
     db.add(project)
     await db.commit()
     await db.refresh(project)
@@ -158,11 +166,9 @@ async def create_project(
 async def get_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectResponse:
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await require_project(db, project_id, current_user)
     return _project_response(project, await _get_project_file_count(db, project_id))
 
 
@@ -171,11 +177,9 @@ async def update_project(
     project_id: str,
     body: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectResponse:
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await require_project(db, project_id, current_user)
     if body.name is not None:
         project.name = body.name
     if body.description is not None:
@@ -190,11 +194,9 @@ async def update_project(
 async def delete_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await require_project(db, project_id, current_user)
 
     await _drop_project_vectors(project_id)
     await _delete_project_rows(db, project_id, project)

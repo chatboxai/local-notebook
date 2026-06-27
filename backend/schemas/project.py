@@ -17,6 +17,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectResponse(UTCDateTimeModel):
     id: str
+    user_id: Optional[str] = None
     name: str
     description: Optional[str]
     summary: Optional[str] = None

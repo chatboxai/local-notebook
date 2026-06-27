@@ -6,6 +6,7 @@ import config
 from kosong._generate import generate
 from kosong.message import Message
 from services.llm_provider import create_llm_chat_provider
+from services.usage_service import record_model_usage
 
 logger = logging.getLogger("service.summary")
 
@@ -120,6 +121,7 @@ async def _llm_complete(
     api_format: str = "openai",
     max_tokens: int = 1024,
     temperature: float = 0.2,
+    user_id: str | None = None,
 ) -> str:
     chat_provider = create_llm_chat_provider(
         api_key=api_key,
@@ -136,6 +138,7 @@ async def _llm_complete(
         tools=[],
         history=[Message(role="user", content=prompt)],
     )
+    await record_model_usage(user_id=user_id, model=model, usage=result.usage)
     return result.message.extract_text().strip()
 
 
@@ -155,6 +158,7 @@ async def generate_segment_summary(
     model: str,
     api_format: str = "openai",
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> str:
     if not content or len(content) < 20:
         return content[:200] if content else ""
@@ -163,7 +167,14 @@ async def generate_segment_summary(
         content=content[:2000],
         output_language=normalize_output_language(output_language),
     )
-    summary = await _llm_complete(prompt, api_key, base_url, model, api_format=api_format)
+    summary = await _llm_complete(
+        prompt,
+        api_key,
+        base_url,
+        model,
+        api_format=api_format,
+        user_id=user_id,
+    )
 
     if len(summary) > 500:
         summary = summary[:500] + "..."
@@ -178,6 +189,7 @@ async def generate_segment_summaries(
     api_format: str = "openai",
     concurrency: int = 30,
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> dict[int, str]:
     if not segments:
         return {}
@@ -197,6 +209,7 @@ async def generate_segment_summaries(
                     model,
                     api_format=api_format,
                     output_language=output_language,
+                    user_id=user_id,
                 )
                 results[idx] = summary
                 logger.info(f"segment {idx} summary done ({len(summary)} chars)")
@@ -215,6 +228,7 @@ async def generate_file_summary(
     model: str,
     api_format: str = "openai",
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     if not segment_summaries:
         return {"summary": "", "keywords": []}
@@ -246,6 +260,7 @@ async def generate_file_summary(
             api_format=api_format,
             max_tokens=1024,
             temperature=0.3,
+            user_id=user_id,
         )
         text = raw.strip()
         if text.startswith("```"):
@@ -274,6 +289,7 @@ async def generate_project_summary(
     model: str,
     api_format: str = "openai",
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> str:
     if not file_summaries:
         return ""
@@ -300,6 +316,7 @@ async def generate_project_summary(
             api_format=api_format,
             max_tokens=1024,
             temperature=0.3,
+            user_id=user_id,
         )
         return summary[:500]
     except Exception as e:
@@ -316,6 +333,7 @@ async def generate_project_overview(
     api_format: str = "openai",
     project_description: str | None = None,
     output_language: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     if not file_summaries:
         return {"summary": "", "color": None}
@@ -344,6 +362,7 @@ async def generate_project_overview(
             api_format=api_format,
             max_tokens=768,
             temperature=0.3,
+            user_id=user_id,
         )
         text = raw.strip()
         if text.startswith("```"):

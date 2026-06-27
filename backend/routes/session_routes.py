@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent.citation_parser import CitationParser
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from dependencies.permissions import require_project, require_session
 from models.message import Message
-from models.project import Project
 from models.session import Session
+from models.user import User
 from schemas.session import SessionCreate, SessionResponse
 from utils.time import utc_isoformat
 
@@ -73,8 +74,9 @@ async def list_sessions(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
+    await require_project(db, project_id, current_user)
     total_result = await db.execute(
         select(func.count()).select_from(Session).where(Session.project_id == project_id)
     )
@@ -101,11 +103,9 @@ async def create_session(
     project_id: str,
     body: SessionCreate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await require_project(db, project_id, current_user)
 
     result = await db.execute(
         select(Session)
@@ -155,15 +155,9 @@ async def get_session(
     offset: int = 0,
     brief: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    result = await db.execute(
-        select(Session).where(Session.id == session_id)
-    )
-    session = result.scalar_one_or_none()
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
 
     has_compact = bool(session.compact_summary and session.compact_message_id)
 
@@ -367,11 +361,9 @@ async def update_session(
     session_id: str,
     body: SessionTitleUpdate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
     if body.title is not None:
         session.title = body.title
     await db.commit()
@@ -383,11 +375,9 @@ async def update_session(
 async def delete_session(
     session_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
     await db.delete(session)
     await db.commit()
 
@@ -399,11 +389,9 @@ async def get_session_messages(
     offset: int = 0,
     brief: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
 
     total_result = await db.execute(
         select(func.count()).select_from(Message).where(Message.session_id == session_id).where(Message.deleted_at.is_(None))
@@ -447,13 +435,11 @@ async def export_session(
     session_id: str,
     body: ExportRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     from services.export_service import export_service
 
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await require_session(db, session_id, current_user)
 
     result = await db.execute(
         select(Message)

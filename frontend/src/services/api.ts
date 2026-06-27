@@ -94,6 +94,74 @@ export async function getCurrentUser() {
   return response.data
 }
 
+export type AdminUserRole = 'user' | 'admin'
+
+export interface AdminUser {
+  user_id: string
+  username: string
+  role: AdminUserRole
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUserListResponse {
+  users: AdminUser[]
+  total: number
+}
+
+export async function getAdminUsers(): Promise<AdminUserListResponse> {
+  const response = await api.get('/api/admin/users')
+  return response.data
+}
+
+export async function createAdminUser(data: {
+  username: string
+  password: string
+}): Promise<AdminUser> {
+  const response = await api.post('/api/admin/users', data)
+  return response.data
+}
+
+export async function resetAdminUserPassword(userId: string, newPassword: string): Promise<void> {
+  await api.post(`/api/admin/users/${userId}/password`, { new_password: newPassword })
+}
+
+export interface AdminUsageRow {
+  usage_date: string
+  user_id: string
+  username: string
+  model: string
+  call_count: number
+  input_uncached_tokens: number
+  input_cache_read_tokens: number
+  input_cache_write_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
+
+export interface AdminUsageTotals {
+  call_count: number
+  input_uncached_tokens: number
+  input_cache_read_tokens: number
+  input_cache_write_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
+
+export interface AdminUsageResponse {
+  rows: AdminUsageRow[]
+  totals: AdminUsageTotals
+}
+
+export async function getAdminUsage(params?: {
+  start_date?: string
+  end_date?: string
+  user_id?: string
+}): Promise<AdminUsageResponse> {
+  const response = await api.get('/api/admin/usage', { params })
+  return response.data
+}
+
 
 export async function getProjects(): Promise<Project[]> {
   const response = await api.get('/api/projects')

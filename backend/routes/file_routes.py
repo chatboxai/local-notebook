@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dependencies.auth import get_current_user, get_current_user_query_or_header
 from dependencies.database import get_db
+from dependencies.permissions import require_file, require_project
 from models.file import File
 from models.project import Project
+from models.user import User
 from schemas.file import FileResponse
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
@@ -40,12 +42,12 @@ def _get_pdf_page_count_sync(file_path: str) -> int:
 
 
 async def _get_file_or_404(
-    db: AsyncSession, file_id: str, project_id: str | None = None
+    db: AsyncSession,
+    file_id: str,
+    current_user: User,
+    project_id: str | None = None,
 ) -> File:
-    db_file = await db.get(File, file_id)
-    if not db_file or (project_id is not None and db_file.project_id != project_id):
-        raise HTTPException(status_code=404, detail="File not found")
-    return db_file
+    return await require_file(db, file_id, current_user, project_id)
 
 
 async def _delete_file(db: AsyncSession, db_file: File) -> None:
@@ -78,8 +80,9 @@ async def _delete_file(db: AsyncSession, db_file: File) -> None:
 async def list_files(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[FileResponse]:
+    await require_project(db, project_id, current_user)
     result = await db.execute(
         select(File)
         .where(File.project_id == project_id)
@@ -95,11 +98,9 @@ async def upload_file(
     request: Request,
     output_language: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> FileResponse:
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await require_project(db, project_id, current_user)
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -148,9 +149,9 @@ async def delete_file(
     project_id: str,
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    db_file = await _get_file_or_404(db, file_id, project_id)
+    db_file = await _get_file_or_404(db, file_id, current_user, project_id)
     await _delete_file(db, db_file)
 
 
@@ -166,9 +167,9 @@ async def update_file(
     file_id: str,
     body: FileUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
     db_file.file_name = body.file_name
     await db.commit()
     await db.refresh(db_file)
@@ -183,12 +184,14 @@ async def update_file(
 async def get_files_status_batch(
     file_ids: list[str] = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     if not file_ids:
         return {"files": []}
     result = await db.execute(
-        select(File.id, File.status, File.error_message).where(File.id.in_(file_ids))
+        select(File.id, File.status, File.error_message)
+        .join(Project, File.project_id == Project.id)
+        .where(File.id.in_(file_ids), Project.owner_user_id == current_user.id)
     )
     files = [
         {"id": row.id, "status": row.status, "error_message": row.error_message}
@@ -201,18 +204,18 @@ async def get_files_status_batch(
 async def get_file_by_id(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> FileResponse:
-    return await _get_file_or_404(db, file_id)
+    return await _get_file_or_404(db, file_id, current_user)
 
 
 @file_router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_file_by_id(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
     await _delete_file(db, db_file)
 
 
@@ -220,14 +223,14 @@ async def delete_file_by_id(
 async def get_file_content(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.segment import Segment
     from models.block import Block
     from sqlalchemy import select, asc
     import json
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     if db_file.status != "ready":
         raise HTTPException(status_code=400, detail="文件尚未处理完成")
@@ -279,14 +282,14 @@ async def get_file_content(
 async def get_file_pages(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.segment import Segment
     from models.block import Block
     from sqlalchemy import select, asc, func
     import json
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     if db_file.status != "ready":
         raise HTTPException(status_code=400, detail="文件尚未处理完成")
@@ -407,9 +410,9 @@ async def get_file_pages(
 async def get_file_raw(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     file_path = Path(db_file.file_path)
     if not file_path.exists():
@@ -440,11 +443,11 @@ async def get_file_raw(
 async def preview_file(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user_query_or_header),
+    current_user: User = Depends(get_current_user_query_or_header),
 ):
     from fastapi.responses import FileResponse
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     file_path = Path(db_file.file_path)
     if not file_path.exists():
@@ -536,12 +539,12 @@ async def get_blocks_bbox(
     file_id: str,
     block_ids: list[str] = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.block import Block
     from sqlalchemy import select
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     if not block_ids:
         return {
@@ -584,13 +587,13 @@ async def find_block_by_position(
     file_id: str,
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.block import Block
     from sqlalchemy import select, and_
     import json
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     page = data.get("page")
     x = data.get("x")
@@ -642,12 +645,12 @@ async def get_blocks_location(
     file_id: str,
     block_ids: list[str] = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.block import Block
     from sqlalchemy import select
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     if not block_ids:
         return {
@@ -683,12 +686,12 @@ async def get_blocks_location(
 async def get_image_info(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     from models.image import Image
     from sqlalchemy import select, asc
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
 
     IMAGE_TYPES = {"jpg", "jpeg", "png"}
     if db_file.file_type not in IMAGE_TYPES:

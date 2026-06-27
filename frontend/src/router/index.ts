@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isLoggedIn } from '../services/auth'
+import { isAdmin, isLoggedIn } from '../services/auth'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,7 +26,13 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsPage.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminPage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true }
     }
   ]
 })
@@ -38,6 +44,8 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAuth && !isLoggedIn()) {
     next('/login')
   } else if (to.path === '/login' && isLoggedIn()) {
+    next('/')
+  } else if (to.meta.requiresAdmin && !isAdmin()) {
     next('/')
   } else {
     next()

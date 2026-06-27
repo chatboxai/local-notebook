@@ -24,6 +24,7 @@ from kosong.chat_provider import ChatProviderError
 from kosong.message import Message, TextPart
 from kosong.tooling.simple import SimpleToolset
 from services.llm_provider import create_llm_chat_provider
+from services.usage_service import record_model_usage
 
 logger = logging.getLogger("feature_agent")
 
@@ -87,6 +88,7 @@ class FeatureAgent:
         custom_prompt: str,
         citation_state: CitationState,
         start_display_num: int,
+        user_id: str | None = None,
         cancellation_check: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int]:
         """返回 (blocks, citations_snapshot, next_display_num)。
@@ -154,6 +156,7 @@ class FeatureAgent:
 
             if cancellation_check:
                 await cancellation_check()
+            await record_model_usage(user_id=user_id, model=model, usage=step_result.usage)
 
             if step_result.tool_calls and not is_final:
                 history.append(step_result.message)
