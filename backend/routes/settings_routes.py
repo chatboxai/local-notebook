@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
-from dependencies.auth import get_current_user
+from dependencies.auth import get_current_admin, get_current_user
 from dependencies.database import get_db
 from schemas.settings import (
     SETTING_DEFAULTS,
@@ -15,7 +15,9 @@ from schemas.settings import (
 from kosong._generate import generate
 from kosong.chat_provider import ChatProviderError
 from kosong.message import Message
+from models.user import User
 from services.llm_provider import create_llm_chat_provider, normalize_llm_api_format
+from services.usage_service import record_model_usage
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -31,7 +33,7 @@ async def _full_settings() -> dict[str, str | None]:
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> SettingsResponse:
     all_settings = await _full_settings()
     return SettingsResponse(settings=all_settings)
@@ -41,7 +43,7 @@ async def get_settings(
 async def update_settings(
     body: SettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> SettingsResponse:
     filtered = {
         k: v for k, v in body.settings.items() if k in SETTING_KEYS
@@ -126,7 +128,7 @@ async def preflight_check(
 @router.get("/{key}")
 async def get_single_setting(
     key: str,
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> dict:
     if key not in SETTING_KEYS:
         raise HTTPException(
@@ -141,7 +143,7 @@ async def get_single_setting(
 async def delete_setting(
     key: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> None:
     if key not in SETTING_KEYS:
         raise HTTPException(
@@ -204,6 +206,7 @@ async def _test_llm_provider(
     api_format: str,
     verified_key: str,
     db: AsyncSession,
+    user_id: str,
 ) -> dict:
     try:
         chat_provider = create_llm_chat_provider(
@@ -214,12 +217,13 @@ async def _test_llm_provider(
             max_tokens=1,
             stream=False,
         )
-        await generate(
+        result = await generate(
             chat_provider=chat_provider,
             system_prompt="",
             tools=[],
             history=[Message(role="user", content="hi")],
         )
+        await record_model_usage(user_id=user_id, model=model, usage=result.usage)
         await _mark_verified(verified_key, True, db)
         return {"ok": True, "msg": "连接成功", "verified": True}
     except ChatProviderError as exc:
@@ -277,31 +281,47 @@ async def _resolve_test_config(
 async def test_llm(
     body: ChatModelTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin),
 ) -> dict:
     api_key, base_url, model, api_format = await _resolve_test_config(body, kind="llm")
     _require_chat_params(api_key, base_url, model)
 
-    return await _test_llm_provider(api_key, base_url, model, api_format, "llm_verified", db)
+    return await _test_llm_provider(
+        api_key,
+        base_url,
+        model,
+        api_format,
+        "llm_verified",
+        db,
+        current_admin.id,
+    )
 
 
 @router.post("/test/easy-task-llm")
 async def test_easy_task_llm(
     body: ChatModelTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin),
 ) -> dict:
     api_key, base_url, model, api_format = await _resolve_test_config(body, kind="llm")
     _require_chat_params(api_key, base_url, model)
 
-    return await _test_llm_provider(api_key, base_url, model, api_format, "easy_task_llm_verified", db)
+    return await _test_llm_provider(
+        api_key,
+        base_url,
+        model,
+        api_format,
+        "easy_task_llm_verified",
+        db,
+        current_admin.id,
+    )
 
 
 @router.post("/test/vlm")
 async def test_vlm(
     body: ChatModelTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> dict:
     api_key, base_url, model, _ = await _resolve_test_config(body, kind="vlm")
     _require_chat_params(api_key, base_url, model)
@@ -323,7 +343,7 @@ class MinerUTestRequest(BaseModel):
 async def test_mineru(
     body: MinerUTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> dict:
     from services.mineru_client import health_check
 
@@ -362,7 +382,7 @@ async def test_mineru(
 async def test_embedding(
     body: EmbeddingTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> dict:
     # 按 body.source 独立解析,避免依赖 DB 里旧的 embedding_source。
     if body.source == "bailian":
@@ -422,7 +442,7 @@ class WebSearchTestRequest(BaseModel):
 async def test_web_search(
     body: WebSearchTestRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    _: str = Depends(get_current_admin),
 ) -> dict:
     enabled, default_key, base_url = await config.resolve_web_search_config()
 

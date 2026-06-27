@@ -20,6 +20,7 @@ from kosong.message import Message, TextPart, ThinkPart, ToolCall
 from kosong.tooling import ToolResult
 from kosong.tooling.simple import SimpleToolset
 from services.llm_provider import create_llm_chat_provider
+from services.usage_service import record_model_usage
 
 logger = logging.getLogger("chat_agent")
 
@@ -51,6 +52,7 @@ class ChatAgent:
         question: str,
         session_id: str,
         project_id: str,
+        user_id: str,
         file_ids: list[str] | None = None,
         enable_web_search: bool = False,
     ) -> AsyncGenerator[dict, None]:
@@ -104,6 +106,8 @@ class ChatAgent:
                     session_id=session_id,
                     history=history,
                     chat_provider=chat_provider,
+                    user_id=user_id,
+                    model=model,
                 )
                 self._citation_state = CitationState()
                 self._citation_state.project_id = project_id
@@ -212,6 +216,11 @@ class ChatAgent:
                 step_result = await step_task
 
                 if step_result.usage:
+                    await record_model_usage(
+                        user_id=user_id,
+                        model=model,
+                        usage=step_result.usage,
+                    )
                     last_total_tokens = step_result.usage.total
 
             except ChatProviderError as e:
@@ -634,6 +643,8 @@ class ChatAgent:
         session_id: str,
         history: list[Message],
         chat_provider,
+        user_id: str,
+        model: str,
     ) -> None:
         from database import AsyncSessionLocal
         from models.message import Message as DBMessage
@@ -694,6 +705,11 @@ class ChatAgent:
             system_prompt=compact_system_prompt,
             tools=[],
             history=[Message(role="user", content=compact_prompt)],
+        )
+        await record_model_usage(
+            user_id=user_id,
+            model=model,
+            usage=summary_result.usage,
         )
         summary_text = ""
         for part in summary_result.message.content:

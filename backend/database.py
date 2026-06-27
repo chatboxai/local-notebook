@@ -43,6 +43,7 @@ class Base(DeclarativeBase):
 
 
 RUNTIME_SCHEMA_COLUMNS = [
+    ("projects", "owner_user_id", "VARCHAR(36)"),
     ("projects", "summary", "TEXT"),
     ("projects", "color", "VARCHAR(20)"),
     ("sessions", "last_total_tokens", "INTEGER"),

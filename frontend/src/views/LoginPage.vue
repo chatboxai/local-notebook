@@ -78,6 +78,7 @@ async function handleLogin() {
             user_id: userInfo.user.user_id,
             username: userInfo.user.username,
             phone: userInfo.user.phone,
+            role: userInfo.user.role || 'user',
             created_at: userInfo.user.created_at
           })
         }
@@ -85,6 +86,7 @@ async function handleLogin() {
         setUser({
           user_id: response.user_id,
           username: response.username,
+          role: response.role || 'user',
           created_at: new Date().toISOString()
         })
       }
@@ -94,7 +96,7 @@ async function handleLogin() {
       error.value = response.error || '登录失败'
     }
   } catch (err: any) {
-    error.value = err.response?.data?.error || '登录失败，请检查网络连接'
+    error.value = err.response?.data?.detail || err.response?.data?.error || '登录失败，请检查网络连接'
   } finally {
     loading.value = false
   }

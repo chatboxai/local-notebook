@@ -13,12 +13,22 @@
       </div>
       <div class="settings-header-right">
         <LanguageSwitcher />
+        <button class="btn-header-icon" @click="router.push('/admin')" title="用户管理">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zM8 11c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+          </svg>
+        </button>
         <span class="user-badge">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
           </svg>
-          <span>admin</span>
+          <span>{{ displayUsername }}</span>
         </span>
+        <button class="btn-header-icon" @click="logout" title="退出登录">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3h-8v2h8v14h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -642,12 +652,18 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getSettings, updateSettings, type SettingsMap } from '../services/api'
-import { getToken } from '../services/auth'
+import { clearTokens, getDisplayUsername, getToken } from '../services/auth'
 import BaseUrlHelpTooltip from '../components/common/BaseUrlHelpTooltip.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 
 const router = useRouter()
 const route = useRoute()
+const displayUsername = computed(() => getDisplayUsername() || 'admin')
+
+function logout() {
+  clearTokens()
+  router.push('/login')
+}
 
 
 const tabs = [
@@ -1121,6 +1137,21 @@ function showToast(msg: string, type: 'success' | 'error') {
   transition: background 0.15s;
 }
 .btn-back:hover { background: #f0f0ec; }
+
+.btn-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e0e0da;
+  border-radius: 6px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-header-icon:hover { background: #f0f0ec; }
 
 .settings-title {
   font-size: 16px;

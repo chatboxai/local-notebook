@@ -41,6 +41,28 @@ async def lifespan(app: FastAPI):
     from database import AsyncSessionLocal
     import config
     async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        from dependencies.auth import hash_password
+        from models.user import User
+
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin")
+        result = await db.execute(select(User).where(User.username == admin_username))
+        admin_user = result.scalar_one_or_none()
+        if admin_user is None:
+            admin_user = User(
+                username=admin_username,
+                password_hash=hash_password(admin_password),
+                role="admin",
+            )
+            db.add(admin_user)
+            await db.commit()
+            logger.info("Initial admin user is ready: %s", admin_username)
+        elif admin_user.role != "admin":
+            admin_user.role = "admin"
+            await db.commit()
+            logger.info("Initial admin user is ready: %s", admin_username)
+
         await config.load_settings(db)
     logger.info("Settings cache loaded")
 
@@ -108,6 +130,7 @@ def create_app() -> FastAPI:
     )
 
     from routes import (
+        admin_router,
         auth_router,
         chat_router,
         direct_file_router,
@@ -119,6 +142,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth_router,        prefix="/api")
+    app.include_router(admin_router,       prefix="/api")
     app.include_router(settings_router,    prefix="/api")
     app.include_router(project_router,     prefix="/api")
     app.include_router(file_router,        prefix="/api")

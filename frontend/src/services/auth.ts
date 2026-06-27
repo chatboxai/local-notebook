@@ -5,17 +5,10 @@ const USER_KEY = 'user'
 export interface User {
   user_id: string
   username: string
+  role: 'user' | 'admin'
   phone?: string
   created_at: string
 }
-
-const LOCAL_USER: User = {
-  user_id: 'local_user',
-  username: '本地用户',
-  created_at: new Date().toISOString()
-}
-
-const LOCAL_TOKEN = 'local_mock_token_for_single_user_mode'
 
 export function getToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY)
@@ -56,9 +49,10 @@ export function isLoggedIn(): boolean {
   return !!getToken()
 }
 
-export async function ensureLocalUser(): Promise<void> {
-  if (!isLoggedIn()) {
-    setTokens(LOCAL_TOKEN, LOCAL_TOKEN)
-    setUser(LOCAL_USER)
-  }
+export function isAdmin(): boolean {
+  return getUser()?.role === 'admin'
+}
+
+export function getDisplayUsername(): string {
+  return getUser()?.username || ''
 }

@@ -23,6 +23,7 @@ from agent.tools.query_knowledge_base import CitationState
 from kosong.message import Message
 from kosong.tooling.simple import SimpleToolset
 from services.llm_provider import create_llm_chat_provider
+from services.usage_service import record_model_usage
 
 logger = logging.getLogger("service.workflow_planner")
 
@@ -187,6 +188,7 @@ async def generate_workflow_title(
     project_id: Optional[str] = None,
     file_ids: Optional[List[str]] = None,
     output_language: str = "",
+    user_id: str | None = None,
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> str:
     """根据用户要求和所选来源生成 workflow 标题。"""
@@ -247,6 +249,7 @@ async def generate_workflow_title(
         )
         if cancellation_check:
             await cancellation_check()
+        await record_model_usage(user_id=user_id, model=model, usage=result.usage)
         title = _clean_generated_title(result.message.extract_text())
         if title:
             logger.info("[planner] generated workflow title attempt=%d title=%r", attempt, title)
@@ -289,6 +292,7 @@ async def _llm_plan_turn(
     project_id: str,
     file_ids: List[str],
     citation_state: CitationState,
+    user_id: str | None = None,
     enable_tools: bool = True,
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> str:
@@ -326,6 +330,7 @@ async def _llm_plan_turn(
         )
         if cancellation_check:
             await cancellation_check()
+        await record_model_usage(user_id=user_id, model=model, usage=result.usage)
 
         if result.tool_calls and not is_final:
             history.append(result.message)
@@ -609,6 +614,7 @@ async def plan_workflow(
     file_ids: List[str],
     report_title: str = "",
     output_language: str = "",
+    user_id: str | None = None,
     cancellation_check: Optional[CancellationCheck] = None,
 ) -> Dict[str, Any]:
     """规划报告。返回 {"steps": [...]}。"""
@@ -672,6 +678,7 @@ Plan the report section structure first. Use tools first if the source overview 
                 project_id=project_id,
                 file_ids=file_ids,
                 citation_state=citation_state,
+                user_id=user_id,
                 cancellation_check=cancellation_check,
             )
             if cancellation_check:
@@ -719,6 +726,7 @@ Now plan generation prerequisites between these steps.
                 project_id=project_id,
                 file_ids=file_ids,
                 citation_state=citation_state,
+                user_id=user_id,
                 enable_tools=False,
                 cancellation_check=cancellation_check,
             )
@@ -790,6 +798,7 @@ Now plan generation prerequisites between these steps.
                     project_id=project_id,
                     file_ids=file_ids,
                     citation_state=citation_state,
+                    user_id=user_id,
                     cancellation_check=cancellation_check,
                 )
                 if cancellation_check:

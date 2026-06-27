@@ -11,8 +11,11 @@ from sqlalchemy.orm import selectinload
 
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
+from dependencies.permissions import require_project, require_workflow
 from models.feature import Feature
+from models.file import File
 from models.project import Project
+from models.user import User
 from models.workflow import Workflow
 from services.workflow_titles import ensure_unique_workflow_title
 
@@ -48,15 +51,6 @@ WORKFLOW_TERMINAL_STATUSES = {"completed", "failed", "partial", "cancelled"}
 WORKFLOW_CANCELLED_MESSAGE = "用户已停止生成"
 
 
-async def _get_workflow_with_features(db: AsyncSession, workflow_id: str) -> Optional[Workflow]:
-    result = await db.execute(
-        select(Workflow)
-        .options(selectinload(Workflow.features))
-        .where(Workflow.id == workflow_id)
-    )
-    return result.scalar_one_or_none()
-
-
 # ---------- routes (literal paths first) ----------
 
 @router.post("/generate")
@@ -64,11 +58,9 @@ async def generate_workflow(
     body: GenerateWorkflowRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    project = await db.get(Project, body.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await require_project(db, body.project_id, current_user)
 
     cfg = body.custom_config or WorkflowCustomConfig()
     if not cfg.file_ids:
@@ -82,6 +74,15 @@ async def generate_workflow(
     output_language = (cfg.output_language or "").strip()
     if not output_language:
         raise HTTPException(status_code=400, detail="缺少输出语言")
+    result = await db.execute(
+        select(File.id).where(
+            File.project_id == body.project_id,
+            File.id.in_(cfg.file_ids),
+        )
+    )
+    accessible_file_ids = set(result.scalars().all())
+    if accessible_file_ids != set(cfg.file_ids):
+        raise HTTPException(status_code=404, detail="File not found")
 
     requested_title = (body.title or "").strip()
     workflow_title = (
@@ -125,14 +126,15 @@ async def generate_workflow(
 async def get_workflows_status_batch(
     body: StatusBatchRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     if not body.workflow_ids:
         return {"workflows": {}}
     result = await db.execute(
         select(Workflow)
         .options(selectinload(Workflow.features))
-        .where(Workflow.id.in_(body.workflow_ids))
+        .join(Project, Workflow.project_id == Project.id)
+        .where(Workflow.id.in_(body.workflow_ids), Project.owner_user_id == current_user.id)
     )
     workflows = {wf.id: wf.to_status_dict() for wf in result.scalars().all()}
     return {"workflows": workflows}
@@ -142,8 +144,9 @@ async def get_workflows_status_batch(
 async def list_project_workflows(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
+    await require_project(db, project_id, current_user)
     result = await db.execute(
         select(Workflow)
         .options(selectinload(Workflow.features))
@@ -157,11 +160,9 @@ async def list_project_workflows(
 async def get_workflow_status(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    wf = await _get_workflow_with_features(db, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user, with_features=True)
     return wf.to_status_dict()
 
 
@@ -169,11 +170,9 @@ async def get_workflow_status(
 async def cancel_workflow(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    wf = await _get_workflow_with_features(db, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user, with_features=True)
 
     if wf.status in WORKFLOW_TERMINAL_STATUSES:
         return wf.to_status_dict()
@@ -206,11 +205,9 @@ async def cancel_workflow(
 async def get_workflow_content(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    wf = await _get_workflow_with_features(db, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user, with_features=True)
     return {
         "workflow_id": wf.id,
         "citations": wf.get_citations(),
@@ -222,11 +219,9 @@ async def get_workflow_content(
 async def get_workflow_detail(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    wf = await _get_workflow_with_features(db, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user, with_features=True)
     return wf.to_detail_dict()
 
 
@@ -235,11 +230,9 @@ async def rename_workflow(
     workflow_id: str,
     body: TitleUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    wf = await _get_workflow_with_features(db, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user, with_features=True)
     new_title = body.title.strip()
     if new_title:
         wf.title = await ensure_unique_workflow_title(
@@ -256,11 +249,9 @@ async def rename_workflow(
 async def delete_workflow(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    wf = await db.get(Workflow, workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    wf = await require_workflow(db, workflow_id, current_user)
     # SQLite 默认不开 FK 级联，显式删除子 features 避免孤儿行
     await db.execute(sa_delete(Feature).where(Feature.workflow_id == workflow_id))
     await db.delete(wf)
