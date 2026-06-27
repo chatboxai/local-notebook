@@ -1348,6 +1348,7 @@ import PdfViewer from '../components/PdfViewer.vue'
 import SessionHistoryPanel from '../components/SessionHistoryPanel.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 import { usePanelResize } from '../composables/usePanelResize'
+import { useMessageExportSelection } from '../composables/useMessageExportSelection'
 import { clearTokens, getDisplayUsername, isAdmin } from '../services/auth'
 import {
   getProject,
@@ -1372,7 +1373,6 @@ import {
   type CitationRef,
   type FoundBlock,
   type FilePageInfo,
-  exportChatMessagesToWord,
   updateProject,
   updateFile,
 
@@ -1403,7 +1403,6 @@ import {
   type FeatureListItem,
   type WorkflowListItem,
   type WorkflowDetail,
-  type WorkflowStatus,
   type WorkflowCitation,
   type WorkflowContentFeature,
   type EditSession,
@@ -1417,139 +1416,40 @@ import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
 import { getModelOutputLanguage, locale, translateText } from '../i18n'
 import { formatMessageTimestamp, formatRelativeTime } from '../utils/format'
-
-
-const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
-
-
-const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
+import {
+  checkFileSize,
+  getStatusText,
+  IMAGE_GENERATION_FILE_TYPES,
+  isAudioFile,
+  isImageFile,
+  MAX_FILE_COUNT,
+  VIDEO_GENERATION_FILE_TYPES,
+} from './projectPage/fileHelpers'
+import { IMAGE_GENERATION_TYPES, TOOL_TYPES, VIDEO_GENERATION_TYPES } from './projectPage/toolTypes'
+import {
+  buildWorkflowPrompt,
+  formatWorkflowElapsed as formatWorkflowElapsedText,
+  formatWorkflowGeneratingMessage,
+  formatWorkflowProgress,
+  formatWorkflowStepRegeneratedMessage,
+  getWorkflowDisplayName,
+  getWorkflowDisplayStatusText,
+  getWorkflowPresetKey,
+  getWorkflowPresetPrompt,
+  getWorkflowSourceClass,
+  getWorkflowSourceLabel,
+  getWorkflowStatusClass,
+  getWorkflowStatusText,
+  hasEditableWorkflowTitle,
+  isWorkflowActiveStatus,
+  isWorkflowCancellable,
+  WORKFLOW_PRESETS,
+  type WorkflowPresetKey,
+} from './projectPage/workflowHelpers'
 
 
 function uiText(text: string): string {
   return translateText(text)
-}
-
-type WorkflowPresetKey = 'quick_read' | 'deep_dive' | 'custom'
-type WorkflowSourceClass = 'source-quick-read' | 'source-deep-dive' | 'source-custom'
-
-interface WorkflowPreset {
-  key: WorkflowPresetKey
-  sourceClass: WorkflowSourceClass
-  title: string
-  description: string
-  hint: string
-  promptPlaceholder: string
-  promptZh?: string
-  promptEn?: string
-}
-
-const WORKFLOW_PRESETS: Record<WorkflowPresetKey, WorkflowPreset> = {
-  quick_read: {
-    key: 'quick_read',
-    sourceClass: 'source-quick-read',
-    title: '内容速读',
-    description: '快速掌握材料主线与重点',
-    hint: '适合先快速了解资料讲了什么、重点在哪里、后续该追问什么。',
-    promptPlaceholder: '可补充希望重点关注的人物、主题、章节或输出长度。',
-    promptZh: [
-      '请基于所选资料生成一份“内容速读”报告，目标是帮助读者在短时间内掌握材料主线。',
-      '',
-      '请优先覆盖：',
-      '1. 材料主题与核心结论。',
-      '2. 关键事实、人物/机构、时间线或核心概念。',
-      '3. 最值得关注的亮点、异常、争议或空白。',
-      '4. 可以继续追问或深入阅读的问题。',
-      '',
-      '要求：结构紧凑，表达清晰；只写资料支持的内容；所有事实性表述都要保留引用。'
-    ].join('\n'),
-    promptEn: [
-      'Generate a "Quick Read" report from the selected sources. The goal is to help readers grasp the main thread quickly.',
-      '',
-      'Prioritize:',
-      '1. The source theme and core conclusions.',
-      '2. Key facts, people/organizations, timeline, or core concepts.',
-      '3. The most important highlights, anomalies, disputes, or gaps.',
-      '4. Questions worth asking next or areas worth reading more deeply.',
-      '',
-      'Requirements: keep the structure compact and clear; only include source-supported content; keep citations for all factual statements.'
-    ].join('\n'),
-  },
-  deep_dive: {
-    key: 'deep_dive',
-    sourceClass: 'source-deep-dive',
-    title: '核心详解',
-    description: '系统拆解材料中的关键逻辑',
-    hint: '适合深入理解资料里的问题、论据、关系、分歧和可执行结论。',
-    promptPlaceholder: '可补充希望加深分析的方向、读者背景、输出风格或篇幅。',
-    promptZh: [
-      '请基于所选资料生成一份“核心详解”报告，目标是系统拆解材料中最重要的问题、论据和关系。',
-      '',
-      '请优先覆盖：',
-      '1. 背景与问题定义。',
-      '2. 关键论点及其证据链。',
-      '3. 重要概念、机制、因果链或结构关系。',
-      '4. 各方观点、分歧、不确定性和潜在反例。',
-      '5. 结论、风险与可执行建议。',
-      '',
-      '要求：层次清楚，分析深入；避免泛泛总结；所有事实性表述都必须基于资料并保留引用。'
-    ].join('\n'),
-    promptEn: [
-      'Generate a "Core Deep Dive" report from the selected sources. The goal is to systematically unpack the most important problems, arguments, and relationships in the material.',
-      '',
-      'Prioritize:',
-      '1. Background and problem definition.',
-      '2. Key arguments and their evidence chains.',
-      '3. Important concepts, mechanisms, causal chains, or structural relationships.',
-      '4. Different viewpoints, disagreements, uncertainties, and possible counterexamples.',
-      '5. Conclusions, risks, and actionable recommendations.',
-      '',
-      'Requirements: keep the structure clear and the analysis deep; avoid generic summary; every factual statement must be grounded in the sources and keep citations.'
-    ].join('\n'),
-  },
-  custom: {
-    key: 'custom',
-    sourceClass: 'source-custom',
-    title: '自定义工作流',
-    description: '完全按你的要求规划和生成',
-    hint: 'AI 会把你的要求拆成多个环节，每个环节作为 workflow 中的一个 feature 生成。',
-    promptPlaceholder: '例如：请基于这些资料生成一份面向投资人的尽调报告，重点分析商业模式、增长证据、竞争格局和风险。',
-  },
-}
-
-function getWorkflowPresetPrompt(preset: WorkflowPreset): string {
-  if (locale.value === 'en' && preset.promptEn) return preset.promptEn
-  return preset.promptZh || ''
-}
-
-function buildWorkflowPrompt(preset: WorkflowPreset, extraPrompt: string): string {
-  const basePrompt = getWorkflowPresetPrompt(preset).trim()
-  const extra = extraPrompt.trim()
-  if (!basePrompt) return extra
-  if (!extra) return basePrompt
-  const extraLabel = locale.value === 'en' ? 'Additional user requirements:' : '用户补充要求：'
-  return `${basePrompt}\n\n${extraLabel}\n${extra}`
-}
-
-function formatWorkflowGeneratingMessage(displayName: string): string {
-  return locale.value === 'en'
-    ? `Generating ${uiText(displayName)}...`
-    : `正在生成${displayName}...`
-}
-
-function formatWorkflowStepRegeneratedMessage(stepName: string): string {
-  return locale.value === 'en'
-    ? `Regenerated: ${stepName}`
-    : `已重新生成：${stepName}`
-}
-
-
-function isImageFile(file: FileInfo): boolean {
-  return IMAGE_TYPES.includes(file.file_type?.toLowerCase() || '')
-}
-
-
-function isAudioFile(file: FileInfo): boolean {
-  return AUDIO_TYPES.includes(file.file_type?.toLowerCase() || '')
 }
 
 const route = useRoute()
@@ -1570,136 +1470,25 @@ const hasMoreMessages = ref(false)
 const isLoadingMoreMessages = ref(false)
 const isMessagesScrollable = ref(false)
 const MESSAGES_PAGE_SIZE = 50
+const isStreaming = ref(false)
 
 
-const isExportSelectionMode = ref(false)
-const selectedUserMessageIds = ref<string[]>([])
-const isExportingMessages = ref(false)
-
-
-function toggleExportSelectionMode() {
-  if (isStreaming.value) return
-  isExportSelectionMode.value = !isExportSelectionMode.value
-  if (!isExportSelectionMode.value) {
-    selectedUserMessageIds.value = []
-  }
-}
-
-
-function enterExportModeWithSelection(assistantIndex: number) {
-  if (isStreaming.value) return
-
-
-  let userMessageId: string | null = null
-  for (let i = assistantIndex - 1; i >= 0; i--) {
-    const msg = messages.value[i]
-    if (msg?.role === 'user' && !msg.id.startsWith('temp_')) {
-      userMessageId = msg.id
-      break
-    }
-  }
-
-
-  isExportSelectionMode.value = true
-
-
-  if (userMessageId) {
-    selectedUserMessageIds.value = [userMessageId]
-  } else {
-    selectedUserMessageIds.value = []
-  }
-}
-
-
-function toggleMessageSelection(messageId: string) {
-  const index = selectedUserMessageIds.value.indexOf(messageId)
-  if (index === -1) {
-    selectedUserMessageIds.value.push(messageId)
-  } else {
-    selectedUserMessageIds.value.splice(index, 1)
-  }
-}
-
-
-function getConversationUserMsgId(msgIndex: number): string | null {
-  const msg = messages.value[msgIndex]
-  if (!msg) return null
-
-
-  if (msg.role === 'user' && !msg.id.startsWith('temp_')) {
-    return msg.id
-  }
-
-
-  for (let i = msgIndex - 1; i >= 0; i--) {
-    const prevMsg = messages.value[i]
-    if (prevMsg?.role === 'user' && !prevMsg.id.startsWith('temp_')) {
-      return prevMsg.id
-    }
-  }
-  return null
-}
-
-
-function isMessageInSelectedConversation(msgIndex: number): boolean {
-  const userMsgId = getConversationUserMsgId(msgIndex)
-  return userMsgId ? selectedUserMessageIds.value.includes(userMsgId) : false
-}
-
-
-function toggleConversationSelection(msgIndex: number) {
-  if (!isExportSelectionMode.value) return
-
-  const userMsgId = getConversationUserMsgId(msgIndex)
-  if (userMsgId) {
-    toggleMessageSelection(userMsgId)
-  }
-}
-
-
-function toggleSelectAllUserMessages() {
-  const userMsgIds = messages.value
-    .filter(m => m.role === 'user' && !m.id.startsWith('temp_'))
-    .map(m => m.id)
-
-  if (selectedUserMessageIds.value.length === userMsgIds.length) {
-    selectedUserMessageIds.value = []
-  } else {
-    selectedUserMessageIds.value = userMsgIds
-  }
-}
-
-
-async function handleExportSelectedMessages() {
-  if (selectedUserMessageIds.value.length === 0 || !currentSession.value) return
-
-  isExportingMessages.value = true
-  try {
-    const { blob, filename } = await exportChatMessagesToWord(
-      currentSession.value.id,
-      selectedUserMessageIds.value
-    )
-
-
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-
-    showToast('导出成功', 'success')
-    isExportSelectionMode.value = false
-    selectedUserMessageIds.value = []
-  } catch (error: any) {
-    console.error('Failed to export messages:', error)
-    showToast(error.response?.data?.error || '导出失败', 'error')
-  } finally {
-    isExportingMessages.value = false
-  }
-}
+const {
+  isExportSelectionMode,
+  selectedUserMessageIds,
+  isExportingMessages,
+  toggleExportSelectionMode,
+  enterExportModeWithSelection,
+  isMessageInSelectedConversation,
+  toggleConversationSelection,
+  toggleSelectAllUserMessages,
+  handleExportSelectedMessages,
+} = useMessageExportSelection({
+  messages,
+  currentSession,
+  isStreaming,
+  showToast,
+})
 
 
 function checkMessagesScrollable() {
@@ -1807,7 +1596,6 @@ const isAllSelected = computed(() =>
 const inputMessage = ref('')
 const enableWebSearch = ref(localStorage.getItem('enableWebSearch') === 'true')
 const agentRole = ref<AgentRole>('default')
-const isStreaming = ref(false)
 const isThinking = ref(false)
 let thinkingTimer: ReturnType<typeof setTimeout> | null = null
 const streamingParts = ref<ContentPart[]>([])
@@ -1857,37 +1645,6 @@ let filePollingTimer: ReturnType<typeof setInterval> | null = null
 
 
 const showUploadModal = ref(false)
-
-
-const TOOL_TYPES = [
-
-
-  { type: 'objective_positioning', title: '定位分析', tooltip: '确定内容定位和差异化重点', color: 'cyan', icon: 'positioning', enabled: false },
-  { type: 'audience_profile', title: '受众画像', tooltip: '分析核心受众群体和需求', color: 'amber', icon: 'audience', enabled: false },
-  { type: 'comparative_analysis', title: '同类分析', tooltip: '搜索分析同类资料或方案', color: 'indigo', icon: 'market', enabled: false },
-
-
-  { type: 'content_summary', title: '内容摘要', tooltip: '生成文档内容摘要', color: 'green', icon: 'summary', enabled: false },
-
-
-  { type: 'title_suggestion', title: '标题生成', tooltip: '分析文档内容，生成标题建议', color: 'purple', icon: 'title', enabled: false },
-  { type: 'communication_copy', title: '传播文案', tooltip: '生成传播文案和推荐语', color: 'rose', icon: 'copy', enabled: false },
-
-
-  { type: 'text_to_image', title: '文生图', tooltip: '输入描述文字，AI生成图片', color: 'brown', icon: 'image', enabled: false },
-  { type: 'reference_to_image', title: '图生图', tooltip: '选择参考图片，AI生成新图片', color: 'teal', icon: 'image_ref', enabled: false },
-
-  { type: 'text_to_video', title: '文生视频', tooltip: '输入描述文字，AI生成视频', color: 'indigo', icon: 'video', enabled: false },
-  { type: 'image_to_video', title: '图生视频', tooltip: '选择一张图片作为首帧生成视频', color: 'rose', icon: 'video_image', enabled: false },
-  { type: 'start_end_to_video', title: '首尾帧视频', tooltip: '选择首尾两张图片生成过渡视频', color: 'amber', icon: 'video_frames', enabled: false },
-
-]
-
-
-const IMAGE_GENERATION_TYPES = ['text_to_image', 'reference_to_image']
-
-
-const VIDEO_GENERATION_TYPES = ['text_to_video', 'image_to_video', 'start_end_to_video']
 
 
 const features = ref<FeatureListItem[]>([])
@@ -1988,7 +1745,7 @@ const imageGenerationModal = reactive({
 
 const imageFilesForGeneration = computed<ImageFile[]>(() =>
   files.value
-    .filter(f => f.status === 'ready' && ['jpg', 'jpeg', 'png', 'webp'].includes(f.file_type?.toLowerCase() || ''))
+    .filter(f => f.status === 'ready' && IMAGE_GENERATION_FILE_TYPES.includes(f.file_type?.toLowerCase() || ''))
     .map(f => ({
       id: f.id,
       file_name: f.file_name,
@@ -2006,7 +1763,7 @@ const videoGenerationModal = reactive({
 
 const videoFilesForGeneration = computed<VideoFile[]>(() =>
   files.value
-    .filter(f => f.status === 'ready' && ['jpg', 'jpeg', 'png'].includes(f.file_type?.toLowerCase() || ''))
+    .filter(f => f.status === 'ready' && VIDEO_GENERATION_FILE_TYPES.includes(f.file_type?.toLowerCase() || ''))
     .map(f => ({
       id: f.id,
       file_name: f.file_name,
@@ -2543,68 +2300,6 @@ function resolveStepDisplayName(configStepName: string | undefined, fallbackDisp
   return uiText('该步骤')
 }
 
-function getWorkflowRawDisplayName(workflow: WorkflowListItem | WorkflowDetail): string {
-  return (workflow.title || workflow.display_name || '').trim()
-}
-
-function getWorkflowDisplayName(workflow: WorkflowListItem | WorkflowDetail): string {
-  const displayName = getWorkflowRawDisplayName(workflow)
-  if (!displayName && isWorkflowActiveStatus(workflow.status)) {
-    return uiText('正在生成标题...')
-  }
-  if (!displayName || isWorkflowPresetKey(displayName)) {
-    return uiText(WORKFLOW_PRESETS[getWorkflowPresetKey(workflow)].title)
-  }
-  return displayName
-}
-
-function isWorkflowPresetKey(value: string): value is WorkflowPresetKey {
-  return value === 'quick_read' || value === 'deep_dive' || value === 'custom'
-}
-
-function getWorkflowPresetKey(workflow: WorkflowListItem | WorkflowDetail): WorkflowPresetKey {
-  const workflowType = (workflow.workflow_type || '').trim()
-  if (workflowType === 'quick_read' || workflowType === 'deep_dive') return workflowType
-
-  const rawName = getWorkflowRawDisplayName(workflow).toLowerCase()
-  if (
-    rawName.includes('quick read') ||
-    rawName.includes('内容速读') ||
-    rawName.includes('“quick read”') ||
-    rawName.includes('"quick read"')
-  ) {
-    return 'quick_read'
-  }
-  if (
-    rawName.includes('core deep dive') ||
-    rawName.includes('核心详解') ||
-    rawName.includes('“core deep dive”') ||
-    rawName.includes('"core deep dive"')
-  ) {
-    return 'deep_dive'
-  }
-  if (isWorkflowPresetKey(workflowType)) return workflowType
-  return 'custom'
-}
-
-function getWorkflowSourcePreset(workflow: WorkflowListItem | WorkflowDetail): WorkflowPreset {
-  return WORKFLOW_PRESETS[getWorkflowPresetKey(workflow)]
-}
-
-function getWorkflowSourceClass(workflow: WorkflowListItem | WorkflowDetail): WorkflowSourceClass {
-  return getWorkflowSourcePreset(workflow).sourceClass
-}
-
-function getWorkflowSourceLabel(workflow: WorkflowListItem | WorkflowDetail): string {
-  return uiText(getWorkflowSourcePreset(workflow).title)
-}
-
-function hasEditableWorkflowTitle(workflow: WorkflowListItem | WorkflowDetail): boolean {
-  const title = (workflow.title || '').trim()
-  return Boolean(title && title !== 'custom')
-}
-
-
 const projectId = route.params.id as string
 
 
@@ -2992,53 +2687,6 @@ async function loadOlderMessages() {
 
 function triggerFileUpload() {
   showUploadModal.value = true
-}
-
-
-const MAX_FILE_COUNT = 30
-
-
-const FILE_SIZE_LIMITS = {
-  document: 100 * 1024 * 1024,
-  image: 20 * 1024 * 1024,
-  audio: 200 * 1024 * 1024,
-} as const
-
-
-function getFileSizeLimit(file: File): number | null {
-  const ext = file.name.split('.').pop()?.toLowerCase() || ''
-
-  if (['txt', 'docx', 'pdf', 'epub'].includes(ext)) {
-    return FILE_SIZE_LIMITS.document
-  }
-  if (['jpg', 'jpeg', 'png'].includes(ext)) {
-    return FILE_SIZE_LIMITS.image
-  }
-  if (['wav', 'mp3', 'm4a', 'wma'].includes(ext)) {
-    return FILE_SIZE_LIMITS.audio
-  }
-  return FILE_SIZE_LIMITS.document
-}
-
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-
-function checkFileSize(file: File): { valid: boolean; error?: string } {
-  const limit = getFileSizeLimit(file)
-  if (limit === null) return { valid: true }
-
-  if (file.size > limit) {
-    return {
-      valid: false,
-      error: `"${file.name}" 超过大小限制（最大 ${formatFileSize(limit)}）`
-    }
-  }
-  return { valid: true }
 }
 
 
@@ -3759,18 +3407,6 @@ function handlePreviewScroll() {
     currentPageNum.value = currentVisiblePage
   }
 }
-
-function getStatusText(status: string) {
-  const statusMap: Record<string, string> = {
-    pending: '等待处理',
-    processing: '处理中',
-    ready: '就绪',
-    error: '错误',
-    failed: '解析失败'
-  }
-  return statusMap[status] || status
-}
-
 
 function handleKeywordClick(keyword: string) {
   if (!currentSession.value || isStreaming.value) return
@@ -6019,73 +5655,8 @@ async function handleWorkflowTitleUpdate(id: string, title: string) {
   }
 }
 
-function getWorkflowStatusText(status: WorkflowStatus): string {
-  const map: Record<WorkflowStatus, string> = {
-    pending: '等待中',
-    processing: '生成中',
-    cancelling: '取消中',
-    completed: '已完成',
-    failed: '失败',
-    partial: '部分完成',
-    cancelled: '已取消'
-  }
-  return uiText(map[status] || status)
-}
-
-function isWorkflowActiveStatus(status: WorkflowStatus): boolean {
-  return status === 'pending' || status === 'processing' || status === 'cancelling'
-}
-
-function isWorkflowCancellable(status: WorkflowStatus): boolean {
-  return status === 'pending' || status === 'processing' || status === 'cancelling'
-}
-
-function isWorkflowPlanning(workflow: WorkflowListItem | WorkflowDetail): boolean {
-  return workflow.status === 'processing' && (workflow.progress?.total ?? 0) === 0
-}
-
-function getWorkflowDisplayStatusText(workflow: WorkflowListItem | WorkflowDetail): string {
-  if (isWorkflowPlanning(workflow)) return uiText('规划中')
-  return getWorkflowStatusText(workflow.status)
-}
-
-function getWorkflowStatusClass(status: WorkflowStatus): string {
-  const map: Record<WorkflowStatus, string> = {
-    pending: 'status-pending',
-    processing: 'status-processing',
-    cancelling: 'status-cancelling',
-    completed: 'status-completed',
-    failed: 'status-failed',
-    partial: 'status-partial',
-    cancelled: 'status-cancelled'
-  }
-  return map[status] || ''
-}
-
-function formatWorkflowProgress(workflow: WorkflowListItem | WorkflowDetail): string {
-  const completed = workflow.progress?.completed ?? 0
-  const total = workflow.progress?.total ?? 0
-  const totalLabel = total > 0 ? String(total) : '...'
-  return `${completed}/${totalLabel}`
-}
-
 function formatWorkflowElapsed(isoString: string): string {
-  const startedAt = new Date(isoString)
-  const elapsedMs = Math.max(0, workflowElapsedTick.value - startedAt.getTime())
-  const elapsedSeconds = Math.floor(elapsedMs / 1000)
-  const hours = Math.floor(elapsedSeconds / 3600)
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60)
-  const seconds = elapsedSeconds % 60
-
-  if (locale.value === 'en') {
-    if (hours > 0) return `${hours}h ${minutes}m`
-    if (minutes > 0) return `${minutes}m ${seconds}s`
-    return `${seconds}s`
-  }
-
-  if (hours > 0) return `${hours}小时${minutes}分钟`
-  if (minutes > 0) return `${minutes}分钟${seconds}秒`
-  return `${seconds}秒`
+  return formatWorkflowElapsedText(isoString, workflowElapsedTick.value)
 }
 
 function formatTime(isoString: string): string {
