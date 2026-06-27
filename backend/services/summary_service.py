@@ -101,6 +101,8 @@ File summaries:
 
 PROJECT_COLORS = {"blue", "green", "orange", "red", "purple", "cyan", "pink", "brown"}
 DEFAULT_OUTPUT_LANGUAGE = "English"
+SUMMARY_GENERATION_MAX_ATTEMPTS = 3
+SUMMARY_RETRY_BASE_DELAY = 0.5
 
 
 def normalize_output_language(output_language: str | None) -> str:
@@ -111,6 +113,40 @@ def normalize_output_language(output_language: str | None) -> str:
     if normalized in {"en", "en-us", "en-gb", "english"}:
         return "English"
     return value or DEFAULT_OUTPUT_LANGUAGE
+
+
+def _strip_json_response(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+    return text
+
+
+def _truncate_summary(text: str, limit: int = 500) -> str:
+    return text.strip()[:limit] if text else ""
+
+
+def _fallback_summary_from_lines(lines: list[str], limit: int = 500) -> str:
+    cleaned = [line.strip() for line in lines if line and line.strip()]
+    if not cleaned:
+        return ""
+    return _truncate_summary(" ".join(cleaned), limit)
+
+
+def _retry_prompt(prompt: str, reason: str) -> str:
+    return (
+        f"{prompt}\n\n"
+        "Previous response was invalid: "
+        f"{reason}. Return the requested final answer only. "
+        "Do not include markdown fences, prose, or explanations."
+    )
+
+
+async def _sleep_before_retry(attempt: int) -> None:
+    await asyncio.sleep(SUMMARY_RETRY_BASE_DELAY * attempt)
 
 
 async def _llm_complete(
@@ -251,34 +287,74 @@ async def generate_file_summary(
         output_language=normalize_output_language(output_language),
     )
 
-    try:
-        raw = await _llm_complete(
-            prompt,
-            api_key,
-            base_url,
-            model,
-            api_format=api_format,
-            max_tokens=1024,
-            temperature=0.3,
-            user_id=user_id,
-        )
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        parsed = json.loads(text)
-        return {
-            "summary": parsed.get("summary", "")[:500],
-            "keywords": parsed.get("keywords", [])[:10],
-        }
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.warning(f"File summary JSON parse failed: {e}, using raw text")
-        return {"summary": raw[:500] if raw else "", "keywords": []}
-    except Exception as e:
-        logger.warning(f"File summary generation failed: {e}")
-        return {"summary": "", "keywords": []}
+    attempt_prompt = prompt
+    raw = ""
+    last_error: Exception | None = None
+    for attempt in range(1, SUMMARY_GENERATION_MAX_ATTEMPTS + 1):
+        try:
+            raw = await _llm_complete(
+                attempt_prompt,
+                api_key,
+                base_url,
+                model,
+                api_format=api_format,
+                max_tokens=1024,
+                temperature=0.3,
+                user_id=user_id,
+            )
+            text = _strip_json_response(raw)
+            if not text:
+                raise ValueError("empty response")
+            parsed = json.loads(text)
+            if not isinstance(parsed, dict):
+                raise TypeError("response JSON must be an object")
+            summary = _truncate_summary(str(parsed.get("summary") or ""))
+            if not summary:
+                raise ValueError("missing non-empty summary")
+            raw_keywords = parsed.get("keywords", [])
+            if not isinstance(raw_keywords, list):
+                raw_keywords = []
+            keywords = [
+                str(keyword).strip()[:80]
+                for keyword in raw_keywords
+                if str(keyword).strip()
+            ][:10]
+            if attempt > 1:
+                logger.info(
+                    "File summary recovered on attempt %d/%d",
+                    attempt,
+                    SUMMARY_GENERATION_MAX_ATTEMPTS,
+                )
+            return {"summary": summary, "keywords": keywords}
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            last_error = e
+            logger.warning(
+                "File summary attempt %d/%d failed: %s",
+                attempt,
+                SUMMARY_GENERATION_MAX_ATTEMPTS,
+                e,
+            )
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "File summary attempt %d/%d generation failed: %s",
+                attempt,
+                SUMMARY_GENERATION_MAX_ATTEMPTS,
+                e,
+            )
+
+        if attempt < SUMMARY_GENERATION_MAX_ATTEMPTS:
+            await _sleep_before_retry(attempt)
+            attempt_prompt = _retry_prompt(prompt, str(last_error or "invalid response"))
+
+    raw_text = _strip_json_response(raw) if raw else ""
+    fallback = "" if raw_text.startswith(("{", "[")) else _truncate_summary(raw_text)
+    fallback = fallback or _fallback_summary_from_lines(sampled)
+    if fallback:
+        logger.warning("File summary fell back after retries: %s", last_error)
+    else:
+        logger.warning("File summary empty after retries: %s", last_error)
+    return {"summary": fallback, "keywords": []}
 
 
 async def generate_project_summary(
@@ -307,21 +383,48 @@ async def generate_project_summary(
         output_language=normalize_output_language(output_language),
     )
 
-    try:
-        summary = await _llm_complete(
-            prompt,
-            api_key,
-            base_url,
-            model,
-            api_format=api_format,
-            max_tokens=1024,
-            temperature=0.3,
-            user_id=user_id,
-        )
-        return summary[:500]
-    except Exception as e:
-        logger.warning(f"Project summary generation failed: {e}")
-        return ""
+    attempt_prompt = prompt
+    last_error: Exception | None = None
+    for attempt in range(1, SUMMARY_GENERATION_MAX_ATTEMPTS + 1):
+        try:
+            summary = await _llm_complete(
+                attempt_prompt,
+                api_key,
+                base_url,
+                model,
+                api_format=api_format,
+                max_tokens=1024,
+                temperature=0.3,
+                user_id=user_id,
+            )
+            summary = _truncate_summary(summary)
+            if not summary:
+                raise ValueError("empty response")
+            if attempt > 1:
+                logger.info(
+                    "Project summary recovered on attempt %d/%d",
+                    attempt,
+                    SUMMARY_GENERATION_MAX_ATTEMPTS,
+                )
+            return summary
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "Project summary attempt %d/%d failed: %s",
+                attempt,
+                SUMMARY_GENERATION_MAX_ATTEMPTS,
+                e,
+            )
+            if attempt < SUMMARY_GENERATION_MAX_ATTEMPTS:
+                await _sleep_before_retry(attempt)
+                attempt_prompt = _retry_prompt(prompt, str(e))
+
+    fallback = _fallback_summary_from_lines([fs["summary"] for fs in file_summaries if fs.get("summary")])
+    if fallback:
+        logger.warning("Project summary fell back after retries: %s", last_error)
+    else:
+        logger.warning("Project summary empty after retries: %s", last_error)
+    return fallback
 
 
 async def generate_project_overview(
@@ -352,35 +455,66 @@ async def generate_project_overview(
         output_language=normalize_output_language(output_language),
     )
 
+    attempt_prompt = prompt
     raw = ""
-    try:
-        raw = await _llm_complete(
-            prompt,
-            api_key,
-            base_url,
-            model,
-            api_format=api_format,
-            max_tokens=768,
-            temperature=0.3,
-            user_id=user_id,
-        )
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        parsed = json.loads(text)
-        color = parsed.get("color")
-        if color not in PROJECT_COLORS:
-            color = "blue"
-        return {
-            "summary": parsed.get("summary", "")[:500],
-            "color": color,
-        }
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        logger.warning(f"Project overview JSON parse failed: {e}, using raw text")
-        return {"summary": raw[:500] if raw else "", "color": None}
-    except Exception as e:
-        logger.warning(f"Project overview generation failed: {e}")
-        return {"summary": "", "color": None}
+    last_error: Exception | None = None
+    for attempt in range(1, SUMMARY_GENERATION_MAX_ATTEMPTS + 1):
+        try:
+            raw = await _llm_complete(
+                attempt_prompt,
+                api_key,
+                base_url,
+                model,
+                api_format=api_format,
+                max_tokens=768,
+                temperature=0.3,
+                user_id=user_id,
+            )
+            text = _strip_json_response(raw)
+            if not text:
+                raise ValueError("empty response")
+            parsed = json.loads(text)
+            if not isinstance(parsed, dict):
+                raise TypeError("response JSON must be an object")
+            summary = _truncate_summary(str(parsed.get("summary") or ""))
+            if not summary:
+                raise ValueError("missing non-empty summary")
+            color = parsed.get("color")
+            if color not in PROJECT_COLORS:
+                color = "blue"
+            if attempt > 1:
+                logger.info(
+                    "Project overview recovered on attempt %d/%d",
+                    attempt,
+                    SUMMARY_GENERATION_MAX_ATTEMPTS,
+                )
+            return {"summary": summary, "color": color}
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            last_error = e
+            logger.warning(
+                "Project overview attempt %d/%d failed: %s",
+                attempt,
+                SUMMARY_GENERATION_MAX_ATTEMPTS,
+                e,
+            )
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "Project overview attempt %d/%d generation failed: %s",
+                attempt,
+                SUMMARY_GENERATION_MAX_ATTEMPTS,
+                e,
+            )
+
+        if attempt < SUMMARY_GENERATION_MAX_ATTEMPTS:
+            await _sleep_before_retry(attempt)
+            attempt_prompt = _retry_prompt(prompt, str(last_error or "invalid response"))
+
+    raw_text = _strip_json_response(raw) if raw else ""
+    fallback = "" if raw_text.startswith(("{", "[")) else _truncate_summary(raw_text)
+    fallback = fallback or _fallback_summary_from_lines([fs["summary"] for fs in file_summaries if fs.get("summary")])
+    if fallback:
+        logger.warning("Project overview fell back after retries: %s", last_error)
+    else:
+        logger.warning("Project overview empty after retries: %s", last_error)
+    return {"summary": fallback, "color": None}
