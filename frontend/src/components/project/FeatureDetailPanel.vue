@@ -24,18 +24,6 @@
       </span>
 
       <button
-        v-if="blockDiffData"
-        class="panel-diff-btn"
-        :class="{ active: showDiff }"
-        @click="showDiff = !showDiff"
-        title="显示修改对比"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M9 7H7v2h2V7zm0 4H7v2h2v-2zm0-8a2 2 0 0 0-2 2v14c0 1.1.89 2 2 2h6v-2H9V5h6v2h2V5a2 2 0 0 0-2-2H9zm8 10v4h-2v-4h-2l3-3 3 3h-2z"/>
-        </svg>
-      </button>
-
-      <button
         v-if="feature.status === 'completed'"
         class="panel-export-btn"
         :class="{ loading: isDownloading }"
@@ -63,9 +51,6 @@
           <div
             v-if="processed.type === 'single' && processed.block"
             class="feature-block"
-            :class="{
-              editing: editingBlockIndex === processed.originalIndex
-            }"
             :data-block-index="processed.originalIndex"
           >
             <component
@@ -83,14 +68,7 @@
                 >{{ part.display_num }}</sup></template></component>
 
             <p v-else-if="processed.block.block_type === 'paragraph'" class="feature-paragraph">
-              <template v-if="showDiff && processed.originalIndex !== undefined && getBlockDiff(processed.originalIndex)">
-                <template v-for="(diff, di) in getBlockDiff(processed.originalIndex!)" :key="di">
-                  <span v-if="diff.type === 'delete'" class="diff-delete" v-html="renderDiffTextWithCitations(diff.text)"></span>
-                  <span v-else-if="diff.type === 'insert'" class="diff-insert" v-html="renderDiffTextWithCitations(diff.text)"></span>
-                  <span v-else class="diff-keep" v-html="renderDiffTextWithCitations(diff.text)"></span>
-                </template>
-              </template>
-              <template v-else v-for="(part, pi) in processed.block.content_parts" :key="pi"><span v-if="part.type === 'text'" class="feature-text" v-html="parseInlineMarkdown(part.content)"></span><sup
+              <template v-for="(part, pi) in processed.block.content_parts" :key="pi"><span v-if="part.type === 'text'" class="feature-text" v-html="parseInlineMarkdown(part.content)"></span><sup
                   v-else-if="part.type === 'citation_ref'"
                   class="inline-citation"
                   :class="{ active: activeCitationNum === part.display_num }"
@@ -146,9 +124,6 @@
           <div
             v-else-if="processed.type === 'list_group' && processed.blocks"
             class="feature-block"
-            :class="{
-              editing: processed.originalIndices?.some((i: number) => i === editingBlockIndex)
-            }"
           >
             <ul class="feature-list">
               <li v-for="(listBlock, li) in processed.blocks" :key="li"><template v-for="(part, pi) in listBlock.content_parts" :key="pi"><span v-if="part.type === 'text'" class="feature-text" v-html="parseInlineMarkdown(part.content)"></span><sup
@@ -172,10 +147,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
-import type { Feature, FeatureBlock, FeatureCitationRefPart, ContentPart } from '../../types'
-import { parseInlineMarkdown, computeDiff, type DiffPart } from '../../utils'
-import { getAssetUrl, type EditSession, type EditSessionMessage, type FeatureEditChange, exportFeatureToWord } from '../../services/api'
+import { ref, nextTick } from 'vue'
+import type { Feature, FeatureBlock, FeatureCitationRefPart } from '../../types'
+import { parseInlineMarkdown } from '../../utils'
+import { getAssetUrl, exportFeatureToWord } from '../../services/api'
 
 
 const isEditingTitle = ref(false)
@@ -212,112 +187,18 @@ async function handleDownloadWord() {
 }
 
 
-const showDiff = ref(false)
-
-
-function renderDiffTextWithCitations(text: string): string {
-  if (!text) return ''
-  
-  let html = parseInlineMarkdown(text)
-  
-  html = html.replace(/\[(\d+)\]/g, '<sup class="inline-citation diff-citation">$1</sup>')
-  return html
-}
-
-
-interface DiffContentPart {
-  type: 'text' | 'citation_ref'
-  content?: string
-  display_num?: number
-  citation_id?: string
-  file_name?: string
-  segment_id?: string
-  summary?: string
-}
-
-
 const props = defineProps<{
   feature: Feature
   activeCitationNum: number | null
-  editingBlockIndex?: number | null
-  blockDiffData?: {
-    blockIndex: number
-    oldContentParts: DiffContentPart[]
-    newContentParts: DiffContentPart[]
-  } | null
-  editMode?: boolean
-  
-  
-  editMessages?: Array<{
-    id: string
-    role: 'user' | 'assistant'
-    content: string
-    content_parts?: Array<{ type: 'text'; content: string } | { type: 'citation_ref'; display_num: number; citation_id: string; file_name?: string; segment_id?: string; summary?: string }>
-    tool_executing?: Array<{ name: string; display: string }>
-  }>
-  isEditStreaming?: boolean
-  editStreamingParts?: ContentPart[]
-  editActiveCitationNum?: number | null
-  
-  editSessions?: EditSession[]
-  editSessionDetail?: { session: EditSession; messages: EditSessionMessage[] } | null
-  isLoadingEditHistory?: boolean
-  isLoadingEditDetail?: boolean
-  editCurrentSessionTitle?: string
 }>()
-
-
-function extractTextWithCitations(contentParts: DiffContentPart[]): string {
-  if (!contentParts) return ''
-  return contentParts
-    .map(p => {
-      if (p.type === 'text') return p.content || ''
-      if (p.type === 'citation_ref') return `[${p.display_num}]`
-      return ''
-    })
-    .join('')
-}
-
-
-function getBlockDiff(blockIndex: number): DiffPart[] | null {
-  if (!props.blockDiffData || props.blockDiffData.blockIndex !== blockIndex) {
-    return null
-  }
-
-  
-  const oldText = extractTextWithCitations(props.blockDiffData.oldContentParts)
-  const newText = extractTextWithCitations(props.blockDiffData.newContentParts)
-
-  if (oldText === newText) return null
-
-  return computeDiff(oldText, newText)
-}
 
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'citationClick', part: FeatureCitationRefPart): void
-  (e: 'editCitationClick', citationId: string, displayNum: number, segmentId: string): void
   (e: 'clearCitation'): void
-  (e: 'enterEdit'): void
-  (e: 'exitEdit'): void
-  (e: 'sendEditMessage', message: string): void
   (e: 'rename', newTitle: string): void
-  (e: 'clearDiff'): void
-  
-  (e: 'editNewSession'): void
-  (e: 'editLoadSessions'): void
-  (e: 'editLoadSessionDetail', sessionId: string): void
-  (e: 'editContinueSession', sessionId: string): void
-  (e: 'editChangeClick', change: FeatureEditChange): void
 }>()
-
-
-watch(() => props.blockDiffData, (newVal, oldVal) => {
-  if (newVal && newVal !== oldVal) {
-    showDiff.value = true
-  }
-})
 
 
 function handleContentClick(event: MouseEvent) {
@@ -536,31 +417,6 @@ function getFeatureStatusClass(status: string): string {
 }
 
 
-.panel-diff-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.2s;
-}
-
-.panel-diff-btn:hover {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.panel-diff-btn.active {
-  background: #fbbf24;
-  color: white;
-}
-
-
 .panel-toggle-btn {
   display: flex;
   align-items: center;
@@ -599,23 +455,6 @@ function getFeatureStatusClass(status: string): string {
   margin: -2px 0;
 }
 
-.feature-block.editing {
-  background-color: rgba(255, 193, 7, 0.15);
-  box-shadow: inset 0 0 0 2px rgba(255, 193, 7, 0.5);
-  padding: 8px;
-  margin: -8px 0 8px 0;
-  animation: pulse-highlight 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-highlight {
-  0%, 100% {
-    background-color: rgba(255, 193, 7, 0.15);
-  }
-  50% {
-    background-color: rgba(255, 193, 7, 0.25);
-  }
-}
-
 .feature-heading {
   color: #111827;
   margin: 0 0 16px 0;
@@ -645,48 +484,6 @@ h6.feature-heading {
   font-size: 15px;
   line-height: 1.75;
   margin: 0 0 16px 0;
-}
-
-
-.diff-delete {
-  background: #fee2e2;
-  color: #dc2626;
-  text-decoration: line-through;
-  padding: 1px 2px;
-  border-radius: 2px;
-}
-
-.diff-insert {
-  background: #dcfce7;
-  color: #16a34a;
-  padding: 1px 2px;
-  border-radius: 2px;
-}
-
-.diff-keep {
-  color: inherit;
-}
-
-
-.diff-delete :deep(.inline-citation),
-.diff-insert :deep(.inline-citation),
-.diff-keep :deep(.inline-citation) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #3b82f6;
-  background: #eff6ff;
-  border-radius: 9px;
-  vertical-align: middle;
-  margin-left: 3px;
-  position: relative;
-  top: -1px;
-  text-decoration: none;
 }
 
 .feature-quote {

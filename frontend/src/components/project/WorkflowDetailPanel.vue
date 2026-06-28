@@ -445,7 +445,8 @@ function hasPendingDependencies(feature: WorkflowContentFeature): boolean {
 function formatDependencyNames(names: string[]): string {
   const visibleNames = names.slice(0, 3)
   const suffix = names.length > visibleNames.length ? '...' : ''
-  return visibleNames.join(locale.value === 'en' ? ', ' : '、') + suffix
+  const quotedNames = visibleNames.map(name => locale.value === 'en' ? `"${name}"` : `“${name}”`)
+  return quotedNames.join(locale.value === 'en' ? ', ' : '、') + suffix
 }
 
 function getFeatureWaitingText(feature: WorkflowContentFeature): string {
@@ -456,7 +457,7 @@ function getFeatureWaitingText(feature: WorkflowContentFeature): string {
       ? `Waiting for ${names} to finish`
       : `正在等待：${names} 生成完成`
   }
-  return uiText('正在等待')
+  return uiText('正在排队')
 }
 
 function startEditTitle() {
@@ -1102,7 +1103,10 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
 .panel-stop-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   gap: 5px;
+  min-width: 64px;
   height: 28px;
   padding: 0 10px;
   border: 1px solid rgba(245, 158, 11, 0.28);
@@ -1111,8 +1115,14 @@ function parseMarkdownTable(content: string, feature: WorkflowContentFeature): P
   color: #b45309;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.panel-stop-btn svg {
+  flex: 0 0 auto;
 }
 
 .panel-stop-btn:hover {

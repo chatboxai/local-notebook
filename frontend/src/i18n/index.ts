@@ -333,6 +333,7 @@ const zhToEn: Record<string, string> = {
   '正在生成，请稍候': 'Generating, please wait',
   '正在生成': 'Generating',
   '正在等待': 'Waiting',
+  '正在排队': 'Queued',
   '正在重新生成，请稍候': 'Regenerating, please wait',
   '生成失败，请点击“重新生成”按钮重试': 'Generation failed. Click "Regenerate" to try again.',
   '规划中': 'Planning',
