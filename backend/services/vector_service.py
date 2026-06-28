@@ -7,14 +7,16 @@ logger = logging.getLogger(__name__)
 # Standalone Milvus 通过 URI 连接(docker 模式 docker-compose 注入,
 # 本地裸跑用 docker compose up -d milvus 后通过 localhost:19530 连接)
 MILVUS_URI = os.getenv("MILVUS_URI", "http://localhost:19530")
-TEXT_COLLECTION = os.getenv("MILVUS_TEXT_COLLECTION", "local_notebook_text_segments_v1")
-IMAGE_COLLECTION = os.getenv("MILVUS_IMAGE_COLLECTION", "local_notebook_image_segments_v1")
 
-MILVUS_INDEX_TYPE = os.getenv("MILVUS_INDEX_TYPE", "IVF_PQ").upper()
-MILVUS_IVF_NLIST = int(os.getenv("MILVUS_IVF_NLIST", "128"))
-MILVUS_IVF_NPROBE = int(os.getenv("MILVUS_IVF_NPROBE", "32"))
-MILVUS_PQ_M = int(os.getenv("MILVUS_PQ_M", "128"))
-MILVUS_PQ_NBITS = int(os.getenv("MILVUS_PQ_NBITS", "8"))
+# These constants define the Milvus data layout. Changing any of them requires
+# an explicit vector-store migration or full re-index.
+TEXT_COLLECTION = "local_notebook_text_segments_v1"
+IMAGE_COLLECTION = "local_notebook_image_segments_v1"
+VECTOR_INDEX_TYPE = "IVF_PQ"
+IVF_NLIST = 128
+IVF_NPROBE = 32
+PQ_M = 128
+PQ_NBITS = 8
 
 _client = None
 
@@ -73,7 +75,7 @@ def _filter_for_project_files(project_id: str, file_ids: list[str] | None = None
 
 
 def _pq_m(dim: int) -> int:
-    preferred = max(1, MILVUS_PQ_M)
+    preferred = max(1, PQ_M)
     if dim % preferred == 0 and preferred <= dim:
         return preferred
 
@@ -81,7 +83,7 @@ def _pq_m(dim: int) -> int:
     for candidate in candidates:
         if candidate <= dim and dim % candidate == 0:
             logger.warning(
-                "MILVUS_PQ_M=%s is incompatible with vector dim=%s; using m=%s",
+                "PQ_M=%s is incompatible with vector dim=%s; using m=%s",
                 preferred,
                 dim,
                 candidate,
@@ -91,13 +93,13 @@ def _pq_m(dim: int) -> int:
 
 
 def _add_vector_index(index_params, dim: int) -> None:
-    params: dict[str, int] = {"nlist": MILVUS_IVF_NLIST}
-    if MILVUS_INDEX_TYPE == "IVF_PQ":
-        params.update({"m": _pq_m(dim), "nbits": MILVUS_PQ_NBITS})
+    params: dict[str, int] = {"nlist": IVF_NLIST}
+    if VECTOR_INDEX_TYPE == "IVF_PQ":
+        params.update({"m": _pq_m(dim), "nbits": PQ_NBITS})
 
     index_params.add_index(
         field_name="embedding",
-        index_type=MILVUS_INDEX_TYPE,
+        index_type=VECTOR_INDEX_TYPE,
         metric_type="L2",
         params=params,
     )
@@ -138,7 +140,7 @@ def ensure_collection(project_id: str, dim: int) -> None:
         "Created Milvus text collection '%s' dim=%s index=%s",
         name,
         dim,
-        MILVUS_INDEX_TYPE,
+        VECTOR_INDEX_TYPE,
     )
 
 
@@ -171,7 +173,7 @@ def ensure_image_collection(project_id: str, dim: int) -> None:
         "Created Milvus image collection '%s' dim=%s index=%s",
         name,
         dim,
-        MILVUS_INDEX_TYPE,
+        VECTOR_INDEX_TYPE,
     )
 
 
@@ -268,7 +270,7 @@ def search(
         limit=top_k,
         filter=_filter_for_project_files(project_id, file_ids),
         output_fields=["file_id", "file_name", "segment_index", "content", "summary"],
-        search_params={"metric_type": "L2", "params": {"nprobe": MILVUS_IVF_NPROBE}},
+        search_params={"metric_type": "L2", "params": {"nprobe": IVF_NPROBE}},
     )
 
     hits = []
@@ -303,7 +305,7 @@ def search_images(
         limit=top_k,
         filter=_filter_for_project_files(project_id, file_ids),
         output_fields=["file_id", "file_name", "image_index", "description"],
-        search_params={"metric_type": "L2", "params": {"nprobe": MILVUS_IVF_NPROBE}},
+        search_params={"metric_type": "L2", "params": {"nprobe": IVF_NPROBE}},
     )
 
     hits = []

@@ -33,19 +33,14 @@ FastAPI service that exposes REST + SSE APIs and runs an embedded ARQ background
 | `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data` injected by docker-compose | Data directory in Docker mode |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN, replaceable with PostgreSQL |
 | `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC endpoint |
-| `MILVUS_TEXT_COLLECTION` | `local_notebook_text_segments_v1` | Shared Milvus collection for text segment vectors |
-| `MILVUS_IMAGE_COLLECTION` | `local_notebook_image_segments_v1` | Shared Milvus collection for image description vectors |
-| `MILVUS_INDEX_TYPE` | `IVF_PQ` | Vector index type for new Milvus collections |
-| `MILVUS_IVF_NLIST` | `128` | IVF cluster count |
-| `MILVUS_IVF_NPROBE` | `32` | Search probe count |
-| `MILVUS_PQ_M` | `128` | IVF_PQ sub-vector count; must divide the embedding dimension |
-| `MILVUS_PQ_NBITS` | `8` | IVF_PQ bits per sub-vector code |
 | `UPLOAD_DIR` | `./uploads` | Uploaded file directory |
 | `REDIS_URL` | `redis://localhost:6379` | Required by the ARQ worker |
 | `SECRET_KEY` | `change-me-in-production` | JWT signing secret, must be changed in production |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 days) | JWT lifetime |
 | `WORKER_MAX_JOBS` | `4` | ARQ concurrency |
 | `PORT` | `8000` | uvicorn listen port |
+
+Milvus collection names and IVF_PQ index parameters are data-layout constants in `services/vector_service.py`, not environment variables. Changing them requires a vector-store migration or a full re-index.
 
 ## Local Development Without Docker Backend
 

@@ -33,19 +33,14 @@ FastAPI 主服务:对外提供 REST + SSE 接口,内置 ARQ 后台 worker 处理
 | `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data`(由 docker-compose 注入) | Docker 模式下数据目录 |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN,可换 PostgreSQL |
 | `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC 地址 |
-| `MILVUS_TEXT_COLLECTION` | `local_notebook_text_segments_v1` | 文本分片向量的共享 Milvus collection |
-| `MILVUS_IMAGE_COLLECTION` | `local_notebook_image_segments_v1` | 图片描述向量的共享 Milvus collection |
-| `MILVUS_INDEX_TYPE` | `IVF_PQ` | 新建 Milvus collection 使用的向量索引类型 |
-| `MILVUS_IVF_NLIST` | `128` | IVF 聚类数量 |
-| `MILVUS_IVF_NPROBE` | `32` | 查询时探测的 IVF 聚类数量 |
-| `MILVUS_PQ_M` | `128` | IVF_PQ 子向量数量,必须能整除 Embedding 维度 |
-| `MILVUS_PQ_NBITS` | `8` | IVF_PQ 每个子向量 code 的 bit 数 |
 | `UPLOAD_DIR` | `./uploads` | 上传文件目录 |
 | `REDIS_URL` | `redis://localhost:6379` | ARQ worker 必需 |
 | `SECRET_KEY` | `change-me-in-production` ⚠ | JWT 签名密钥,**生产必改** |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080`(7 天) | JWT 有效期 |
 | `WORKER_MAX_JOBS` | `4` | ARQ 并发 |
 | `PORT` | `8000` | uvicorn 监听端口 |
+
+Milvus collection 名称和 IVF_PQ 索引参数是 `services/vector_service.py` 里的数据布局常量,不是环境变量。变更这些值时需要做向量库迁移或完整重建索引。
 
 ## 本地开发(不用 Docker 跑 backend)
 
