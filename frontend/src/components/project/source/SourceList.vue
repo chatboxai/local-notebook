@@ -122,11 +122,17 @@
           :class="file.status"
           :title="file.status === 'failed' ? (file.error_message || '') : ''"
         >
-          {{ getStatusText(file.status) }}
+          {{ getSourceStatusText(file) }}
           <span v-if="file.status === 'failed' && file.error_message" class="source-status-reason">
             {{ file.error_message }}
           </span>
         </span>
+        <div v-if="hasProcessingProgress(file)" class="source-processing-progress" aria-hidden="true">
+          <div
+            class="source-processing-fill"
+            :style="{ width: getProcessingProgressPercent(file) + '%' }"
+          ></div>
+        </div>
       </div>
 
       <div v-if="file.status === 'ready'" class="source-right">
@@ -175,6 +181,33 @@ const emit = defineEmits<{
   (e: 'delete-file', fileId: string): void
   (e: 'toggle-file-selection', fileId: string): void
 }>()
+
+function getProcessingNumbers(file: FileInfo): { current: number; total: number } | null {
+  const total = Number(file.processing_total || 0)
+  if (!Number.isFinite(total) || total <= 0) return null
+  const rawCurrent = Number(file.processing_current || 0)
+  const current = Math.max(0, Math.min(total, Number.isFinite(rawCurrent) ? rawCurrent : 0))
+  return { current, total }
+}
+
+function hasProcessingProgress(file: FileInfo): boolean {
+  return file.status === 'processing' && getProcessingNumbers(file) !== null
+}
+
+function getProcessingProgressPercent(file: FileInfo): number {
+  const progress = getProcessingNumbers(file)
+  if (!progress) return 0
+  return Math.round((progress.current / progress.total) * 100)
+}
+
+function getSourceStatusText(file: FileInfo): string {
+  if (file.status === 'processing') {
+    const progress = getProcessingNumbers(file)
+    if (progress) return `正在处理 ${progress.current}/${progress.total}`
+    return file.processing_message || '准备处理...'
+  }
+  return getStatusText(file.status)
+}
 </script>
 
 <style scoped>
@@ -558,6 +591,22 @@ const emit = defineEmits<{
 
 .source-status.processing {
   color: var(--primary-color);
+}
+
+.source-processing-progress {
+  width: 100%;
+  height: 4px;
+  margin-top: 5px;
+  background: rgba(74, 155, 168, 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.source-processing-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: inherit;
+  transition: width 0.25s ease;
 }
 
 .source-status.error,

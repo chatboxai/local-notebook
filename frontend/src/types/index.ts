@@ -22,6 +22,9 @@ export interface FileInfo {
   file_type: string
   status: 'pending' | 'processing' | 'ready' | 'error' | 'failed'
   error_message?: string
+  processing_current?: number | null
+  processing_total?: number | null
+  processing_message?: string | null
   storage_path: string
   created_at: string
   updated_at: string
@@ -313,7 +316,7 @@ export interface Feature {
   project_id: string
   feature_type: string
   title: string | null
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   error_message: string | null
   blocks: FeatureBlock[]
   citations: Record<string, CitationMetadata>

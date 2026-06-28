@@ -327,7 +327,16 @@ export async function updateFile(fileId: string, data: { file_name: string }): P
   return response.data
 }
 
-export async function getFilesStatusBatch(fileIds: string[]): Promise<{ files: { id: string; status: string; error_message?: string }[] }> {
+export async function getFilesStatusBatch(fileIds: string[]): Promise<{
+  files: {
+    id: string
+    status: string
+    error_message?: string
+    processing_current?: number | null
+    processing_total?: number | null
+    processing_message?: string | null
+  }[]
+}> {
   const response = await api.post('/api/files/status/batch', { file_ids: fileIds })
   return response.data
 }
@@ -1161,6 +1170,8 @@ export interface WorkflowProgress {
 
 export interface WorkflowStep {
   step_index: number
+  step_id?: string | null
+  depends_on?: string[]
   step_name: string
   feature_id: string | null
   feature_type: string
@@ -1501,9 +1512,11 @@ export interface WorkflowContentFeature {
   project_id: string
   feature_type: string
   step_index: number
+  step_id?: string | null
+  depends_on?: string[]
   step_name: string
   title: string
-  status: string
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   error_message?: string
   blocks: FeatureBlock[]
   citations: Record<string, WorkflowCitation>

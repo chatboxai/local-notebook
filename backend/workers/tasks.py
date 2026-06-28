@@ -26,6 +26,74 @@ class WorkflowCancelled(RuntimeError):
     """Raised when a workflow has been cancelled by the user."""
 
 
+async def _commit_file_progress(
+    db,
+    db_file,
+    current: int | None = None,
+    total: int | None = None,
+    message: str | None = None,
+) -> None:
+    if current is not None:
+        db_file.processing_current = max(0, int(current))
+    if total is not None:
+        db_file.processing_total = max(1, int(total))
+        if db_file.processing_current is not None:
+            db_file.processing_current = min(db_file.processing_current, db_file.processing_total)
+    if message is not None:
+        db_file.processing_message = message or None
+    db_file.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+class FileProgressTracker:
+    def __init__(self, db, db_file, total: int, min_interval: float = 0.5):
+        self.db = db
+        self.db_file = db_file
+        self.total = max(1, int(total))
+        self.current = 0
+        self.min_interval = min_interval
+        self.last_flush = 0.0
+        self.lock = asyncio.Lock()
+
+    async def start(self) -> None:
+        async with self.lock:
+            self.current = 0
+            await self._flush(force=True, message="")
+
+    async def advance(self, amount: int = 1, force: bool = False) -> None:
+        async with self.lock:
+            self.current = min(self.total, self.current + max(0, int(amount)))
+            await self._flush(force=force)
+
+    async def finish(self) -> None:
+        async with self.lock:
+            self.current = self.total
+            await self._flush(force=True, message="")
+
+    async def _flush(self, force: bool = False, message: str | None = None) -> None:
+        now = time.monotonic()
+        if not force and self.current < self.total and now - self.last_flush < self.min_interval:
+            return
+        await _commit_file_progress(
+            self.db,
+            self.db_file,
+            current=self.current,
+            total=self.total,
+            message=message,
+        )
+        self.last_flush = now
+
+
+def _file_processing_message(file_type: str | None) -> str:
+    if file_type == "pdf":
+        return "正在解析 PDF..."
+    if file_type in {"wav", "mp3", "m4a"}:
+        return "正在转写音频..."
+    if file_type in {"jpg", "jpeg", "png"}:
+        return "正在分析图片..."
+    return "正在读取内容..."
+
+
 async def _get_workflow_status(session_factory, workflow_id: str) -> str | None:
     from sqlalchemy import select
     from models.workflow import Workflow
@@ -121,6 +189,10 @@ async def _recover_stuck_files(session_factory) -> None:
             await db.execute(sa_delete(Image).where(Image.file_id == f.id))
             await asyncio.to_thread(delete_by_file, f.project_id, f.id)
             f.status = "pending"
+            f.error_message = None
+            f.processing_current = 0
+            f.processing_total = None
+            f.processing_message = None
             await db.flush()
             await arq_pool.enqueue_job("parse_file_task", f.id)
             logger.info(f"Re-enqueued file {f.id}")
@@ -182,6 +254,10 @@ async def parse_file_task(
             await asyncio.to_thread(delete_by_file, project_id, file_id)
 
             db_file.status = "processing"
+            db_file.error_message = None
+            db_file.processing_current = 0
+            db_file.processing_total = None
+            db_file.processing_message = _file_processing_message(file_type)
             await db.commit()
 
             import config
@@ -211,8 +287,7 @@ async def parse_file_task(
             if not blocks:
                 logger.warning(f"[{file_name}] no blocks produced, marking ready")
                 db_file.status = "ready"
-                db_file.updated_at = datetime.now(timezone.utc)
-                await db.commit()
+                await _commit_file_progress(db, db_file, current=1, total=1, message="")
                 return {"status": "ok", "file_id": file_id, "segments": 0}
 
             logger.info(f"[{file_name}] step 2/5: segmenting from {len(blocks)} blocks")
@@ -225,14 +300,15 @@ async def parse_file_task(
             if not segments:
                 logger.warning(f"[{file_name}] no segments produced, marking ready")
                 db_file.status = "ready"
-                db_file.updated_at = datetime.now(timezone.utc)
-                await db.commit()
+                await _commit_file_progress(db, db_file, current=1, total=1, message="")
                 return {"status": "ok", "file_id": file_id, "segments": 0}
 
             logger.info(f"[{file_name}] {len(segments)} segments")
 
             segment_summaries: dict[int, str] = {}
             llm_cfg = None
+            progress_units_per_pass = max(1, len(segments))
+            summary_language = output_language
             try:
                 from services.summary_service import (
                     _resolve_llm,
@@ -250,6 +326,21 @@ async def parse_file_task(
                         f"segments (model={md}, format={fmt}, economy={economy}, "
                         f"language={summary_language})"
                     )
+                else:
+                    logger.info(f"[{file_name}] LLM not configured, skipping segment summaries")
+            except Exception as e:
+                llm_cfg = None
+                logger.warning(f"[{file_name}] segment summary setup failed, continuing: {e}")
+            standard_total = progress_units_per_pass + 1
+            if llm_cfg:
+                standard_total += progress_units_per_pass + 1
+            if images_meta:
+                standard_total += len(images_meta)
+            progress = FileProgressTracker(db, db_file, standard_total)
+            await progress.start()
+
+            if llm_cfg:
+                try:
                     seg_inputs = [{"segment_index": s.segment_index, "content": s.content} for s in segments]
                     segment_summaries = await generate_segment_summaries(
                         seg_inputs,
@@ -259,17 +350,19 @@ async def parse_file_task(
                         api_format=fmt,
                         output_language=summary_language,
                         user_id=user_id,
+                        progress_callback=progress.advance,
                     )
                     logger.info(f"[{file_name}] summaries generated: {len(segment_summaries)}/{len(segments)}")
-                else:
-                    logger.info(f"[{file_name}] LLM not configured, skipping segment summaries")
-            except Exception as e:
-                logger.warning(f"[{file_name}] segment summary step failed, continuing: {e}")
+                except Exception as e:
+                    remaining_summary_units = max(0, progress_units_per_pass - progress.current)
+                    if remaining_summary_units:
+                        await progress.advance(remaining_summary_units, force=True)
+                    logger.warning(f"[{file_name}] segment summary step failed, continuing: {e}")
 
             logger.info(f"[{file_name}] step 3: embedding {len(segments)} segments")
             from services.embedding_service import embed_texts
             contents = [s.content for s in segments]
-            vectors = await embed_texts(contents)
+            vectors = await embed_texts(contents, progress_callback=progress.advance)
             logger.info(f"[{file_name}] embedding done, dim={len(vectors[0])}")
 
             logger.info(f"[{file_name}] step 4/5: storing vectors, blocks, segments & images")
@@ -365,7 +458,7 @@ async def parse_file_task(
                 await asyncio.to_thread(ensure_image_collection, project_id, dim)
 
                 image_descriptions = [img["description"] for img in images_meta]
-                image_vectors = await embed_texts(image_descriptions)
+                image_vectors = await embed_texts(image_descriptions, progress_callback=progress.advance)
 
                 image_chunks = [
                     {
@@ -380,6 +473,7 @@ async def parse_file_task(
                 ]
                 await asyncio.to_thread(upsert_image_chunks, project_id, image_chunks)
                 logger.info(f"[{file_name}] stored {len(images_meta)} images to vector db")
+            await progress.advance(1, force=True)
 
             try:
                 if llm_cfg and segment_summaries:
@@ -408,10 +502,11 @@ async def parse_file_task(
                     logger.info(f"[{file_name}] skipping file/project summaries (LLM not configured or no segment summaries)")
             except Exception as e:
                 logger.warning(f"[{file_name}] file/project summary failed, continuing: {e}")
+            if llm_cfg:
+                await progress.advance(1, force=True)
 
             db_file.status = "ready"
-            db_file.updated_at = datetime.now(timezone.utc)
-            await db.commit()
+            await progress.finish()
 
             try:
                 if llm_cfg and segment_summaries:

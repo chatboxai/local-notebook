@@ -154,6 +154,9 @@ async def upload_file(
         file_type=_file_type(file.filename or ""),
         file_size=file_size,
         status="pending",
+        processing_current=0,
+        processing_total=None,
+        processing_message=None,
     )
     db.add(db_file)
     await db.commit()
@@ -217,12 +220,26 @@ async def get_files_status_batch(
     if not file_ids:
         return {"files": []}
     result = await db.execute(
-        select(File.id, File.status, File.error_message)
+        select(
+            File.id,
+            File.status,
+            File.error_message,
+            File.processing_current,
+            File.processing_total,
+            File.processing_message,
+        )
         .join(Project, File.project_id == Project.id)
         .where(File.id.in_(file_ids), Project.owner_user_id == current_user.id)
     )
     files = [
-        {"id": row.id, "status": row.status, "error_message": row.error_message}
+        {
+            "id": row.id,
+            "status": row.status,
+            "error_message": row.error_message,
+            "processing_current": row.processing_current,
+            "processing_total": row.processing_total,
+            "processing_message": row.processing_message,
+        }
         for row in result.all()
     ]
     return {"files": files}

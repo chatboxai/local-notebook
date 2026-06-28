@@ -134,6 +134,8 @@ class Workflow(Base):
         steps = [
             {
                 "step_index": f.step_index,
+                "step_id": f.get_step_id(),
+                "depends_on": f.get_depends_on(),
                 "step_name": f.step_name,
                 "feature_id": f.id,
                 "feature_type": f.feature_type,

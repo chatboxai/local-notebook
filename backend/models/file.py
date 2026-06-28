@@ -26,6 +26,9 @@ class File(Base):
 
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processing_current: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    processing_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    processing_message: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     job_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 

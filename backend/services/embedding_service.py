@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Awaitable, Callable
 
 import httpx
 
@@ -31,7 +32,10 @@ async def _get_config() -> tuple[str, str, str, str]:
 EMBED_BATCH_SIZE = 10
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
+async def embed_texts(
+    texts: list[str],
+    progress_callback: Callable[[int], Awaitable[None]] | None = None,
+) -> list[list[float]]:
     if not texts:
         return []
 
@@ -80,6 +84,8 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         items = sorted(data["data"], key=lambda x: x["index"])
         for i, item in enumerate(items):
             all_results[batch_start + i] = item["embedding"]
+        if progress_callback:
+            await progress_callback(len(batch))
 
     return all_results
 

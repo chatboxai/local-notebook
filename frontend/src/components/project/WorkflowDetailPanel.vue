@@ -307,9 +307,17 @@
             </template>
           </div>
           <div v-else class="report-body empty-blocks">
-            <div v-if="feature.status === 'pending' || feature.status === 'processing'" class="empty-placeholder">
-              <span class="loading-text">{{ uiText('正在生成，请稍候') }}</span>
+            <div v-if="feature.status === 'processing'" class="empty-placeholder">
+              <span class="loading-text">{{ uiText('正在生成') }}</span>
               <span class="loading-dots" aria-hidden="true">
+                <span class="dot dot-1">.</span>
+                <span class="dot dot-2">.</span>
+                <span class="dot dot-3">.</span>
+              </span>
+            </div>
+            <div v-else-if="feature.status === 'pending'" class="empty-placeholder waiting-placeholder">
+              <span class="loading-text">{{ getFeatureWaitingText(feature) }}</span>
+              <span v-if="!hasPendingDependencies(feature)" class="loading-dots" aria-hidden="true">
                 <span class="dot dot-1">.</span>
                 <span class="dot dot-2">.</span>
                 <span class="dot dot-3">.</span>
@@ -356,7 +364,7 @@ import type { WorkflowDetail, WorkflowStatus, WorkflowContentFeature } from '../
 import type { FeatureBlock, CitationMetadata } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
 import { getAssetUrl, exportWorkflowToWord } from '../../services/api'
-import { translateText } from '../../i18n'
+import { locale, translateText } from '../../i18n'
 
 import WebCitationTooltip from '../common/WebCitationTooltip.vue'
 
@@ -416,6 +424,39 @@ const workflowThemeClass = computed(() => {
 
 function formatSectionIndex(index: number): string {
   return String(index + 1).padStart(2, '0')
+}
+
+function getDependencyFeature(depStepId: string): WorkflowContentFeature | undefined {
+  return props.features.find(feature => feature.step_id === depStepId)
+}
+
+function getPendingDependencyNames(feature: WorkflowContentFeature): string[] {
+  const dependsOn = Array.isArray(feature.depends_on) ? feature.depends_on : []
+  return dependsOn
+    .map(depStepId => getDependencyFeature(depStepId))
+    .filter((dep): dep is WorkflowContentFeature => Boolean(dep && dep.status !== 'completed'))
+    .map(dep => dep.step_name || dep.title || dep.step_id || uiText('该步骤'))
+}
+
+function hasPendingDependencies(feature: WorkflowContentFeature): boolean {
+  return getPendingDependencyNames(feature).length > 0
+}
+
+function formatDependencyNames(names: string[]): string {
+  const visibleNames = names.slice(0, 3)
+  const suffix = names.length > visibleNames.length ? '...' : ''
+  return visibleNames.join(locale.value === 'en' ? ', ' : '、') + suffix
+}
+
+function getFeatureWaitingText(feature: WorkflowContentFeature): string {
+  const dependencyNames = getPendingDependencyNames(feature)
+  if (dependencyNames.length > 0) {
+    const names = formatDependencyNames(dependencyNames)
+    return locale.value === 'en'
+      ? `Waiting for ${names} to finish`
+      : `正在等待：${names} 生成完成`
+  }
+  return uiText('正在等待')
 }
 
 function startEditTitle() {

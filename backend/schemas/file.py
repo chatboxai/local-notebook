@@ -13,6 +13,9 @@ class FileResponse(UTCDateTimeModel):
     file_size: Optional[int]
     status: str
     error_message: Optional[str]
+    processing_current: Optional[int]
+    processing_total: Optional[int]
+    processing_message: Optional[str]
     job_id: Optional[str]
     created_at: datetime
     updated_at: datetime

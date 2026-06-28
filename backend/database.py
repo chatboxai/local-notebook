@@ -51,6 +51,9 @@ RUNTIME_SCHEMA_COLUMNS = [
     ("sessions", "compact_citations_json", "TEXT"),
     ("sessions", "compact_message_id", "VARCHAR(36)"),
     ("messages", "deleted_at", "TIMESTAMP"),
+    ("files", "processing_current", "INTEGER"),
+    ("files", "processing_total", "INTEGER"),
+    ("files", "processing_message", "VARCHAR(200)"),
 ]
 
 
