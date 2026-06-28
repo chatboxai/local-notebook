@@ -40,6 +40,8 @@ FastAPI 主服务:对外提供 REST + SSE 接口,内置 ARQ 后台 worker 处理
 | `WORKER_MAX_JOBS` | `4` | ARQ 并发 |
 | `PORT` | `8000` | uvicorn 监听端口 |
 
+Milvus collection 名称和 IVF_PQ 索引参数是 `services/vector_service.py` 里的数据布局常量,不是环境变量。变更这些值时需要做向量库迁移或完整重建索引。
+
 ## 本地开发(不用 Docker 跑 backend)
 
 需要 **Python 3.12+**,以及两个外部服务:**Redis** 和 **Standalone Milvus**(后者依赖 etcd + minio,共 3 个容器)。
@@ -55,12 +57,13 @@ cd backend
 pip install -r requirements.txt
 
 # 3. 设置 env
+export LOCAL_NOTEBOOK_DATA_DIR="$(cd .. && pwd)/local-notebook-data"
 export REDIS_URL=redis://localhost:6379
 export MILVUS_URI=http://localhost:19530
-export DATABASE_URL=sqlite+aiosqlite:///./local-notebook-data/local_notebook.db
-export UPLOAD_DIR=./local-notebook-data/uploads
+export DATABASE_URL=sqlite+aiosqlite:///${LOCAL_NOTEBOOK_DATA_DIR}/local_notebook.db
+export UPLOAD_DIR=${LOCAL_NOTEBOOK_DATA_DIR}/uploads
 export SECRET_KEY=$(openssl rand -hex 32)
-mkdir -p ./local-notebook-data/uploads
+mkdir -p "${UPLOAD_DIR}"
 
 # 4. 跑 backend
 python main.py     # 默认 http://localhost:8000
@@ -81,5 +84,5 @@ curl http://localhost:8000/health/redis
 ## 数据流
 
 1. **文件上传** → `routes/file_routes.py` 写入 `UPLOAD_DIR` → 投递到 ARQ
-2. **后台解析** → `workers/parsers/` 调用 MinerU(PDF)/ FunASR(音频)→ 切块 (`segment_service`) → 向量化 (`embedding_service`) → 入库 (`vector_service`)
+2. **后台解析** → `workers/parsers/` 调用 MinerU(PDF)/ FunASR(音频)→ 切块 (`segment_service`) → 向量化 (`embedding_service`) → 写入共享 Milvus collection (`vector_service`)
 3. **对话** → `routes/chat_routes.py` (SSE) → `agent/chat_agent.py` 推理 → `agent/citation_parser.py` 解析引用 → 流式返回到前端

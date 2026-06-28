@@ -46,15 +46,15 @@ async def _get_project_file_count(db: AsyncSession, project_id: str) -> int:
 
 async def _drop_project_vectors(project_id: str) -> None:
     try:
-        from services.vector_service import delete_project_collections
+        from services.vector_service import delete_project_vectors
 
         await asyncio.wait_for(
-            asyncio.to_thread(delete_project_collections, project_id),
+            asyncio.to_thread(delete_project_vectors, project_id),
             timeout=15.0,
         )
     except Exception as exc:
         logger.warning(
-            "Failed to delete Milvus collections for project %s: %s",
+            "Failed to delete Milvus vectors for project %s: %s",
             project_id,
             exc,
         )

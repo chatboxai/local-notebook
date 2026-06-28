@@ -169,7 +169,11 @@ def _cleanup_uploads(active_project_ids: set[str], dry_run: bool) -> list[str]:
 
 def _cleanup_milvus(active_project_ids: set[str], dry_run: bool) -> list[str]:
     try:
-        from services.vector_service import MILVUS_URI
+        from services.vector_service import (
+            MILVUS_URI,
+            delete_vectors_not_in_projects,
+            shared_collection_names,
+        )
         from pymilvus import MilvusClient
     except Exception as exc:
         print(f"Milvus cleanup skipped: cannot import pymilvus ({exc})")
@@ -188,10 +192,18 @@ def _cleanup_milvus(active_project_ids: set[str], dry_run: bool) -> list[str]:
         if project_id and project_id not in active_project_ids:
             orphan_collections.append(name)
 
+    shared_cleanup = [
+        f"{name}: project_id not in active SQL projects ({len(active_project_ids)} kept)"
+        for name in shared_collection_names()
+        if name in collections
+    ]
+
     if not dry_run:
         for name in orphan_collections:
             client.drop_collection(collection_name=name)
-    return orphan_collections
+        delete_vectors_not_in_projects(active_project_ids)
+    legacy_cleanup = [f"{name} (legacy collection)" for name in orphan_collections]
+    return legacy_cleanup + shared_cleanup
 
 
 async def main() -> None:
@@ -201,7 +213,7 @@ async def main() -> None:
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="Actually delete orphan SQL rows, upload dirs, and Milvus collections.",
+        help="Actually delete orphan SQL rows, upload dirs, and Milvus vectors.",
     )
     args = parser.parse_args()
     dry_run = not args.yes
@@ -233,7 +245,7 @@ async def main() -> None:
     else:
         print("  none")
 
-    print("\nMilvus collections:")
+    print("\nMilvus vectors / legacy collections:")
     if milvus_collections:
         for name in milvus_collections:
             print(f"  {name}")

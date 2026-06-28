@@ -40,6 +40,8 @@ FastAPI service that exposes REST + SSE APIs and runs an embedded ARQ background
 | `WORKER_MAX_JOBS` | `4` | ARQ concurrency |
 | `PORT` | `8000` | uvicorn listen port |
 
+Milvus collection names and IVF_PQ index parameters are data-layout constants in `services/vector_service.py`, not environment variables. Changing them requires a vector-store migration or a full re-index.
+
 ## Local Development Without Docker Backend
 
 Requires **Python 3.12+** plus two external services: **Redis** and **Standalone Milvus**. Standalone Milvus depends on etcd and minio, so it uses three containers in total.
@@ -55,12 +57,13 @@ cd backend
 pip install -r requirements.txt
 
 # 3. Configure environment variables
+export LOCAL_NOTEBOOK_DATA_DIR="$(cd .. && pwd)/local-notebook-data"
 export REDIS_URL=redis://localhost:6379
 export MILVUS_URI=http://localhost:19530
-export DATABASE_URL=sqlite+aiosqlite:///./local-notebook-data/local_notebook.db
-export UPLOAD_DIR=./local-notebook-data/uploads
+export DATABASE_URL=sqlite+aiosqlite:///${LOCAL_NOTEBOOK_DATA_DIR}/local_notebook.db
+export UPLOAD_DIR=${LOCAL_NOTEBOOK_DATA_DIR}/uploads
 export SECRET_KEY=$(openssl rand -hex 32)
-mkdir -p ./local-notebook-data/uploads
+mkdir -p "${UPLOAD_DIR}"
 
 # 4. Run the backend
 python main.py     # default: http://localhost:8000
@@ -83,5 +86,5 @@ curl http://localhost:8000/health/redis
 ## Data Flow
 
 1. **File upload** -> `routes/file_routes.py` writes to `UPLOAD_DIR` -> job is queued in ARQ.
-2. **Background parsing** -> `workers/parsers/` calls MinerU for PDFs or FunASR for audio -> chunks with `segment_service` -> vectorizes with `embedding_service` -> writes vectors with `vector_service`.
+2. **Background parsing** -> `workers/parsers/` calls MinerU for PDFs or FunASR for audio -> chunks with `segment_service` -> vectorizes with `embedding_service` -> writes vectors into shared Milvus collections with `vector_service`.
 3. **Chat** -> `routes/chat_routes.py` streams SSE -> `agent/chat_agent.py` reasons -> `agent/citation_parser.py` parses citations -> the frontend receives streamed output.

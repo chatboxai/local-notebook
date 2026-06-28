@@ -27,11 +27,6 @@ def _apply_local_data_defaults() -> None:
         os.environ["UPLOAD_DIR"] = str(upload_dir)
 
 
-def _collection_names(project_id: str) -> tuple[str, str]:
-    name = "p_" + project_id.replace("-", "_")
-    return name, name + "_images"
-
-
 async def _unowned_project_rows() -> list[tuple[str, str]]:
     import models  # noqa: F401
     from database import AsyncSessionLocal
@@ -189,7 +184,12 @@ def _delete_upload_dirs(project_ids: list[str], dry_run: bool) -> list[str]:
 
 def _cleanup_milvus(project_ids: list[str], dry_run: bool) -> list[str]:
     try:
-        from services.vector_service import MILVUS_URI
+        from services.vector_service import (
+            MILVUS_URI,
+            delete_projects_vectors,
+            legacy_collection_names,
+            shared_collection_names,
+        )
         from pymilvus import MilvusClient
     except Exception as exc:
         print(f"Milvus cleanup skipped: cannot import pymilvus ({exc})")
@@ -203,14 +203,33 @@ def _cleanup_milvus(project_ids: list[str], dry_run: bool) -> list[str]:
 
     existing = []
     for project_id in project_ids:
-        for name in _collection_names(project_id):
+        for name in legacy_collection_names(project_id):
             if client.has_collection(name):
-                existing.append(name)
+                existing.append(f"{name} (legacy collection)")
+
+    shared_existing = [
+        name for name in shared_collection_names() if client.has_collection(name)
+    ]
+    existing.extend(
+        f"{name}: project_id in selected projects ({len(project_ids)} ids)"
+        for name in shared_existing
+    )
 
     if not dry_run:
-        for name in existing:
-            client.drop_collection(collection_name=name)
+        delete_projects_vectors(project_ids)
+        for project_id in project_ids:
+            for name in legacy_collection_names(project_id):
+                if client.has_collection(name):
+                    client.drop_collection(collection_name=name)
     return existing
+
+
+def _print_milvus_entries(entries: list[str]) -> None:
+    if entries:
+        for name in entries:
+            print(f"  {name}")
+    else:
+        print("  none")
 
 
 async def main() -> None:
@@ -252,12 +271,8 @@ async def main() -> None:
     else:
         print("  none")
 
-    print("\nMilvus collections:")
-    if milvus_collections:
-        for name in milvus_collections:
-            print(f"  {name}")
-    else:
-        print("  none")
+    print("\nMilvus vectors / legacy collections:")
+    _print_milvus_entries(milvus_collections)
 
     if dry_run:
         print("\nNo changes were made. Re-run with --yes to delete these projects.")
