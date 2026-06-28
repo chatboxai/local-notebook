@@ -93,6 +93,18 @@ class Feature(Base):
 
     # --- view helpers ---
 
+    def get_step_id(self) -> Optional[str]:
+        step_id = self.get_custom_config().get("step_id")
+        return str(step_id) if step_id else None
+
+    def get_depends_on(self) -> List[str]:
+        depends_on = self.get_custom_config().get("depends_on") or []
+        if isinstance(depends_on, str):
+            depends_on = [depends_on]
+        if not isinstance(depends_on, list):
+            return []
+        return [str(item) for item in depends_on if item]
+
     def to_content_dict(self) -> Dict[str, Any]:
         """前端 WorkflowContentFeature / Feature 形状。"""
         return {
@@ -100,6 +112,8 @@ class Feature(Base):
             "project_id": self.project_id,
             "feature_type": self.feature_type,
             "step_index": self.step_index,
+            "step_id": self.get_step_id(),
+            "depends_on": self.get_depends_on(),
             "step_name": self.step_name,
             "title": self.title or self.step_name,
             "status": self.status,

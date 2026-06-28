@@ -2557,7 +2557,10 @@ function startFilePolling() {
           files.value[index] = {
             ...existingFile,
             status: fileStatus.status as FileInfo['status'],
-            error_message: fileStatus.error_message || existingFile.error_message
+            error_message: fileStatus.error_message ?? undefined,
+            processing_current: fileStatus.processing_current ?? null,
+            processing_total: fileStatus.processing_total ?? null,
+            processing_message: fileStatus.processing_message ?? null
           }
         }
 

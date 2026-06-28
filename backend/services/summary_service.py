@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from typing import Awaitable, Callable
 
 import config
 from kosong._generate import generate
@@ -226,6 +227,7 @@ async def generate_segment_summaries(
     concurrency: int = 30,
     output_language: str | None = None,
     user_id: str | None = None,
+    progress_callback: Callable[[int], Awaitable[None]] | None = None,
 ) -> dict[int, str]:
     if not segments:
         return {}
@@ -251,6 +253,9 @@ async def generate_segment_summaries(
                 logger.info(f"segment {idx} summary done ({len(summary)} chars)")
             except Exception as e:
                 logger.warning(f"segment {idx} summary failed, skipping: {e}")
+            finally:
+                if progress_callback:
+                    await progress_callback(1)
 
     await asyncio.gather(*[_do_one(s) for s in segments])
     return results
