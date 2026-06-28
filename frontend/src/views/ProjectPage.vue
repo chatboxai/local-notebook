@@ -293,34 +293,11 @@
           :features="workflowFeatures"
           :active-citation-num="activeWorkflowCitationNum"
           :active-feature-id="activeWorkflowFeatureId"
-          :edit-mode="workflowEditMode"
-          :editing-step-index="editingStepIndex"
-          :editing-block-index="editingWorkflowBlockIndex"
-          :block-diff-data="workflowBlockDiffData"
-          :edit-messages="workflowEditMessages"
-          :is-edit-streaming="isWorkflowEditStreaming"
-          :edit-streaming-parts="workflowEditStreamingParts"
-          :edit-active-citation-num="workflowEditActiveCitationNum"
-          :edit-sessions="workflowEditSessions"
-          :edit-session-detail="workflowEditSessionDetail"
-          :is-loading-edit-history="isLoadingWorkflowEditHistory"
-          :is-loading-edit-detail="isLoadingWorkflowEditDetail"
-          :edit-current-session-title="workflowEditCurrentSessionTitle"
           @close="closeWorkflowDetail"
           @cancel="handleCancelWorkflow"
           @update-title="handleWorkflowTitleUpdate"
           @citation-click="handleWorkflowCitationClick"
           @clear-citation="clearWorkflowCitation"
-          @enter-edit="enterWorkflowEditMode"
-          @exit-edit="exitWorkflowEditMode"
-          @send-edit-message="handleSendWorkflowEditMessage"
-          @edit-citation-click="handleWorkflowEditCitationClick"
-          @clear-diff="clearWorkflowBlockDiff"
-          @edit-new-session="handleWorkflowEditNewSession"
-          @edit-load-sessions="handleWorkflowEditLoadSessions"
-          @edit-load-session-detail="handleWorkflowEditLoadSessionDetail"
-          @edit-continue-session="handleWorkflowEditContinueSession"
-          @edit-change-click="handleWorkflowEditChangeClick"
           @regenerate-step="handleWorkflowStepRegenerate"
           @show-toast="showToast"
         />
@@ -330,32 +307,10 @@
           v-else-if="showFeatureDetail && activeFeature"
           :feature="activeFeature"
           :active-citation-num="activeFeatureCitationNum"
-          :editing-block-index="editingBlockIndex"
-          :block-diff-data="blockDiffData"
-          :edit-mode="featureEditMode"
-          :edit-messages="editMessages"
-          :is-edit-streaming="isEditStreaming"
-          :edit-streaming-parts="editStreamingParts"
-          :edit-active-citation-num="featureEditActiveCitationNum"
-          :edit-sessions="featureEditSessions"
-          :edit-session-detail="featureEditSessionDetail"
-          :is-loading-edit-history="isLoadingFeatureEditHistory"
-          :is-loading-edit-detail="isLoadingFeatureEditDetail"
-          :edit-current-session-title="featureEditCurrentSessionTitle"
           @close="closeFeatureDetail"
           @citation-click="handleFeatureCitationClick"
-          @edit-citation-click="handleEditCitationClick"
           @clear-citation="clearFeatureCitation"
-          @enter-edit="enterFeatureEditMode"
-          @exit-edit="exitFeatureEditMode"
           @rename="handleFeatureDetailRename"
-          @send-edit-message="handleSendEditMessage"
-          @clear-diff="clearBlockDiff"
-          @edit-new-session="handleFeatureEditNewSession"
-          @edit-load-sessions="handleFeatureEditLoadSessions"
-          @edit-load-session-detail="handleFeatureEditLoadSessionDetail"
-          @edit-continue-session="handleFeatureEditContinueSession"
-          @edit-change-click="handleFeatureEditChangeClick"
         />
 
 
@@ -726,10 +681,6 @@ import {
   getFeaturesStatusBatch,
   updateFeature,
   deleteFeature,
-  featureEditChat,
-  workflowEditChat,
-  getFeatureEditSessions,
-  getFeatureEditSessionDetail,
   createWorkflow,
   getProjectWorkflows,
   renameWorkflow,
@@ -741,17 +692,11 @@ import {
   getWorkflowsStatusBatch,
   getWorkflowStepConfig,
   regenerateWorkflowStep,
-  getWorkflowEditSessions,
-  getWorkflowEditSessionDetail,
   type FeatureListItem,
   type WorkflowListItem,
   type WorkflowDetail,
   type WorkflowCitation,
   type WorkflowContentFeature,
-  type EditSession,
-  type EditSessionMessage,
-  type FeatureEditCitationRef,
-  type FeatureEditHistoryMessage,
 } from '../services/api'
 import type { Project, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, Feature, FeatureCitationRefPart } from '../types'
 import RenameModal from '../components/common/RenameModal.vue'
@@ -1037,69 +982,6 @@ const showFeatureDetail = ref(false)
 const featureMenuId = ref<string | null>(null)
 
 
-const featureEditMode = ref(false)
-const editingFeature = ref<Feature | null>(null)
-
-
-type EditMessageContentPart = { type: 'text'; content: string } | { type: 'citation_ref'; display_num: number; citation_id: string; file_name?: string; segment_id?: string; summary?: string; citation_type?: 'audio' | 'image' | 'web'; time_start?: number; time_end?: number; time_range?: string }
-interface EditMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  content_parts?: EditMessageContentPart[]
-  tool_executing?: Array<{ name: string; display: string }>
-  changes?: Array<{
-    block_index: number
-    old_content: string
-    new_content: string
-    success: boolean
-    error_message?: string | null
-    is_outdated?: boolean
-  }>
-}
-const editMessages = ref<EditMessage[]>([])
-const isEditStreaming = ref(false)
-const editStreamingParts = ref<ContentPart[]>([])
-const editingBlockIndex = ref<number | null>(null)
-const featureEditSessionId = ref<string | null>(null)
-
-const featureEditSessions = ref<EditSession[]>([])
-const featureEditSessionDetail = ref<{ session: EditSession; messages: EditSessionMessage[] } | null>(null)
-const isLoadingFeatureEditHistory = ref(false)
-const isLoadingFeatureEditDetail = ref(false)
-const featureEditCurrentSessionTitle = ref('')
-
-const blockDiffData = ref<{
-  blockIndex: number
-  oldContentParts: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-  newContentParts: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-} | null>(null)
-
-
-const workflowEditMode = ref(false)
-const editingWorkflow = ref<WorkflowDetail | null>(null)
-const workflowEditMessages = ref<EditMessage[]>([])
-const isWorkflowEditStreaming = ref(false)
-const workflowEditStreamingParts = ref<ContentPart[]>([])
-const workflowEditSessionId = ref<string | null>(null)
-
-const workflowEditSessions = ref<EditSession[]>([])
-const workflowEditSessionDetail = ref<{ session: EditSession; messages: EditSessionMessage[] } | null>(null)
-const isLoadingWorkflowEditHistory = ref(false)
-const isLoadingWorkflowEditDetail = ref(false)
-const workflowEditCurrentSessionTitle = ref('')
-const workflowEditCitations = ref<Record<string, WorkflowCitation>>({})
-const editingStepIndex = ref<number | null>(null)
-const editingWorkflowBlockIndex = ref<number | null>(null)
-
-const workflowBlockDiffData = ref<{
-  stepIndex: number
-  blockIndex: number
-  oldContentParts: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-  newContentParts: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-} | null>(null)
-
-
 const renameModal = reactive({
   visible: false,
   type: 'file' as 'file' | 'feature' | 'workflow',
@@ -1169,8 +1051,6 @@ async function handleFeatureCitationClick(part: FeatureCitationRefPart) {
 
   activeChatCitationNum.value = null
   activeWorkflowCitationNum.value = null
-  featureEditActiveCitationNum.value = null
-  workflowEditActiveCitationNum.value = null
   activeFeatureCitationNum.value = part.display_num
 
 
@@ -1196,32 +1076,6 @@ async function handleFeatureCitationClick(part: FeatureCitationRefPart) {
 
   const segmentId = part.segment_id || citationMeta?.segment_id
   if (!segmentId) return
-
-
-  const fileIdFromSegment = segmentId.split('_s_')[0]!
-
-
-  const file = files.value.find(f => f.id === fileIdFromSegment)
-
-  if (file) {
-
-    await openFilePreview(fileIdFromSegment, segmentId)
-  }
-}
-
-
-async function handleEditCitationClick(citationId: string, displayNum: number, segmentId: string) {
-  if (!segmentId) {
-    console.warn('Edit citation segment_id not provided:', citationId, displayNum)
-    return
-  }
-
-
-  activeChatCitationNum.value = null
-  activeFeatureCitationNum.value = null
-  activeWorkflowCitationNum.value = null
-  workflowEditActiveCitationNum.value = null
-  featureEditActiveCitationNum.value = displayNum
 
 
   const fileIdFromSegment = segmentId.split('_s_')[0]!
@@ -1273,8 +1127,6 @@ function closeWorkflowMenu() {
 }
 
 const activeWorkflowFeatureId = ref<string | null>(null)
-const featureEditActiveCitationNum = ref<number | null>(null)
-const workflowEditActiveCitationNum = ref<number | null>(null)
 
 
 const toastVisible = ref(false)
@@ -1588,8 +1440,6 @@ async function handleCitationClickEvent(event: MouseEvent) {
 
         activeFeatureCitationNum.value = null
         activeWorkflowCitationNum.value = null
-        featureEditActiveCitationNum.value = null
-        workflowEditActiveCitationNum.value = null
         activeChatCitationNum.value = displayNum
 
 
@@ -1627,8 +1477,6 @@ function clearCitationHighlight() {
   activeFeatureCitationNum.value = null
   activeWorkflowCitationNum.value = null
   activeWorkflowFeatureId.value = null
-  featureEditActiveCitationNum.value = null
-  workflowEditActiveCitationNum.value = null
 
   clearSourceHighlights()
 }
@@ -3422,8 +3270,6 @@ function closeWorkflowDetail() {
 async function handleWorkflowCitationClick(part: FeatureCitationRefPart, feature: WorkflowContentFeature) {
   activeChatCitationNum.value = null
   activeFeatureCitationNum.value = null
-  featureEditActiveCitationNum.value = null
-  workflowEditActiveCitationNum.value = null
   activeWorkflowCitationNum.value = part.display_num
   activeWorkflowFeatureId.value = feature.id
 
@@ -3720,9 +3566,6 @@ async function handleFeatureClick(featureItem: FeatureListItem) {
 }
 
 function closeFeatureDetail() {
-  if (featureEditMode.value) {
-    exitFeatureEditMode()
-  }
   showFeatureDetail.value = false
   activeFeature.value = null
   if (rightPanelWidthBeforeReport.value !== null) {
@@ -3731,571 +3574,6 @@ function closeFeatureDetail() {
   }
 }
 
-
-function clearBlockDiff() {
-  blockDiffData.value = null
-}
-
-function enterFeatureEditMode() {
-  if (!activeFeature.value) return
-
-  featureEditMode.value = true
-  editingFeature.value = activeFeature.value
-  editMessages.value = []
-  isEditStreaming.value = false
-  editStreamingParts.value = []
-  editingBlockIndex.value = null
-  featureEditSessionId.value = null
-  blockDiffData.value = null
-}
-
-async function exitFeatureEditMode() {
-  const featureId = editingFeature.value?.id
-
-  featureEditMode.value = false
-  editingFeature.value = null
-  editMessages.value = []
-  isEditStreaming.value = false
-  editStreamingParts.value = []
-  editingBlockIndex.value = null
-  featureEditSessionId.value = null
-  featureEditActiveCitationNum.value = null
-
-  if (featureId && activeFeature.value?.id === featureId) {
-    try {
-      const updatedFeature = await getFeature(featureId)
-      activeFeature.value = updatedFeature
-    } catch (error) {
-      console.error('Failed to refresh feature after edit:', error)
-    }
-  }
-}
-
-async function handleSendEditMessage(message: string) {
-  if (!message || !editingFeature.value || isEditStreaming.value) return
-
-  const collectedChanges: Array<{
-    block_index: number
-    old_content: string
-    new_content: string
-    success: boolean
-    error_message?: string
-  }> = []
-
-  const userMessageId = Date.now().toString()
-  editMessages.value.push({
-    id: userMessageId,
-    role: 'user',
-    content: message
-  })
-
-  isEditStreaming.value = true
-  editStreamingParts.value = []
-  editingBlockIndex.value = null
-
-  const assistantMessageId = (Date.now() + 1).toString()
-  editMessages.value.push({
-    id: assistantMessageId,
-    role: 'assistant',
-    content: ''
-  })
-
-  function getTextFromParts(parts: ContentPart[]): string {
-    return parts
-      .filter(p => p.type === 'text')
-      .map(p => p.content || '')
-      .join('')
-  }
-
-  try {
-    await featureEditChat(
-      editingFeature.value.id,
-      message,
-      {
-        onStart: () => {
-        },
-        onText: (text: string) => {
-          const lastPart = editStreamingParts.value[editStreamingParts.value.length - 1]
-          if (lastPart && lastPart.type === 'text') {
-            lastPart.content = (lastPart.content || '') + text
-          } else {
-            editStreamingParts.value.push({ type: 'text', content: text })
-          }
-          const lastMsg = editMessages.value[editMessages.value.length - 1]
-          if (lastMsg && lastMsg.role === 'assistant') {
-            lastMsg.content = getTextFromParts(editStreamingParts.value)
-          }
-        },
-        onCitationRef: (citation) => {
-          editStreamingParts.value.push({
-            type: 'citation_ref',
-            display_num: citation.display_num,
-            file_name: citation.file_name || '',
-            segment_id: citation.segment_id || '',
-            summary: citation.summary || ''
-          } as unknown as ContentPart)
-        },
-        onToolExecuting: (tools: ToolExecuting[]) => {
-          for (const tool of tools) {
-            editStreamingParts.value.push({
-              type: 'tool_status',
-              display: tool.display
-            } as ToolStatusPart)
-
-            if (tool.name === 'create_generation_task') {
-              const category = tool.arguments?.category
-              loadWorkflows()
-              if (category === 'feature') {
-                toolboxMode.value = 'tools'
-              } else {
-                toolboxMode.value = 'oneclick'
-              }
-            }
-          }
-        },
-        onEditPreview: (data) => {
-          editingBlockIndex.value = data.block_index
-
-          if (data.old_content_parts && data.new_content_parts) {
-            blockDiffData.value = {
-              blockIndex: data.block_index,
-              oldContentParts: data.old_content_parts,
-              newContentParts: data.new_content_parts
-            }
-          }
-        },
-        onEditApplied: (data) => {
-          editingBlockIndex.value = null
-
-          const oldContent = blockDiffData.value?.blockIndex === data.block_index
-            ? blockDiffData.value.oldContentParts.map(p => p.type === 'text' ? p.content || '' : `[${p.display_num}]`).join('')
-            : ''
-          collectedChanges.push({
-            block_index: data.block_index,
-            old_content: oldContent,
-            new_content: data.new_content || '',
-            success: data.success,
-            error_message: data.error
-          })
-
-          if (data.success && data.block && activeFeature.value) {
-            activeFeature.value.blocks[data.block_index] = data.block
-          } else if (!data.success && data.error) {
-            console.error('Edit applied failed:', data.error)
-          }
-        },
-        onDone: (data) => {
-          featureEditSessionId.value = data.session_id
-          isEditStreaming.value = false
-          editStreamingParts.value = []
-
-          const messages = data.history
-            .filter(msg => msg.content?.trim() || (msg.content_parts && msg.content_parts.length > 0))
-            .map((msg, index) => ({
-              id: `history-${Date.now()}-${index}`,
-              role: msg.role,
-              content: msg.content || '',
-              content_parts: msg.content_parts,
-              tool_executing: msg.tool_executing,
-              changes: undefined as typeof collectedChanges | undefined
-            }))
-
-          if (collectedChanges.length > 0) {
-            const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant')
-            if (lastAssistantMsg) {
-              lastAssistantMsg.changes = [...collectedChanges]
-            }
-          }
-
-          editMessages.value = messages
-        },
-        onError: (error: string) => {
-          console.error('Feature edit error:', error)
-          isEditStreaming.value = false
-          editStreamingParts.value = []
-          const lastMsg = editMessages.value[editMessages.value.length - 1]
-          if (lastMsg && lastMsg.role === 'assistant') {
-            lastMsg.content = `错误: ${error}`
-          }
-        }
-      },
-      featureEditSessionId.value
-    )
-  } catch (error) {
-    console.error('Feature edit chat failed:', error)
-    isEditStreaming.value = false
-    editStreamingParts.value = []
-    const lastMsg = editMessages.value[editMessages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant') {
-      lastMsg.content = `请求失败: ${error instanceof Error ? error.message : '未知错误'}`
-    }
-  }
-}
-
-
-function handleFeatureEditNewSession() {
-  featureEditSessionId.value = null
-  editMessages.value = []
-  featureEditCurrentSessionTitle.value = ''
-}
-
-async function handleFeatureEditLoadSessions() {
-  if (!activeFeature.value?.id) return
-
-  isLoadingFeatureEditHistory.value = true
-  try {
-    const response = await getFeatureEditSessions(activeFeature.value.id)
-    featureEditSessions.value = response.sessions
-  } catch (error) {
-    console.error('Failed to load feature edit sessions:', error)
-  } finally {
-    isLoadingFeatureEditHistory.value = false
-  }
-}
-
-async function handleFeatureEditLoadSessionDetail(sessionId: string) {
-  if (!activeFeature.value?.id) return
-
-  isLoadingFeatureEditDetail.value = true
-  try {
-    const response = await getFeatureEditSessionDetail(activeFeature.value.id, sessionId)
-    featureEditSessionDetail.value = {
-      session: response.session,
-      messages: response.messages
-    }
-  } catch (error) {
-    console.error('Failed to load feature edit session detail:', error)
-  } finally {
-    isLoadingFeatureEditDetail.value = false
-  }
-}
-
-function handleFeatureEditContinueSession(sessionId: string) {
-  if (!featureEditSessionDetail.value) return
-
-  featureEditSessionId.value = sessionId
-  editMessages.value = featureEditSessionDetail.value.messages
-    .filter(msg => msg.role !== 'tool')
-    .map(msg => ({
-      id: msg.id,
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-      content_parts: msg.content_parts as EditMessage['content_parts'],
-      tool_executing: msg.tool_executing,
-      changes: msg.changes
-    }))
-  const firstUserMsg = featureEditSessionDetail.value.messages.find(m => m.role === 'user')
-  featureEditCurrentSessionTitle.value = firstUserMsg?.content.slice(0, 20) || ''
-}
-
-function handleFeatureEditChangeClick(change: { block_index: number; old_content: string; new_content: string }) {
-  blockDiffData.value = {
-    blockIndex: change.block_index,
-    oldContentParts: [{ type: 'text' as const, content: change.old_content }],
-    newContentParts: [{ type: 'text' as const, content: change.new_content }]
-  }
-}
-
-
-function enterWorkflowEditMode() {
-  if (!currentWorkflow.value) return
-
-  workflowEditMode.value = true
-  editingWorkflow.value = currentWorkflow.value
-  workflowEditMessages.value = []
-  isWorkflowEditStreaming.value = false
-  workflowEditStreamingParts.value = []
-  workflowEditSessionId.value = null
-  editingStepIndex.value = null
-  editingWorkflowBlockIndex.value = null
-  workflowBlockDiffData.value = null
-}
-
-function exitWorkflowEditMode() {
-  workflowEditMode.value = false
-  editingWorkflow.value = null
-  workflowEditMessages.value = []
-  isWorkflowEditStreaming.value = false
-  workflowEditStreamingParts.value = []
-  workflowEditSessionId.value = null
-  editingStepIndex.value = null
-  editingWorkflowBlockIndex.value = null
-  workflowBlockDiffData.value = null
-  workflowEditActiveCitationNum.value = null
-}
-
-function clearWorkflowBlockDiff() {
-  workflowBlockDiffData.value = null
-}
-
-async function handleWorkflowEditCitationClick(citationId: string, displayNum: number, segmentId: string) {
-  if (!segmentId) {
-    console.warn('Workflow edit citation segment_id not provided:', citationId, displayNum)
-    return
-  }
-
-  activeChatCitationNum.value = null
-  activeFeatureCitationNum.value = null
-  activeWorkflowCitationNum.value = null
-  featureEditActiveCitationNum.value = null
-  workflowEditActiveCitationNum.value = displayNum
-
-  const fileIdFromSegment = segmentId.split('_s_')[0]!
-
-  const file = files.value.find(f => f.id === fileIdFromSegment)
-
-  if (file) {
-    await openFilePreview(fileIdFromSegment, segmentId)
-  }
-}
-
-async function handleSendWorkflowEditMessage(message: string) {
-  if (!message || !currentWorkflow.value || isWorkflowEditStreaming.value) return
-
-  const collectedChanges: Array<{
-    block_index: number
-    old_content: string
-    new_content: string
-    step_index: number
-    step_name: string
-    success: boolean
-    error_message?: string
-  }> = []
-
-  const userMessageId = Date.now().toString()
-  workflowEditMessages.value.push({
-    id: userMessageId,
-    role: 'user',
-    content: message
-  })
-
-  isWorkflowEditStreaming.value = true
-  workflowEditStreamingParts.value = []
-  editingStepIndex.value = null
-  editingWorkflowBlockIndex.value = null
-
-  const assistantMessageId = (Date.now() + 1).toString()
-  workflowEditMessages.value.push({
-    id: assistantMessageId,
-    role: 'assistant',
-    content: ''
-  })
-
-  function getTextFromParts(parts: ContentPart[]): string {
-    return parts
-      .filter(p => p.type === 'text')
-      .map(p => p.content || '')
-      .join('')
-  }
-
-  try {
-    await workflowEditChat(
-      currentWorkflow.value.id,
-      message,
-      {
-        onStart: () => {
-        },
-        onText: (text: string) => {
-          const lastPart = workflowEditStreamingParts.value[workflowEditStreamingParts.value.length - 1]
-          if (lastPart && lastPart.type === 'text') {
-            lastPart.content = (lastPart.content || '') + text
-          } else {
-            workflowEditStreamingParts.value.push({ type: 'text', content: text })
-          }
-          const lastMsg = workflowEditMessages.value[workflowEditMessages.value.length - 1]
-          if (lastMsg && lastMsg.role === 'assistant') {
-            lastMsg.content = getTextFromParts(workflowEditStreamingParts.value)
-          }
-        },
-        onCitationRef: (citation: FeatureEditCitationRef) => {
-          workflowEditStreamingParts.value.push({
-            type: 'citation_ref',
-            display_num: citation.display_num,
-            file_name: citation.file_name || '',
-            segment_id: citation.segment_id || '',
-            summary: citation.summary || ''
-          } as unknown as ContentPart)
-        },
-        onToolExecuting: (tools: ToolExecuting[]) => {
-          for (const tool of tools) {
-            workflowEditStreamingParts.value.push({
-              type: 'tool_status',
-              display: tool.display
-            } as ToolStatusPart)
-
-            if (tool.name === 'create_generation_task') {
-              const category = tool.arguments?.category
-              loadWorkflows()
-              if (category === 'feature') {
-                toolboxMode.value = 'tools'
-              } else {
-                toolboxMode.value = 'oneclick'
-              }
-            }
-          }
-        },
-        onEditPreview: (data: {
-          step_index: number
-          step_name: string
-          block_index: number
-          old_content_parts?: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-          new_content_parts?: Array<{ type: 'text' | 'citation_ref'; content?: string; display_num?: number; citation_id?: string; file_name?: string; segment_id?: string; summary?: string }>
-        }) => {
-          editingStepIndex.value = data.step_index
-          editingWorkflowBlockIndex.value = data.block_index
-
-          if (data.old_content_parts && data.new_content_parts) {
-            workflowBlockDiffData.value = {
-              stepIndex: data.step_index,
-              blockIndex: data.block_index,
-              oldContentParts: data.old_content_parts,
-              newContentParts: data.new_content_parts
-            }
-          }
-        },
-        onEditApplied: (data: { step_index: number; step_name: string; block_index: number; success: boolean; new_content?: string; block?: any; error?: string }) => {
-          editingStepIndex.value = null
-          editingWorkflowBlockIndex.value = null
-
-          const oldContent = workflowBlockDiffData.value?.stepIndex === data.step_index && workflowBlockDiffData.value?.blockIndex === data.block_index
-            ? workflowBlockDiffData.value.oldContentParts.map(p => p.type === 'text' ? p.content || '' : `[${p.display_num}]`).join('')
-            : ''
-          collectedChanges.push({
-            block_index: data.block_index,
-            old_content: oldContent,
-            new_content: data.new_content || '',
-            step_index: data.step_index,
-            step_name: data.step_name,
-            success: data.success,
-            error_message: data.error
-          })
-
-          if (data.success && data.block) {
-            const stepIndex = data.step_index
-            const feature = workflowFeatures.value.find((_, i) => i === stepIndex - 1)
-            if (feature && feature.blocks) {
-              feature.blocks[data.block_index] = data.block
-            }
-          } else if (!data.success && data.error) {
-            console.error('Workflow edit applied failed:', data.error)
-          }
-        },
-        onDone: (data) => {
-          workflowEditSessionId.value = data.session_id
-          isWorkflowEditStreaming.value = false
-          workflowEditStreamingParts.value = []
-
-          const messages = data.history
-            .filter((msg: FeatureEditHistoryMessage) => msg.content?.trim() || (msg.content_parts && msg.content_parts.length > 0))
-            .map((msg: FeatureEditHistoryMessage, index: number) => ({
-              id: `history-${Date.now()}-${index}`,
-              role: msg.role,
-              content: msg.content || '',
-              content_parts: msg.content_parts,
-              tool_executing: msg.tool_executing,
-              changes: undefined as typeof collectedChanges | undefined
-            }))
-
-          if (collectedChanges.length > 0) {
-            const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant')
-            if (lastAssistantMsg) {
-              lastAssistantMsg.changes = [...collectedChanges]
-            }
-          }
-
-          workflowEditMessages.value = messages
-
-          if (data.citations) {
-            workflowEditCitations.value = data.citations
-          }
-        },
-        onError: (error: string) => {
-          console.error('Workflow edit error:', error)
-          isWorkflowEditStreaming.value = false
-          workflowEditStreamingParts.value = []
-          const lastMsg = workflowEditMessages.value[workflowEditMessages.value.length - 1]
-          if (lastMsg && lastMsg.role === 'assistant') {
-            lastMsg.content = `错误: ${error}`
-          }
-        }
-      },
-      workflowEditSessionId.value
-    )
-  } catch (error) {
-    console.error('Workflow edit chat failed:', error)
-    isWorkflowEditStreaming.value = false
-    workflowEditStreamingParts.value = []
-    const lastMsg = workflowEditMessages.value[workflowEditMessages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant') {
-      lastMsg.content = `请求失败: ${error instanceof Error ? error.message : '未知错误'}`
-    }
-  }
-}
-
-
-function handleWorkflowEditNewSession() {
-  workflowEditSessionId.value = null
-  workflowEditMessages.value = []
-  workflowEditCurrentSessionTitle.value = ''
-}
-
-async function handleWorkflowEditLoadSessions() {
-  if (!currentWorkflow.value?.id) return
-
-  isLoadingWorkflowEditHistory.value = true
-  try {
-    const response = await getWorkflowEditSessions(currentWorkflow.value.id)
-    workflowEditSessions.value = response.sessions
-  } catch (error) {
-    console.error('Failed to load workflow edit sessions:', error)
-  } finally {
-    isLoadingWorkflowEditHistory.value = false
-  }
-}
-
-async function handleWorkflowEditLoadSessionDetail(sessionId: string) {
-  if (!currentWorkflow.value?.id) return
-
-  isLoadingWorkflowEditDetail.value = true
-  try {
-    const response = await getWorkflowEditSessionDetail(currentWorkflow.value.id, sessionId)
-    workflowEditSessionDetail.value = {
-      session: response.session,
-      messages: response.messages
-    }
-  } catch (error) {
-    console.error('Failed to load workflow edit session detail:', error)
-  } finally {
-    isLoadingWorkflowEditDetail.value = false
-  }
-}
-
-function handleWorkflowEditContinueSession(sessionId: string) {
-  if (!workflowEditSessionDetail.value) return
-
-  workflowEditSessionId.value = sessionId
-  workflowEditMessages.value = workflowEditSessionDetail.value.messages
-    .filter(msg => msg.role !== 'tool')
-    .map(msg => ({
-      id: msg.id,
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-      content_parts: msg.content_parts as EditMessage['content_parts'],
-      tool_executing: msg.tool_executing,
-      changes: msg.changes
-    }))
-  const firstUserMsg = workflowEditSessionDetail.value.messages.find(m => m.role === 'user')
-  workflowEditCurrentSessionTitle.value = firstUserMsg?.content.slice(0, 20) || ''
-}
-
-function handleWorkflowEditChangeClick(change: { block_index: number; old_content: string; new_content: string; step_index: number; step_name: string }) {
-  workflowBlockDiffData.value = {
-    stepIndex: change.step_index,
-    blockIndex: change.block_index,
-    oldContentParts: [{ type: 'text' as const, content: change.old_content }],
-    newContentParts: [{ type: 'text' as const, content: change.new_content }]
-  }
-}
 
 async function handleRegenerateFeature(featureItem: FeatureListItem) {
   featureMenuId.value = null
