@@ -58,6 +58,19 @@ export interface SegmentCitationRefPart {
 }
 
 
+export interface AudioCitationRefPart {
+  type: 'citation_ref'
+  citation_type: 'audio'
+  display_num: number
+  file_name: string
+  segment_id: string
+  summary: string
+  time_start?: number
+  time_end?: number
+  time_range?: string
+}
+
+
 export interface ImageCitationRefPart {
   type: 'citation_ref'
   citation_type: 'image'
@@ -83,7 +96,7 @@ export interface WebCitationRefPart {
   favicon?: string
 }
 
-export type CitationRefPart = SegmentCitationRefPart | ImageCitationRefPart | WebCitationRefPart
+export type CitationRefPart = SegmentCitationRefPart | AudioCitationRefPart | ImageCitationRefPart | WebCitationRefPart
 
 export interface ToolStatusPart {
   type: 'tool_status'
@@ -144,6 +157,7 @@ export interface Block {
     time_end?: number
     time_range?: string
     raw_text?: string
+    media_type?: string
     
     is_table?: boolean
     table_html?: string
@@ -162,6 +176,9 @@ export interface SegmentMapping {
   segment_id: string
   block_ids: string[]
   summary: string
+  time_start?: number
+  time_end?: number
+  time_range?: string
 }
 
 
@@ -172,6 +189,11 @@ export interface FileContent {
   keywords: string[]
   blocks: Block[]
   segments: SegmentMapping[]
+  audio_meta?: {
+    duration_ms: number
+    start_ms: number
+    speaker_count: number
+  }
 }
 
 
@@ -199,6 +221,11 @@ export interface CitationMetadata {
   summary?: string
   display_num: number
   type?: 'segment' | 'image' | 'pdf_image' | 'web'
+  media_type?: 'audio'
+  citation_type?: 'audio'
+  time_start?: number
+  time_end?: number
+  time_range?: string
   
   image_name?: string
   image_index?: number
@@ -238,6 +265,10 @@ export interface FeatureCitationRefPart {
   file_name?: string
   segment_id?: string
   summary?: string
+  citation_type?: 'audio' | 'image' | 'web'
+  time_start?: number
+  time_end?: number
+  time_range?: string
 }
 
 export type FeatureContentPart = FeatureTextPart | FeatureCitationRefPart

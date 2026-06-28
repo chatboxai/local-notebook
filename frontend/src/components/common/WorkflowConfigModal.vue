@@ -182,7 +182,7 @@ function handleConfirm() {
   }
   emit('confirm', localTitle.value.trim(), localPrompt.value.trim(), localSelectedIds.value)
 }
-const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
+const AUDIO_TYPES = ['wav', 'mp3', 'm4a']
 
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp']
 

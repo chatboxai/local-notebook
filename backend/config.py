@@ -90,6 +90,13 @@ async def resolve_mineru_config() -> tuple[bool, str, str | None, str | None]:
     return False, "api", None, None
 
 
+async def resolve_funasr_config() -> tuple[bool, str | None]:
+    base_url = await get_setting("funasr_base_url", "")
+    if base_url and base_url.strip():
+        return True, base_url.strip().rstrip("/")
+    return False, None
+
+
 BOCHA_BASE_URL = "https://api.bochaai.com/v1"
 
 async def resolve_web_search_config() -> tuple[bool, str | None, str | None]:

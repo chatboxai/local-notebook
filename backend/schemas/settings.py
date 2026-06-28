@@ -26,6 +26,7 @@ SETTING_KEYS = {
     "mineru_base_url",
     "mineru_api_key",
     "funasr_base_url",
+    "funasr_verified",
     "bocha_api_key",
     "llm_verified",
     "vlm_verified",

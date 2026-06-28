@@ -107,6 +107,10 @@ class ReadSegmentsTool(CallableTool2[ReadSegmentsParams]):
             existing_cid = state.segment_to_citation.get(seg_id)
             if existing_cid:
                 item["citation_id"] = f"[{existing_cid}]"
+                meta = state.citations_map.get(existing_cid) or {}
+                if meta.get("media_type") == "audio":
+                    item["media_type"] = "audio"
+                    item["time_range"] = meta.get("time_range", "")
             results.append(item)
 
         if errors:

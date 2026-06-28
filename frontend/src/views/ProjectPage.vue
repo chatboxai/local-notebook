@@ -231,15 +231,47 @@
 
 
               <template v-else-if="isPreviewingAudio && previewingFileContent?.blocks">
-                <div
-                  v-for="block in previewingFileContent.blocks"
-                  :key="block.block_id"
-                  :data-block-id="block.block_id"
-                  class="audio-block"
-                  :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
-                >
-                  <span class="audio-meta">{{ block.extra?.time_range || '' }} 说话人{{ (block.extra?.speaker ?? 0) + 1 }}</span>
-                  <span class="audio-text">{{ block.content }}</span>
+                <div class="audio-preview-shell">
+                  <div class="audio-player-bar">
+                    <audio
+                      v-if="previewingFile"
+                      ref="audioPlayerRef"
+                      class="audio-player"
+                      :src="audioPreviewUrl"
+                      controls
+                      preload="metadata"
+                      @timeupdate="handleAudioTimeUpdate"
+                      @play="handleAudioPlay"
+                    ></audio>
+                  </div>
+
+                  <div class="audio-transcript-list">
+                    <section
+                      v-for="group in audioTranscriptGroups"
+                      :key="group.key"
+                      class="audio-transcript-group"
+                    >
+                      <div v-if="audioSpeakerCount > 1" class="audio-speaker-label">
+                        {{ group.speakerLabel }}
+                      </div>
+                      <p class="audio-paragraph">
+                        <button
+                          v-for="block in group.blocks"
+                          :key="block.block_id"
+                          type="button"
+                          :data-block-id="block.block_id"
+                          class="audio-text-segment"
+                          :class="{
+                            highlighted: highlightBlockIds.includes(block.block_id),
+                            active: activeAudioBlockId === block.block_id
+                          }"
+                          @click="seekAudioToBlock(block)"
+                        >
+                          {{ block.content }}
+                        </button>
+                      </p>
+                    </section>
+                  </div>
                 </div>
               </template>
 
@@ -1367,6 +1399,7 @@ import {
   editMessageAndRegenerate,
   type AgentRole,
   getImagePreviewUrl,
+  getAudioPreviewUrl,
   getEmbeddedImagePreviewUrl,
   getBlocksLocation,
   getFile,
@@ -1660,7 +1693,7 @@ const featureEditMode = ref(false)
 const editingFeature = ref<Feature | null>(null)
 
 
-type EditMessageContentPart = { type: 'text'; content: string } | { type: 'citation_ref'; display_num: number; citation_id: string; file_name?: string; segment_id?: string; summary?: string; citation_type?: 'image' | 'web' }
+type EditMessageContentPart = { type: 'text'; content: string } | { type: 'citation_ref'; display_num: number; citation_id: string; file_name?: string; segment_id?: string; summary?: string; citation_type?: 'audio' | 'image' | 'web'; time_start?: number; time_end?: number; time_range?: string }
 interface EditMessage {
   id: string
   role: 'user' | 'assistant'
@@ -1877,6 +1910,8 @@ const previewingFileContent = ref<FileContent | null>(null)
 const previewingFileName = ref<string>('')
 const previewingFile = ref<FileInfo | null>(null)
 const highlightBlockIds = ref<string[]>([])
+const audioPlayerRef = ref<HTMLAudioElement | null>(null)
+const activeAudioBlockId = ref<string | null>(null)
 const activeChatCitationNum = ref<number | null>(null)
 const activeFeatureCitationNum = ref<number | null>(null)
 const activeWorkflowCitationNum = ref<number | null>(null)
@@ -2005,12 +2040,12 @@ const isRawViewMode = computed(() => isPdfFile.value && viewMode.value === 'raw'
 watch(activeChatCitationNum, (newNum, oldNum) => {
 
   if (oldNum !== null) {
-    const oldElements = document.querySelectorAll(`.assistant-content .segment-citation[data-display-num="${oldNum}"]`)
+    const oldElements = document.querySelectorAll(`.assistant-content .inline-citation[data-display-num="${oldNum}"]`)
     oldElements.forEach(el => el.classList.remove('active'))
   }
 
   if (newNum !== null) {
-    const newElements = document.querySelectorAll(`.assistant-content .segment-citation[data-display-num="${newNum}"]`)
+    const newElements = document.querySelectorAll(`.assistant-content .inline-citation[data-display-num="${newNum}"]`)
     newElements.forEach(el => el.classList.add('active'))
   }
 })
@@ -2131,6 +2166,65 @@ const isPreviewingImage = computed(() => {
 
 const isPreviewingAudio = computed(() => {
   return previewingFile.value ? isAudioFile(previewingFile.value) : false
+})
+
+
+const audioPreviewUrl = computed(() => {
+  return previewingFile.value && isPreviewingAudio.value
+    ? getAudioPreviewUrl(previewingFile.value.id)
+    : ''
+})
+
+
+const audioSpeakerCount = computed(() => {
+  const fromMeta = previewingFileContent.value?.audio_meta?.speaker_count
+  if (fromMeta && fromMeta > 0) return fromMeta
+  const speakers = new Set<number>()
+  for (const block of previewingFileContent.value?.blocks || []) {
+    const speaker = Number(block.extra?.speaker)
+    if (Number.isFinite(speaker)) speakers.add(speaker)
+  }
+  return speakers.size
+})
+
+
+interface AudioTranscriptGroup {
+  key: string
+  speaker: number | null
+  speakerLabel: string
+  blocks: FileContent['blocks']
+}
+
+const audioTranscriptGroups = computed<AudioTranscriptGroup[]>(() => {
+  const blocks = previewingFileContent.value?.blocks || []
+  if (!blocks.length) return []
+
+  if (audioSpeakerCount.value <= 1) {
+    return [{
+      key: 'speaker-all',
+      speaker: null,
+      speakerLabel: '',
+      blocks
+    }]
+  }
+
+  const groups: AudioTranscriptGroup[] = []
+  for (const block of blocks) {
+    const speakerValue = Number(block.extra?.speaker)
+    const speaker = Number.isFinite(speakerValue) ? speakerValue : null
+    const previous = groups[groups.length - 1]
+    if (previous && previous.speaker === speaker) {
+      previous.blocks.push(block)
+      continue
+    }
+    groups.push({
+      key: `speaker-${speaker ?? 'unknown'}-${groups.length}`,
+      speaker,
+      speakerLabel: getAudioSpeakerLabel(block),
+      blocks: [block]
+    })
+  }
+  return groups
 })
 
 
@@ -2439,7 +2533,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
     } else {
 
       const segmentId = citationEl.dataset.segmentId
-      const displayNum = parseInt(citationEl.textContent || '0', 10)
+      const displayNum = parseInt(citationEl.dataset.displayNum || citationEl.textContent || '0', 10)
 
       if (segmentId) {
 
@@ -2981,6 +3075,7 @@ async function openFilePreview(fileId: string, segmentId?: string) {
     pdfPageInfo.value = null
     currentPageNum.value = 1
     jumpToPageInput.value = ''
+    activeAudioBlockId.value = null
 
 
     if (isSwitchingFile) {
@@ -3140,6 +3235,90 @@ function getBlockImagePreviewUrl(block: FileContent['blocks'][number]): string {
 }
 
 
+function getAudioSpeakerLabel(block: FileContent['blocks'][number]): string {
+  const speaker = Number(block.extra?.speaker)
+  if (!Number.isFinite(speaker)) return '说话人'
+  return `说话人 ${speaker + 1}`
+}
+
+
+function getAudioStartMs(block: FileContent['blocks'][number]): number | null {
+  const value = Number(block.extra?.time_start)
+  return Number.isFinite(value) ? value : null
+}
+
+
+function getAudioEndMs(block: FileContent['blocks'][number]): number | null {
+  const value = Number(block.extra?.time_end)
+  return Number.isFinite(value) ? value : null
+}
+
+
+function findAudioBlockAtTime(ms: number): FileContent['blocks'][number] | null {
+  const blocks = previewingFileContent.value?.blocks || []
+  for (const block of blocks) {
+    const start = getAudioStartMs(block)
+    const end = getAudioEndMs(block)
+    if (start === null || end === null) continue
+    if (ms >= start && ms < Math.max(end, start + 1)) return block
+  }
+  return null
+}
+
+
+function handleAudioPlay() {
+  highlightBlockIds.value = []
+}
+
+
+function handleAudioTimeUpdate() {
+  const player = audioPlayerRef.value
+  if (!player) return
+  const currentMs = Math.round(player.currentTime * 1000)
+
+  const activeBlock = findAudioBlockAtTime(currentMs)
+  if (!activeBlock || activeBlock.block_id === activeAudioBlockId.value) return
+
+  activeAudioBlockId.value = activeBlock.block_id
+  if (!player.paused) {
+    nextTick(() => scrollToBlock(activeBlock.block_id))
+  }
+}
+
+
+async function seekAudioToBlock(block: FileContent['blocks'][number]) {
+  const start = getAudioStartMs(block)
+  if (start === null) return
+  await seekAudioToMs(start, [block.block_id])
+}
+
+
+async function seekAudioToMs(startMs: number, blockIds: string[]) {
+  await nextTick()
+  const player = audioPlayerRef.value
+  if (player) {
+    player.currentTime = Math.max(0, startMs / 1000)
+  }
+  activeAudioBlockId.value = blockIds[0] || null
+  highlightBlockIds.value = blockIds
+  if (blockIds[0]) {
+    await nextTick()
+    scrollToBlock(blockIds[0])
+  }
+}
+
+
+function getAudioStartForBlockIds(blockIds: string[]): number | null {
+  const blocks = previewingFileContent.value?.blocks || []
+  const ids = new Set(blockIds)
+  const starts = blocks
+    .filter(block => ids.has(block.block_id))
+    .map(block => getAudioStartMs(block))
+    .filter((value): value is number => value !== null)
+  return starts.length ? Math.min(...starts) : null
+}
+
+
 async function scrollToSegment(_fileId: string, segmentId: string) {
 
   let blockIds: string[] = []
@@ -3155,6 +3334,20 @@ async function scrollToSegment(_fileId: string, segmentId: string) {
 
 
   currentBlockIds.value = blockIds
+
+  if (isPreviewingAudio.value && previewingFileContent.value) {
+    const startMs = getAudioStartForBlockIds(blockIds)
+    if (startMs !== null) {
+      await seekAudioToMs(startMs, blockIds)
+    } else {
+      highlightBlockIds.value = blockIds
+      await nextTick()
+      if (blockIds[0]) {
+        scrollToBlock(blockIds[0])
+      }
+    }
+    return
+  }
 
   if (isRawViewMode.value && pdfPageInfo.value) {
 
@@ -3319,6 +3512,7 @@ function closePreview() {
   previewingFileName.value = ''
   previewingFile.value = null
   highlightBlockIds.value = []
+  activeAudioBlockId.value = null
 
 
   isPdfFile.value = false
@@ -3682,6 +3876,15 @@ async function sendMessage() {
             image_index: citation.image_index,
             page: citation.page
           } as any)
+        } else if (citation.type === 'audio') {
+
+          streamingParts.value.push({
+            type: 'citation_ref',
+            display_num: citation.display_num,
+            file_name: citation.file_name,
+            segment_id: citation.segment_id,
+            summary: citation.summary
+          } as any)
         } else {
 
           streamingParts.value.push({
@@ -4030,7 +4233,7 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         const iconHtml = favicon
           ? `<img class="web-favicon" src="${escapeHtml(favicon)}" width="12" height="12" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" /><svg class="web-icon" style="display:none" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`
           : `<svg class="web-icon" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`
-        currentText += `<span class="inline-citation web-citation" data-citation-type="web" data-title="${escapeHtml(title)}" data-url="${escapeHtml(url)}" data-snippet="${escapeHtml(snippet)}" data-source="${escapeHtml(source)}" data-date="${escapeHtml(publishedDate)}" data-favicon="${escapeHtml(favicon)}">${partAny.display_num}${iconHtml}</span>`
+        currentText += `<span class="inline-citation web-citation" data-citation-type="web" data-display-num="${partAny.display_num}" data-title="${escapeHtml(title)}" data-url="${escapeHtml(url)}" data-snippet="${escapeHtml(snippet)}" data-source="${escapeHtml(source)}" data-date="${escapeHtml(publishedDate)}" data-favicon="${escapeHtml(favicon)}">${partAny.display_num}${iconHtml}</span>`
       } else if (partAny.citation_type === 'image') {
 
         const fileId = partAny.file_id || ''
@@ -4038,7 +4241,12 @@ function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = fal
         const imageName = partAny.image_name || ''
         const imageIndex = partAny.image_index ?? ''
         const page = partAny.page ?? ''
-        currentText += `<span class="inline-citation image-citation" data-citation-type="image" data-file-id="${escapeHtml(fileId)}" data-file="${escapeHtml(fileName)}" data-image-name="${escapeHtml(imageName)}" data-image-index="${imageIndex}" data-page="${page}">${partAny.display_num}</span>`
+        currentText += `<span class="inline-citation image-citation" data-citation-type="image" data-display-num="${partAny.display_num}" data-file-id="${escapeHtml(fileId)}" data-file="${escapeHtml(fileName)}" data-image-name="${escapeHtml(imageName)}" data-image-index="${imageIndex}" data-page="${page}">${partAny.display_num}</span>`
+      } else if (partAny.citation_type === 'audio') {
+
+        const segmentId = partAny.segment_id || ''
+        const disabledClass = segmentId ? '' : ' disabled'
+        currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}">${partAny.display_num}</span>`
       } else {
 
 
@@ -4387,6 +4595,14 @@ async function submitEditMessage(msg: Message) {
             image_index: citation.image_index,
             page: citation.page
           } as any)
+        } else if (citation.type === 'audio') {
+          streamingParts.value.push({
+            type: 'citation_ref',
+            display_num: citation.display_num,
+            file_name: citation.file_name,
+            segment_id: citation.segment_id,
+            summary: citation.summary
+          } as any)
         } else {
           streamingParts.value.push({
             type: 'citation_ref',
@@ -4728,6 +4944,14 @@ async function regenerateMessage(assistantIndex: number) {
             display_num: citation.display_num,
             file_id: citation.file_id,
             file_name: citation.file_name
+          } as any)
+        } else if (citation.type === 'audio') {
+          streamingParts.value.push({
+            type: 'citation_ref',
+            display_num: citation.display_num,
+            file_name: citation.file_name,
+            segment_id: citation.segment_id,
+            summary: citation.summary
           } as any)
         } else {
           streamingParts.value.push({
@@ -7575,29 +7799,77 @@ void [
 }
 
 
-.audio-block {
-  margin-bottom: 12px;
-  line-height: 1.6;
-  padding: 2px 8px;
-  border-radius: 4px;
-  transition: background 0.3s;
+.audio-preview-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.audio-block.highlighted {
-  background: rgba(147, 51, 234, 0.1);
+.audio-player-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 0 0 6px;
+  background: var(--bg-white);
+}
+
+.audio-player {
+  width: 100%;
+  height: 36px;
+}
+
+.audio-transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.audio-transcript-group {
+  padding: 2px 0;
+}
+
+.audio-speaker-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.audio-paragraph {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.9;
+  word-break: break-word;
+}
+
+.audio-text-segment {
+  display: inline;
+  margin: 0 2px 0 0;
+  padding: 1px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.audio-text-segment:hover {
+  background: var(--bg-hover);
+}
+
+.audio-text-segment.highlighted {
+  background: rgba(147, 51, 234, 0.12);
   animation: highlightFadeIn 0.3s ease-out;
 }
 
-.audio-meta {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-right: 8px;
-  font-family: monospace;
-}
-
-.audio-text {
-  color: var(--text-primary);
-  font-size: 14px;
+.audio-text-segment.active {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--primary-color);
 }
 
 .preview-block {
@@ -10488,7 +10760,6 @@ void [
   background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
   border-color: #66bb6a;
 }
-
 
 .assistant-content :deep(.inline-citation.web-citation) {
   width: auto;

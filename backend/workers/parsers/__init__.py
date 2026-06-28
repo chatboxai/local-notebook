@@ -3,6 +3,7 @@ from .txt_parser import TxtParser
 from .docx_parser import DocxParser
 from .epub_parser import EpubParser
 from .image_parser import ImageParser
+from .audio_parser import AudioParser
 
 
 PARSERS = {
@@ -14,6 +15,9 @@ PARSERS = {
     ".jpg": ImageParser,
     ".jpeg": ImageParser,
     ".png": ImageParser,
+    ".wav": AudioParser,
+    ".mp3": AudioParser,
+    ".m4a": AudioParser,
 }
 
 
@@ -34,6 +38,7 @@ __all__ = [
     "TxtParser",
     "DocxParser",
     "EpubParser",
+    "AudioParser",
     "get_parser_for_file",
     "PARSERS",
 ]

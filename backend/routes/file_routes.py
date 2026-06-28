@@ -19,16 +19,44 @@ from schemas.file import FileResponse
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 UPLOAD_CHUNK_SIZE = 1024 * 1024
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".epub", ".jpg", ".jpeg", ".png", ".wav", ".mp3", ".m4a"}
+DOCUMENT_EXTENSIONS = {"pdf", "docx", "doc", "txt", "epub"}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png"}
+AUDIO_EXTENSIONS = {"wav", "mp3", "m4a"}
+ALLOWED_EXTENSIONS = {
+    *(f".{ext}" for ext in DOCUMENT_EXTENSIONS),
+    *(f".{ext}" for ext in IMAGE_EXTENSIONS),
+    *(f".{ext}" for ext in AUDIO_EXTENSIONS),
+}
 
 router = APIRouter(prefix="/projects/{project_id}/files", tags=["files"])
 
 
 def _file_type(filename: str) -> str:
     ext = Path(filename).suffix.lower().lstrip(".")
-    if ext in {"pdf", "docx", "doc", "txt", "epub", "jpg", "jpeg", "png", "wav", "mp3", "m4a"}:
+    if ext in DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS | AUDIO_EXTENSIONS:
         return ext
     return "unknown"
+
+
+def _format_audio_time_range(start_ms: int, end_ms: int) -> str:
+    return f"{_format_audio_time(start_ms)}-{_format_audio_time(end_ms)}"
+
+
+def _format_audio_time(ms: int) -> str:
+    total_seconds = max(0, int(ms or 0) // 1000)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _get_pdf_page_count_sync(file_path: str) -> int:
@@ -248,15 +276,6 @@ async def get_file_content(
         .order_by(asc(Segment.segment_index))
     )
     segments_raw = result.scalars().all()
-    segments = [
-        {
-            "segment_id": s.id,
-            "block_ids": json.loads(s.block_ids) if s.block_ids else [],
-            "summary": "",
-        }
-        for s in segments_raw
-    ]
-
     serialized_blocks = [
         {
             "block_id": b.block_id,
@@ -268,14 +287,73 @@ async def get_file_content(
         for b in blocks
     ]
 
-    return {
+    is_audio = (db_file.file_type or "").lower() in AUDIO_EXTENSIONS
+    block_by_id = {b["block_id"]: b for b in serialized_blocks}
+    segments = []
+    for s in segments_raw:
+        block_ids = json.loads(s.block_ids) if s.block_ids else []
+        item = {
+            "segment_id": s.id,
+            "block_ids": block_ids,
+            "summary": s.summary or "",
+        }
+        if is_audio:
+            starts = []
+            ends = []
+            for block_id in block_ids:
+                extra = (block_by_id.get(block_id) or {}).get("extra") or {}
+                start = _int_or_none(extra.get("time_start"))
+                end = _int_or_none(extra.get("time_end"))
+                if start is not None:
+                    starts.append(start)
+                if end is not None:
+                    ends.append(end)
+            if starts and ends:
+                item["time_start"] = min(starts)
+                item["time_end"] = max(ends)
+                item["time_range"] = _format_audio_time_range(item["time_start"], item["time_end"])
+        segments.append(item)
+
+    keywords = []
+    if db_file.keywords:
+        try:
+            parsed_keywords = json.loads(db_file.keywords)
+            if isinstance(parsed_keywords, list):
+                keywords = parsed_keywords
+        except (json.JSONDecodeError, TypeError):
+            keywords = []
+
+    response = {
         "file_id": file_id,
         "file_name": db_file.file_name,
-        "summary": "",
-        "keywords": [],
+        "summary": db_file.summary or "",
+        "keywords": keywords,
         "blocks": serialized_blocks,
         "segments": segments
     }
+
+    if is_audio:
+        audio_starts = []
+        audio_ends = []
+        speakers = set()
+        for block in serialized_blocks:
+            extra = block.get("extra") or {}
+            start = _int_or_none(extra.get("time_start"))
+            end = _int_or_none(extra.get("time_end"))
+            speaker = _int_or_none(extra.get("speaker"))
+            if start is not None:
+                audio_starts.append(start)
+            if end is not None:
+                audio_ends.append(end)
+            if speaker is not None:
+                speakers.add(speaker)
+        response["audio_meta"] = {
+            "duration_ms": max(audio_ends) if audio_ends else 0,
+            "start_ms": min(audio_starts) if audio_starts else 0,
+            "speaker_count": len(speakers),
+        }
+
+    return response
 
 
 @file_router.get("/{file_id}/content/pages")
@@ -362,7 +440,7 @@ async def get_file_pages(
         {
             "segment_id": s.id,
             "block_ids": json.loads(s.block_ids) if s.block_ids else [],
-            "summary": "",
+            "summary": s.summary or "",
         }
         for s in segments_raw
     ]
@@ -425,6 +503,12 @@ async def get_file_raw(
         content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     elif db_file.file_type == "txt":
         content_type = "text/plain; charset=utf-8"
+    elif db_file.file_type == "wav":
+        content_type = "audio/wav"
+    elif db_file.file_type == "mp3":
+        content_type = "audio/mpeg"
+    elif db_file.file_type == "m4a":
+        content_type = "audio/mp4"
 
     from urllib.parse import quote
 
@@ -457,12 +541,15 @@ async def preview_file(
         "jpg": "image/jpeg",
         "jpeg": "image/jpeg",
         "png": "image/png",
+        "wav": "audio/wav",
+        "mp3": "audio/mpeg",
+        "m4a": "audio/mp4",
     }
     if db_file.file_type in mime_types:
         media_type = mime_types[db_file.file_type]
         return FileResponse(str(file_path), media_type=media_type)
 
-    raise HTTPException(status_code=400, detail="Preview only available for image files")
+    raise HTTPException(status_code=400, detail="Preview only available for image and audio files")
 
 
 @file_router.get("/{file_id}/images/{image_index}/preview")
@@ -470,7 +557,7 @@ async def preview_embedded_image(
     file_id: str,
     image_index: int,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user_query_or_header),
+    current_user: User = Depends(get_current_user_query_or_header),
 ):
     from fastapi.responses import FileResponse
     from models.block import Block
@@ -481,7 +568,7 @@ async def preview_embedded_image(
     if image_index < 0:
         raise HTTPException(status_code=400, detail="Invalid image index")
 
-    db_file = await _get_file_or_404(db, file_id)
+    db_file = await _get_file_or_404(db, file_id, current_user)
     image_dir = Path(db_file.file_path).parent / "images" / file_id
     if not image_dir.is_dir():
         raise HTTPException(status_code=404, detail="Images not found")

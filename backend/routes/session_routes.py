@@ -318,6 +318,14 @@ def _process_messages_citations(messages: list) -> list:
                         ref_item["source"] = event.get("source", "")
                         ref_item["published_date"] = event.get("published_date", "")
                         ref_item["favicon"] = event.get("favicon", "")
+                    elif citation_type == "audio":
+                        ref_item["citation_type"] = "audio"
+                        ref_item["file_name"] = event.get("file_name", "")
+                        ref_item["segment_id"] = event.get("segment_id", "")
+                        ref_item["summary"] = event.get("summary", "")
+                        ref_item["time_start"] = event.get("time_start")
+                        ref_item["time_end"] = event.get("time_end")
+                        ref_item["time_range"] = event.get("time_range", "")
                     else:
                         ref_item["file_name"] = event.get("file_name", "")
                         ref_item["segment_id"] = event.get("segment_id", "")

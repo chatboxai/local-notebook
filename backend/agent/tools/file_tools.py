@@ -14,7 +14,7 @@ from agent.tools.query_knowledge_base import CitationState
 logger = logging.getLogger("tool.file_tools")
 
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "bmp"}
-AUDIO_EXTENSIONS = {"wav", "mp3", "m4a", "wma"}
+AUDIO_EXTENSIONS = {"wav", "mp3", "m4a"}
 
 
 def _get_db_path() -> str:

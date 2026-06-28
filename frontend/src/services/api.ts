@@ -409,6 +409,18 @@ export interface SegmentCitationRef {
 }
 
 
+export interface AudioCitationRef {
+  type: 'audio'
+  display_num: number
+  file_name: string
+  segment_id: string
+  summary: string
+  time_start?: number
+  time_end?: number
+  time_range?: string
+}
+
+
 export interface ImageCitationRef {
   type: 'image'
   display_num: number
@@ -432,7 +444,7 @@ export interface WebCitationRef {
   favicon?: string
 }
 
-export type CitationRef = SegmentCitationRef | ImageCitationRef | WebCitationRef
+export type CitationRef = SegmentCitationRef | AudioCitationRef | ImageCitationRef | WebCitationRef
 
 
 export type AgentRole = 'default' | 'analysis'
@@ -546,6 +558,15 @@ export function chatStream(
                       image_index: data.image_index,
                       page: data.page
                     })
+                  } else if (data.citation_type === 'audio') {
+
+                    callbacks.onCitationRef?.({
+                      type: 'segment',
+                      display_num: data.display_num,
+                      file_name: data.file_name,
+                      segment_id: data.segment_id,
+                      summary: data.summary
+                    })
                   } else {
 
                     callbacks.onCitationRef?.({
@@ -584,6 +605,14 @@ export function chatStream(
                       image_name: data.image_name,
                       image_index: data.image_index,
                       page: data.page
+                    })
+                  } else if (data.citation_type === 'audio') {
+                    callbacks.onReasoningCitationRef?.({
+                      type: 'segment',
+                      display_num: data.display_num,
+                      file_name: data.file_name,
+                      segment_id: data.segment_id,
+                      summary: data.summary
                     })
                   } else {
                     callbacks.onReasoningCitationRef?.({
@@ -746,6 +775,14 @@ export function editMessageAndRegenerate(
                       image_index: data.image_index,
                       page: data.page
                     })
+                  } else if (data.citation_type === 'audio') {
+                    callbacks.onCitationRef?.({
+                      type: 'segment',
+                      display_num: data.display_num,
+                      file_name: data.file_name,
+                      segment_id: data.segment_id,
+                      summary: data.summary
+                    })
                   } else {
                     callbacks.onCitationRef?.({
                       type: 'segment',
@@ -783,6 +820,14 @@ export function editMessageAndRegenerate(
                       image_name: data.image_name,
                       image_index: data.image_index,
                       page: data.page
+                    })
+                  } else if (data.citation_type === 'audio') {
+                    callbacks.onReasoningCitationRef?.({
+                      type: 'segment',
+                      display_num: data.display_num,
+                      file_name: data.file_name,
+                      segment_id: data.segment_id,
+                      summary: data.summary
                     })
                   } else {
                     callbacks.onReasoningCitationRef?.({
@@ -947,6 +992,12 @@ export interface ImageInfo {
 
 
 export function getImagePreviewUrl(fileId: string): string {
+  const token = getToken()
+  const query = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${API_BASE}/api/files/${fileId}/preview${query}`
+}
+
+export function getAudioPreviewUrl(fileId: string): string {
   const token = getToken()
   const query = token ? `?token=${encodeURIComponent(token)}` : ''
   return `${API_BASE}/api/files/${fileId}/preview${query}`
@@ -1280,7 +1331,10 @@ export interface FeatureEditCitationRef {
   file_name?: string
   segment_id?: string
   summary?: string
-  citation_type?: 'image' | 'web'
+  citation_type?: 'audio' | 'image' | 'web'
+  time_start?: number
+  time_end?: number
+  time_range?: string
 
   file_id?: string
 
@@ -1431,6 +1485,11 @@ export interface WorkflowCitation {
   start_page?: number
   content?: string
   type?: 'image' | 'pdf_image' | 'web' | 'segment'
+  media_type?: 'audio'
+  citation_type?: 'audio'
+  time_start?: number
+  time_end?: number
+  time_range?: string
   image_name?: string
   image_index?: number
   page?: number
@@ -1844,6 +1903,7 @@ export interface SettingsMap {
   mineru_base_url?: string
   mineru_api_key?: string
   funasr_base_url?: string
+  funasr_verified?: string
   bocha_api_key?: string
   [key: string]: string | undefined
 }

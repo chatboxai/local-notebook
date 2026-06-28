@@ -44,13 +44,24 @@ python server.py
 ## FunASR 服务
 
 ```bash
-cd services/funasr
-pip install -r requirements.txt
+# 1) 先安装系统音频解码工具。mp3/m4a 等格式转写会用到 ffmpeg。
+# macOS:
+brew install ffmpeg
+# Ubuntu/Debian:
+# sudo apt install ffmpeg
 
+# 2) 安装 Python 依赖。
+cd services/funasr
+python -m pip install -U pip setuptools wheel
+python -m pip install torch torchaudio
+python -m pip install -r requirements.txt
+
+# 3) 启动服务。
 python server.py
 ```
 
 首次启动会自动下载模型（paraformer-zh + VAD + 说话人分离）。
+如果转写时报 `[Errno 2] No such file or directory: 'ffmpeg'`，说明系统没有安装 `ffmpeg`，按上面的系统命令安装后重启服务即可。
 
 接口：`POST http://localhost:8003/transcribe`（multipart/form-data，field=file）
 

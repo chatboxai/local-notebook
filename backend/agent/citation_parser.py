@@ -175,6 +175,8 @@ class CitationParser:
                     "file_name": event.get("file_name", ""),
                     "segment_id": event.get("segment_id", ""),
                     "summary": event.get("summary", ""),
+                    "citation_type": event.get("citation_type"),
+                    "time_range": event.get("time_range"),
                 })
 
         return {

@@ -378,6 +378,30 @@ async def test_mineru(
             return {"ok": False, "msg": str(exc)}
 
 
+class FunASRTestRequest(BaseModel):
+    base_url: str | None = None
+
+
+@router.post("/test/funasr")
+async def test_funasr(
+    body: FunASRTestRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_admin),
+) -> dict:
+    from services.funasr_client import FunASRClient
+
+    _, default_url = await config.resolve_funasr_config()
+    base_url = (body.base_url or default_url or "").strip().rstrip("/")
+    if not base_url:
+        return {"ok": False, "msg": "未配置服务地址"}
+
+    ok, msg = await FunASRClient(base_url).health_check()
+    await _mark_verified("funasr_verified", ok, db)
+    if ok:
+        return {"ok": True, "msg": f"{msg} ({base_url})", "verified": True}
+    return {"ok": False, "msg": msg}
+
+
 @router.post("/test/embedding")
 async def test_embedding(
     body: EmbeddingTestRequest,
