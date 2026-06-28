@@ -33,6 +33,13 @@ FastAPI service that exposes REST + SSE APIs and runs an embedded ARQ background
 | `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data` injected by docker-compose | Data directory in Docker mode |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN, replaceable with PostgreSQL |
 | `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC endpoint |
+| `MILVUS_TEXT_COLLECTION` | `local_notebook_text_segments_v1` | Shared Milvus collection for text segment vectors |
+| `MILVUS_IMAGE_COLLECTION` | `local_notebook_image_segments_v1` | Shared Milvus collection for image description vectors |
+| `MILVUS_INDEX_TYPE` | `IVF_PQ` | Vector index type for new Milvus collections |
+| `MILVUS_IVF_NLIST` | `128` | IVF cluster count |
+| `MILVUS_IVF_NPROBE` | `32` | Search probe count |
+| `MILVUS_PQ_M` | `128` | IVF_PQ sub-vector count; must divide the embedding dimension |
+| `MILVUS_PQ_NBITS` | `8` | IVF_PQ bits per sub-vector code |
 | `UPLOAD_DIR` | `./uploads` | Uploaded file directory |
 | `REDIS_URL` | `redis://localhost:6379` | Required by the ARQ worker |
 | `SECRET_KEY` | `change-me-in-production` | JWT signing secret, must be changed in production |
@@ -55,12 +62,13 @@ cd backend
 pip install -r requirements.txt
 
 # 3. Configure environment variables
+export LOCAL_NOTEBOOK_DATA_DIR="$(cd .. && pwd)/local-notebook-data"
 export REDIS_URL=redis://localhost:6379
 export MILVUS_URI=http://localhost:19530
-export DATABASE_URL=sqlite+aiosqlite:///./local-notebook-data/local_notebook.db
-export UPLOAD_DIR=./local-notebook-data/uploads
+export DATABASE_URL=sqlite+aiosqlite:///${LOCAL_NOTEBOOK_DATA_DIR}/local_notebook.db
+export UPLOAD_DIR=${LOCAL_NOTEBOOK_DATA_DIR}/uploads
 export SECRET_KEY=$(openssl rand -hex 32)
-mkdir -p ./local-notebook-data/uploads
+mkdir -p "${UPLOAD_DIR}"
 
 # 4. Run the backend
 python main.py     # default: http://localhost:8000
@@ -83,5 +91,5 @@ curl http://localhost:8000/health/redis
 ## Data Flow
 
 1. **File upload** -> `routes/file_routes.py` writes to `UPLOAD_DIR` -> job is queued in ARQ.
-2. **Background parsing** -> `workers/parsers/` calls MinerU for PDFs or FunASR for audio -> chunks with `segment_service` -> vectorizes with `embedding_service` -> writes vectors with `vector_service`.
+2. **Background parsing** -> `workers/parsers/` calls MinerU for PDFs or FunASR for audio -> chunks with `segment_service` -> vectorizes with `embedding_service` -> writes vectors into shared Milvus collections with `vector_service`.
 3. **Chat** -> `routes/chat_routes.py` streams SSE -> `agent/chat_agent.py` reasons -> `agent/citation_parser.py` parses citations -> the frontend receives streamed output.

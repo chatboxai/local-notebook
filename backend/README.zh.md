@@ -33,6 +33,13 @@ FastAPI 主服务:对外提供 REST + SSE 接口,内置 ARQ 后台 worker 处理
 | `LOCAL_NOTEBOOK_DATA_DIR` | `./local-notebook-data`(由 docker-compose 注入) | Docker 模式下数据目录 |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./local_notebook.db` | SQLAlchemy DSN,可换 PostgreSQL |
 | `MILVUS_URI` | `http://localhost:19530` | Standalone Milvus gRPC 地址 |
+| `MILVUS_TEXT_COLLECTION` | `local_notebook_text_segments_v1` | 文本分片向量的共享 Milvus collection |
+| `MILVUS_IMAGE_COLLECTION` | `local_notebook_image_segments_v1` | 图片描述向量的共享 Milvus collection |
+| `MILVUS_INDEX_TYPE` | `IVF_PQ` | 新建 Milvus collection 使用的向量索引类型 |
+| `MILVUS_IVF_NLIST` | `128` | IVF 聚类数量 |
+| `MILVUS_IVF_NPROBE` | `32` | 查询时探测的 IVF 聚类数量 |
+| `MILVUS_PQ_M` | `128` | IVF_PQ 子向量数量,必须能整除 Embedding 维度 |
+| `MILVUS_PQ_NBITS` | `8` | IVF_PQ 每个子向量 code 的 bit 数 |
 | `UPLOAD_DIR` | `./uploads` | 上传文件目录 |
 | `REDIS_URL` | `redis://localhost:6379` | ARQ worker 必需 |
 | `SECRET_KEY` | `change-me-in-production` ⚠ | JWT 签名密钥,**生产必改** |
@@ -55,12 +62,13 @@ cd backend
 pip install -r requirements.txt
 
 # 3. 设置 env
+export LOCAL_NOTEBOOK_DATA_DIR="$(cd .. && pwd)/local-notebook-data"
 export REDIS_URL=redis://localhost:6379
 export MILVUS_URI=http://localhost:19530
-export DATABASE_URL=sqlite+aiosqlite:///./local-notebook-data/local_notebook.db
-export UPLOAD_DIR=./local-notebook-data/uploads
+export DATABASE_URL=sqlite+aiosqlite:///${LOCAL_NOTEBOOK_DATA_DIR}/local_notebook.db
+export UPLOAD_DIR=${LOCAL_NOTEBOOK_DATA_DIR}/uploads
 export SECRET_KEY=$(openssl rand -hex 32)
-mkdir -p ./local-notebook-data/uploads
+mkdir -p "${UPLOAD_DIR}"
 
 # 4. 跑 backend
 python main.py     # 默认 http://localhost:8000
@@ -81,5 +89,5 @@ curl http://localhost:8000/health/redis
 ## 数据流
 
 1. **文件上传** → `routes/file_routes.py` 写入 `UPLOAD_DIR` → 投递到 ARQ
-2. **后台解析** → `workers/parsers/` 调用 MinerU(PDF)/ FunASR(音频)→ 切块 (`segment_service`) → 向量化 (`embedding_service`) → 入库 (`vector_service`)
+2. **后台解析** → `workers/parsers/` 调用 MinerU(PDF)/ FunASR(音频)→ 切块 (`segment_service`) → 向量化 (`embedding_service`) → 写入共享 Milvus collection (`vector_service`)
 3. **对话** → `routes/chat_routes.py` (SSE) → `agent/chat_agent.py` 推理 → `agent/citation_parser.py` 解析引用 → 流式返回到前端
