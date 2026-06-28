@@ -135,353 +135,77 @@
           @trigger-file-upload="triggerFileUpload"
         />
 
-      <main class="chat-panel">
-        <div class="chat-header">
-
-          <div class="session-title-wrapper">
-            <input
-              v-if="isEditingSessionTitle"
-              ref="sessionTitleInputRef"
-              v-model="editingSessionTitleValue"
-              class="session-title-input"
-              @blur="handleSessionTitleBlur"
-              @keydown.enter="handleSessionTitleEnter"
-              @keydown.escape="cancelSessionTitleEdit"
-              @compositionstart="isSessionTitleComposing = true"
-              @compositionend="isSessionTitleComposing = false"
-            />
-            <span
-              v-else
-              class="chat-title"
-              @click="startSessionTitleEdit"
-              title="点击编辑会话标题"
-            >{{ currentSession?.title || '新对话' }}</span>
-          </div>
-
-          <div class="chat-header-actions">
-            <button
-              class="header-action-btn"
-              @click="handleCreateNewSession"
-              :disabled="isStreaming"
-              title="新建对话"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-              </svg>
-            </button>
-            <button
-              class="header-action-btn"
-              @click="showSessionHistory = true"
-              title="历史对话"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="chat-messages" ref="messagesRef" @scroll="handleMessagesScroll" @mouseover="handleWebCitationHover" @mouseout="handleWebCitationLeave" @click="handleChatAreaClick">
-          <div v-if="messages.length === 0" class="chat-empty">
-
-            <template v-if="hasReadyFiles">
-              <div class="greeting-message">{{ localizedGreeting }}</div>
-            </template>
-
-            <template v-else>
-              <div class="empty-upload-icon">
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                  <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
-                </svg>
-              </div>
-              <h3>添加来源即可开始使用</h3>
-              <button class="upload-btn" @click="triggerFileUpload">上传来源</button>
-            </template>
-          </div>
-
-          <template v-else>
-
-            <div v-if="isLoadingMoreMessages" class="loading-more-messages">
-              <span class="loading-spinner"></span>
-              <span>加载历史消息...</span>
-            </div>
-            <div v-else-if="hasMoreMessages && isMessagesScrollable" class="load-more-hint">
-              <span>向上滚动加载更多</span>
-            </div>
-
-            <div
-              v-for="(msg, index) in messages"
-              :key="msg.id"
-              class="message"
-              :class="[msg.role, {
-                'tool-only': isToolOnlyMessage(msg),
-                'selection-mode': isExportSelectionMode,
-                'conversation-selected': isExportSelectionMode && isMessageInSelectedConversation(index)
-              }]"
-              @click="isExportSelectionMode && toggleConversationSelection(index)"
-            >
-
-              <div v-if="isExportSelectionMode && msg.role === 'user'" class="message-selection-check">
-                <div class="custom-checkbox" :class="{ checked: selectedUserMessageIds.includes(msg.id) }">
-                  <svg v-if="selectedUserMessageIds.includes(msg.id)" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                  </svg>
-                </div>
-              </div>
-
-
-              <div v-if="msg.role === 'compact_divider'" class="compact-divider">
-                <span>── 更早的对话已压缩 ──</span>
-              </div>
-
-              <div v-else-if="msg.role === 'user'" class="user-message" :class="{ 'editing': editingMessageId === msg.id, 'selectable': isExportSelectionMode }">
-
-                <div v-if="editingMessageId === msg.id" class="user-message-edit">
-                  <textarea
-                    ref="editTextareaRef"
-                    v-model="editingContent"
-                    class="user-edit-textarea"
-                    @keydown.enter.exact.prevent="submitEditMessage(msg)"
-                    @keydown.escape="cancelEditMessage"
-                    @input="autoResizeEditTextarea"
-                  ></textarea>
-                  <div class="user-edit-actions">
-                    <button class="edit-cancel-btn" @click="cancelEditMessage">取消</button>
-                    <button class="edit-submit-btn" :disabled="!editingContent.trim() || isStreaming" @click="submitEditMessage(msg)">
-                      保存并重新生成
-                    </button>
-                  </div>
-                </div>
-
-                <template v-else>
-                  <span class="user-message-content">{{ msg.content }}</span>
-                  <div v-if="!isExportSelectionMode" class="user-action-btns">
-                    <button class="user-action-btn" :data-tooltip="isPreCompactMessage(index) ? '已压缩的消息不可编辑' : '编辑'" @click="startEditMessage(msg)" :disabled="isStreaming || isPreCompactMessage(index)">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                      </svg>
-                    </button>
-                    <button class="user-action-btn" data-tooltip="复制" @click="copyUserMessage(msg)">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </template>
-              </div>
-              <div v-else class="assistant-message">
-                <div
-                  class="assistant-content"
-                  :class="{ 'has-error': parseMessageContent(msg).hasError }"
-                >
-                  <div
-                    v-for="(segment, segIndex) in getRenderedMessage(msg)"
-                    :key="segIndex"
-                    class="assistant-segment"
-                    :class="`segment-${segment.type}`"
-                  >
-                    <div
-                      v-if="segment.type === 'body'"
-                      class="assistant-body markdown-body"
-                      v-html="segment.html"
-                    ></div>
-                    <div
-                      v-else
-                      v-html="segment.html"
-                    ></div>
-                  </div>
-                </div>
-
-                <div v-if="shouldShowMessageActions(index)" class="message-actions">
-                  <button class="action-btn" data-tooltip="复制纯文本" @click="copyMessageAsText(msg)">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                  </button>
-                  <button class="action-btn" data-tooltip="复制 Markdown" @click="copyMessageAsMarkdown(msg)">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 3v4a1 1 0 001 1h4"></path>
-                      <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
-                      <path d="M9 15l2-2 2 2"></path>
-                      <path d="M11 13v4"></path>
-                    </svg>
-                  </button>
-                  <button class="action-btn" disabled data-tooltip="喜欢（即将推出）">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-                    </svg>
-                  </button>
-                  <button class="action-btn" disabled data-tooltip="不喜欢（即将推出）">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path>
-                    </svg>
-                  </button>
-                  <button
-                    class="action-btn"
-                    :class="{ 'error-retry': parseMessageContent(msg).hasError }"
-                    :disabled="!isLastAssistantMessage(index) || isStreaming || isPreCompactMessage(index)"
-                    :data-tooltip="isPreCompactMessage(index) ? '已压缩的消息不可重新生成' : (parseMessageContent(msg).hasError ? '重新生成（上次出错）' : (isLastAssistantMessage(index) ? '重新生成' : '仅最后一条消息可重新生成'))"
-                    @click="regenerateMessage(index)"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 4v6h6"></path>
-                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                    </svg>
-                  </button>
-                  <button
-                    class="action-btn"
-                    data-tooltip="下载对话"
-                    :disabled="isStreaming"
-                    @click.stop="enterExportModeWithSelection(index)"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                  </button>
-                  <span class="actions-divider">|</span>
-                  <span class="agent-role-label">{{ msg.agent_role === 'analysis' ? '分析助手' : '小洛' }}</span>
-                  <span class="message-time">{{ formatMessageTime(msg.created_at) }}</span>
-                </div>
-              </div>
-            </div>
-
-
-            <div v-if="streamingParts.length > 0 || isStreaming" class="message assistant">
-              <div class="assistant-message">
-                <div class="assistant-content">
-                  <div
-                    v-for="(segment, segIndex) in streamingRendered"
-                    :key="segIndex"
-                    class="assistant-segment"
-                    :class="`segment-${segment.type}`"
-                  >
-                    <div
-                      v-if="segment.type === 'body'"
-                      class="assistant-body markdown-body"
-                      v-html="segment.html"
-                    ></div>
-                    <div
-                      v-else
-                      v-html="segment.html"
-                    ></div>
-                  </div>
-                </div>
-
-                <div v-if="isThinking" class="thinking-indicator">
-                  <svg class="thinking-spinner" viewBox="0 0 24 24" width="14" height="14">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
-                  </svg>
-                  <span>思考中...</span>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-
-        <transition name="fade">
-          <button
-            v-if="showScrollToBottom"
-            class="scroll-to-bottom-btn"
-            :style="{ bottom: scrollBtnBottom + (isExportSelectionMode ? 60 : 0) + 'px' }"
-            @click="forceScrollToBottom"
-            title="滚动到底部"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-              <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-            </svg>
-          </button>
-        </transition>
-
-
-        <transition name="slide-up">
-          <div v-if="isExportSelectionMode" class="selection-action-bar">
-            <div class="selection-info">
-              <button class="select-all-btn" @click="toggleSelectAllUserMessages">
-                {{ selectedUserMessageIds.length === messages.filter(m => m.role === 'user').length ? '取消全选' : '全选' }}
-              </button>
-              <span class="selected-count">已选中 {{ selectedUserMessageIds.length }} 项</span>
-            </div>
-            <div class="selection-actions">
-              <button class="selection-cancel-btn" @click="toggleExportSelectionMode">取消</button>
-              <button
-                class="selection-export-btn"
-                :disabled="selectedUserMessageIds.length === 0 || isExportingMessages"
-                @click="handleExportSelectedMessages"
-              >
-                {{ isExportingMessages ? '导出中...' : '导出为 Word' }}
-              </button>
-            </div>
-          </div>
-        </transition>
-
-
-        <div class="chat-input-wrapper" ref="inputWrapperRef" :class="{ 'disabled-by-selection': isExportSelectionMode }">
-          <div class="chat-input-box">
-            <div class="input-main-row">
-              <textarea
-                ref="textareaRef"
-                v-model="inputMessage"
-                :placeholder="hasReadyFiles ? '有什么想问的？' : '上传来源即可开始使用'"
-                :disabled="!currentSession || isStreaming || !hasReadyFiles"
-                @keydown.enter.exact.prevent="handleSendEnter"
-                @compositionstart="isComposing = true"
-                @compositionend="isComposing = false"
-                @input="autoResizeTextarea"
-                rows="1"
-              ></textarea>
-              <button
-                v-if="!isStreaming"
-                class="send-btn"
-                :disabled="!inputMessage.trim() || !currentSession || !hasReadyFiles"
-                @click="sendMessage"
-                title="发送"
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              </button>
-              <button
-                v-else
-                class="send-btn"
-                @click="stopStreaming"
-                title="暂停"
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
-                </svg>
-              </button>
-            </div>
-            <div class="input-options-row">
-              <label class="web-search-toggle" :class="{ active: enableWebSearch }">
-                <input type="checkbox" v-model="enableWebSearch" />
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>联网搜索</span>
-              </label>
-
-
-              <span class="source-count">{{ readyFiles.length }} 个来源</span>
-            </div>
-          </div>
-        </div>
-
-
-        <Transition name="copy-toast">
-          <div v-if="copyToastVisible" class="copy-toast">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-            </svg>
-            {{ copyToastMessage }}
-          </div>
-        </Transition>
-      </main>
+      <ChatPanel
+        ref="chatPanelRef"
+        :title="currentSession?.title || '新对话'"
+        :is-editing-title="isEditingSessionTitle"
+        :editing-title-value="editingSessionTitleValue"
+        :is-streaming="isStreaming"
+        :messages="messages"
+        :has-ready-files="hasReadyFiles"
+        :localized-greeting="localizedGreeting"
+        :is-loading-more-messages="isLoadingMoreMessages"
+        :has-more-messages="hasMoreMessages"
+        :is-messages-scrollable="isMessagesScrollable"
+        :is-export-selection-mode="isExportSelectionMode"
+        :selected-user-message-ids="selectedUserMessageIds"
+        :is-exporting-messages="isExportingMessages"
+        :editing-message-id="editingMessageId"
+        :editing-content="editingContent"
+        :streaming-parts-count="streamingParts.length"
+        :streaming-rendered="streamingRendered"
+        :is-thinking="isThinking"
+        :show-scroll-to-bottom="showScrollToBottom"
+        :scroll-btn-bottom="scrollBtnBottom"
+        :input-message="inputMessage"
+        :enable-web-search="enableWebSearch"
+        :source-count="readyFiles.length"
+        :has-current-session="Boolean(currentSession)"
+        :copy-toast-visible="copyToastVisible"
+        :copy-toast-message="copyToastMessage"
+        :is-tool-only-message="isToolOnlyMessage"
+        :is-message-in-selected-conversation="isMessageInSelectedConversation"
+        :is-pre-compact-message="isPreCompactMessage"
+        :parse-message-content="parseMessageContent"
+        :get-rendered-message="getRenderedMessage"
+        :should-show-message-actions="shouldShowMessageActions"
+        :is-last-assistant-message="isLastAssistantMessage"
+        :format-message-time="formatMessageTime"
+        @update:editing-title-value="editingSessionTitleValue = $event"
+        @start-title-edit="startSessionTitleEdit"
+        @save-title-edit="saveSessionTitle"
+        @cancel-title-edit="cancelSessionTitleEdit"
+        @create-session="handleCreateNewSession"
+        @open-history="showSessionHistory = true"
+        @messages-scroll="handleMessagesScroll"
+        @web-citation-hover="handleWebCitationHover"
+        @web-citation-leave="handleWebCitationLeave"
+        @chat-area-click="handleChatAreaClick"
+        @trigger-upload="triggerFileUpload"
+        @toggle-conversation-selection="toggleConversationSelection"
+        @update:editing-content="editingContent = $event"
+        @submit-edit-message="submitEditMessage"
+        @cancel-edit-message="cancelEditMessage"
+        @auto-resize-edit-textarea="autoResizeEditTextarea"
+        @start-edit-message="startEditMessage"
+        @copy-user-message="copyUserMessage"
+        @copy-message-as-text="copyMessageAsText"
+        @copy-message-as-markdown="copyMessageAsMarkdown"
+        @regenerate-message="regenerateMessage"
+        @enter-export-mode-with-selection="enterExportModeWithSelection"
+        @force-scroll-to-bottom="forceScrollToBottom"
+        @toggle-select-all-user-messages="toggleSelectAllUserMessages"
+        @toggle-export-selection-mode="toggleExportSelectionMode"
+        @export-selected-messages="handleExportSelectedMessages"
+        @update:input-message="inputMessage = $event"
+        @update:enable-web-search="enableWebSearch = $event"
+        @send-enter="handleSendEnter"
+        @composition-start="isComposing = true"
+        @composition-end="isComposing = false"
+        @auto-resize-textarea="autoResizeTextarea"
+        @send-message="sendMessage"
+        @stop-streaming="stopStreaming"
+      />
 
 
       <div
@@ -982,8 +706,6 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import 'katex/dist/katex.min.css'
-import { escapeHtml, renderMarkdownWithLatex } from '../utils'
-import { parseThinkingContent, renderThinkingBlock, ENABLE_THINK_PARSING } from '../utils/think'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import FeatureConfigModal from '../components/common/FeatureConfigModal.vue'
 import UploadSourceModal from '../components/common/UploadSourceModal.vue'
@@ -993,10 +715,13 @@ import ImageGenerationModal, { type ImageFile } from '../components/common/Image
 import VideoGenerationModal, { type VideoFile, type VideoGenerationMode, type VideoGenerationConfig } from '../components/common/VideoGenerationModal.vue'
 import FeatureDetailPanel from '../components/project/FeatureDetailPanel.vue'
 import WorkflowDetailPanel from '../components/project/WorkflowDetailPanel.vue'
+import ChatPanel from '../components/project/chat/ChatPanel.vue'
 import CollapsedSourceRail from '../components/project/source/CollapsedSourceRail.vue'
 import SourcePanel from '../components/project/source/SourcePanel.vue'
 import SessionHistoryPanel from '../components/SessionHistoryPanel.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
+import { useChatScroll } from '../composables/useChatScroll'
+import { useMessageRendering } from '../composables/useMessageRendering'
 import { usePanelResize } from '../composables/usePanelResize'
 import { useMessageExportSelection } from '../composables/useMessageExportSelection'
 import { clearTokens, getDisplayUsername, isAdmin } from '../services/auth'
@@ -1116,7 +841,6 @@ const totalMessages = ref(0)
 const messagesOffset = ref(0)
 const hasMoreMessages = ref(false)
 const isLoadingMoreMessages = ref(false)
-const isMessagesScrollable = ref(false)
 const MESSAGES_PAGE_SIZE = 50
 const isStreaming = ref(false)
 
@@ -1138,21 +862,6 @@ const {
   showToast,
 })
 
-
-function checkMessagesScrollable() {
-  nextTick(() => {
-    if (messagesRef.value) {
-      isMessagesScrollable.value = messagesRef.value.scrollHeight > messagesRef.value.clientHeight
-    }
-  })
-}
-
-
-watch(messages, () => {
-  checkMessagesScrollable()
-}, { flush: 'post' })
-
-
 const isEditingTitle = ref(false)
 const editingTitleValue = ref('')
 const titleInputRef = ref<HTMLInputElement | null>(null)
@@ -1162,8 +871,6 @@ const titleInputWidth = ref('120px')
 
 const isEditingSessionTitle = ref(false)
 const editingSessionTitleValue = ref('')
-const sessionTitleInputRef = ref<HTMLInputElement | null>(null)
-const isSessionTitleComposing = ref(false)
 
 
 const showSessionHistory = ref(false)
@@ -1256,7 +963,8 @@ const pendingEditSessionId = ref<string | null>(null)
 
 const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
-const editTextareaRef = ref<HTMLTextAreaElement[]>([])
+const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null)
+const editTextareaRef = computed<HTMLTextAreaElement[]>(() => chatPanelRef.value?.editTextareaElements ?? [])
 
 
 watch(enableWebSearch, (val) => {
@@ -1264,13 +972,44 @@ watch(enableWebSearch, (val) => {
 })
 
 
-const userExpandedThinkingBlocks = new Set<string>()
 const isComposing = ref(false)
 
-const messagesRef = ref<HTMLDivElement | null>(null)
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const inputWrapperRef = ref<HTMLDivElement | null>(null)
-const scrollBtnBottom = ref(100)
+const messagesRef = computed<HTMLDivElement | null>(() => chatPanelRef.value?.messagesElement ?? null)
+const textareaRef = computed<HTMLTextAreaElement | null>(() => chatPanelRef.value?.textareaElement ?? null)
+const inputWrapperRef = computed<HTMLDivElement | null>(() => chatPanelRef.value?.inputWrapperElement ?? null)
+
+const {
+  isMessagesScrollable,
+  isUserScrolling,
+  showScrollToBottom,
+  scrollBtnBottom,
+  autoResizeTextarea,
+  resetTextareaHeight,
+  scrollToBottom,
+  forceScrollToBottom,
+  handleMessagesScroll,
+} = useChatScroll({
+  messages,
+  streamingParts,
+  messagesRef,
+  textareaRef,
+  inputWrapperRef,
+  hasMoreMessages,
+  isLoadingMoreMessages,
+  loadOlderMessages,
+})
+
+const {
+  streamingRendered,
+  getRenderedMessage,
+  getMessageTextContent,
+  isToolOnlyMessage,
+  parseMessageContent,
+  handleThinkingToggleClick,
+} = useMessageRendering({
+  messages,
+  streamingParts,
+})
 
 
 const webCitationTooltip = reactive({
@@ -1859,10 +1598,6 @@ const previewSummary = computed(() => {
 })
 
 
-const isUserScrolling = ref(false)
-const showScrollToBottom = ref(false)
-
-
 const clickedCitationElement = ref<HTMLElement | null>(null)
 const clickedCitationTop = ref<number>(0)
 
@@ -2045,12 +1780,6 @@ onMounted(async () => {
 
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  nextTick(() => updateScrollBtnPosition())
-
-  window.addEventListener('resize', checkMessagesScrollable)
-
-  checkMessagesScrollable()
-
   startWorkflowElapsedTimer()
 })
 
@@ -2059,7 +1788,6 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleCitationClickEvent)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-  window.removeEventListener('resize', checkMessagesScrollable)
 
   stopFilePolling()
   stopFeaturePolling()
@@ -2067,53 +1795,11 @@ onUnmounted(() => {
   stopWorkflowElapsedTimer()
 })
 
-function localizedThinkingLabel() {
-  return escapeHtml(translateText('思考过程'))
-}
-
-function renderThinkingToggleContent(isExpanded: boolean) {
-  const iconPath = isExpanded
-    ? 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'
-    : 'M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z'
-
-  return `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="${iconPath}"/></svg><span>${localizedThinkingLabel()}</span>`
-}
-
-
 async function handleCitationClickEvent(event: MouseEvent) {
   const target = event.target as HTMLElement
 
-
-  const thinkingToggle = target.closest('[data-thinking-toggle]') as HTMLElement | null
-  if (thinkingToggle) {
-    const thinkingBlock = thinkingToggle.closest('.thinking-block') as HTMLElement | null
-    if (thinkingBlock) {
-      const isExpanded = thinkingBlock.classList.contains('expanded')
-      const blockId = thinkingBlock.dataset.thinkingId || ''
-
-      if (isExpanded) {
-
-        thinkingBlock.classList.remove('expanded')
-        thinkingBlock.classList.add('collapsed')
-
-        thinkingToggle.innerHTML = renderThinkingToggleContent(false)
-
-        if (blockId) {
-          userExpandedThinkingBlocks.delete(blockId)
-        }
-      } else {
-
-        thinkingBlock.classList.remove('collapsed')
-        thinkingBlock.classList.add('expanded')
-
-        thinkingToggle.innerHTML = renderThinkingToggleContent(true)
-
-        if (blockId) {
-          userExpandedThinkingBlocks.add(blockId)
-        }
-      }
-      return
-    }
+  if (handleThinkingToggleClick(target)) {
+    return
   }
 
 
@@ -2281,18 +1967,6 @@ function stopPositionTracking() {
   clickedCitationElement.value = null
   clickedCitationTop.value = 0
 }
-
-watch(messages, () => {
-  nextTick(() => {
-    scrollToBottom()
-  })
-})
-
-watch(streamingParts, () => {
-  nextTick(() => {
-    scrollToBottom()
-  })
-}, { deep: true })
 
 async function loadProject() {
   try {
@@ -3227,40 +2901,6 @@ function handleKeywordClick(keyword: string) {
 }
 
 
-function autoResizeTextarea() {
-  const textarea = textareaRef.value
-  if (!textarea) return
-
-
-  textarea.style.height = 'auto'
-
-
-  const maxHeight = 150
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight)
-  textarea.style.height = newHeight + 'px'
-
-
-  updateScrollBtnPosition()
-}
-
-function updateScrollBtnPosition() {
-  const wrapper = inputWrapperRef.value
-  if (wrapper) {
-    scrollBtnBottom.value = wrapper.offsetHeight + 20
-  }
-}
-
-
-function resetTextareaHeight() {
-  const textarea = textareaRef.value
-  if (textarea) {
-    textarea.style.height = 'auto'
-  }
-
-  nextTick(() => updateScrollBtnPosition())
-}
-
-
 function handleSendEnter() {
   if (isComposing.value) return
   sendMessage()
@@ -3694,296 +3334,6 @@ async function sendMessage() {
 }
 
 
-function processUnresolvedCitations(text: string): string {
-  const unresolvedHtml = (displayNum: string) =>
-    `<span class="inline-citation segment-citation disabled unresolved" data-citation-type="segment">${displayNum}</span>`
-
-
-  let processed = text.replace(/\[citation:([^\]]+)\]/gi, (_match, value) => {
-    const trimmed = String(value || '').trim()
-    const displayNum = /^\d+$/.test(trimmed) ? trimmed : 'x'
-    return unresolvedHtml(displayNum)
-  })
-
-
-  processed = processed.replace(/\bcitation_([a-z0-9]+)\b/gi, (_match, value) => {
-    const trimmed = String(value || '').trim()
-    const displayNum = /^\d+$/.test(trimmed) ? trimmed : 'x'
-    return unresolvedHtml(displayNum)
-  })
-
-  return processed
-}
-
-type RenderedSegmentType = 'thinking' | 'tool' | 'body'
-type RenderedSegment = { type: RenderedSegmentType; html: string }
-
-
-interface ReasoningExpandState {
-  shouldExpand: boolean
-  isStreaming: boolean
-}
-
-
-function analyzeReasoningExpandStates(
-  parts: ContentPart[],
-  isStreamingMode: boolean,
-  messageId: string
-): Map<number, ReasoningExpandState> {
-  const states = new Map<number, ReasoningExpandState>()
-  if (!parts || parts.length === 0) return states
-
-  let reasoningBlockIndex = 0
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]
-    if (!part || part.type !== 'reasoning') continue
-
-    const blockId = messageId ? `${messageId}_reasoning_${reasoningBlockIndex++}` : ''
-
-
-    const userExpanded = blockId && userExpandedThinkingBlocks.has(blockId)
-
-
-    let hasContentAfter = false
-    for (let j = i + 1; j < parts.length; j++) {
-      const nextPart = parts[j]
-      if (!nextPart) continue
-
-      if (nextPart.type === 'text') {
-        const text = 'content' in nextPart && typeof (nextPart as any).content === 'string' ? (nextPart as any).content : ''
-
-        const parsed = parseThinkingContent(text)
-        if (parsed.content && parsed.content.trim() !== '') {
-          hasContentAfter = true
-          break
-        }
-      } else if (nextPart.type === 'citation_ref') {
-
-        hasContentAfter = true
-        break
-      }
-
-    }
-
-
-    const autoExpand = isStreamingMode && !hasContentAfter
-    const shouldExpand = userExpanded || autoExpand
-
-
-    const isStreaming = isStreamingMode && !hasContentAfter
-
-    states.set(i, {
-      shouldExpand,
-      isStreaming
-    })
-  }
-
-  return states
-}
-
-
-function renderContentParts(parts: ContentPart[], isStreamingMode: boolean = false, messageId: string = ''): RenderedSegment[] {
-  if (!parts || parts.length === 0) return []
-
-
-  const segments: RenderedSegment[] = []
-  let currentText = ''
-  let thinkingBlockIndex = 0
-
-
-  const reasoningExpandStates = analyzeReasoningExpandStates(parts, isStreamingMode, messageId)
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]
-    if (!part) continue
-
-    if (part.type === 'text') {
-      const content = 'content' in part && typeof (part as any).content === 'string' ? (part as any).content : ''
-      if (content.trim() === '') {
-        if (content.includes('\n')) {
-          continue
-        }
-        if (currentText && !currentText.endsWith(' ')) {
-          currentText += ' '
-        }
-        continue
-      }
-      currentText += content
-    } else if (part.type === 'reasoning') {
-
-
-      if (currentText) {
-        renderTextWithThinking(currentText, isStreamingMode)
-        currentText = ''
-      }
-
-      const reasoningContent = 'content' in part && typeof (part as any).content === 'string' ? (part as any).content : ''
-      if (reasoningContent) {
-        const blockId = messageId ? `${messageId}_reasoning_${thinkingBlockIndex++}` : ''
-
-        const expandState = reasoningExpandStates.get(i)
-        const shouldExpand = expandState?.shouldExpand ?? isStreamingMode
-        const isStreaming = expandState?.isStreaming ?? isStreamingMode
-
-        segments.push({
-          type: 'thinking',
-          html: renderThinkingBlock(reasoningContent, shouldExpand, isStreaming, blockId, localizedThinkingLabel())
-        })
-      }
-    } else if (part.type === 'citation_ref') {
-
-      const partAny = part as any
-
-      if (partAny.citation_type === 'web') {
-
-        const title = partAny.title || ''
-        const url = partAny.url || ''
-        const snippet = partAny.snippet || ''
-        const source = partAny.source || ''
-        const publishedDate = partAny.published_date || ''
-        const favicon = partAny.favicon || ''
-
-        const iconHtml = favicon
-          ? `<img class="web-favicon" src="${escapeHtml(favicon)}" width="12" height="12" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" /><svg class="web-icon" style="display:none" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`
-          : `<svg class="web-icon" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`
-        currentText += `<span class="inline-citation web-citation" data-citation-type="web" data-display-num="${partAny.display_num}" data-title="${escapeHtml(title)}" data-url="${escapeHtml(url)}" data-snippet="${escapeHtml(snippet)}" data-source="${escapeHtml(source)}" data-date="${escapeHtml(publishedDate)}" data-favicon="${escapeHtml(favicon)}">${partAny.display_num}${iconHtml}</span>`
-      } else if (partAny.citation_type === 'image') {
-
-        const fileId = partAny.file_id || ''
-        const fileName = partAny.file_name || ''
-        const imageName = partAny.image_name || ''
-        const imageIndex = partAny.image_index ?? ''
-        const page = partAny.page ?? ''
-        currentText += `<span class="inline-citation image-citation" data-citation-type="image" data-display-num="${partAny.display_num}" data-file-id="${escapeHtml(fileId)}" data-file="${escapeHtml(fileName)}" data-image-name="${escapeHtml(imageName)}" data-image-index="${imageIndex}" data-page="${page}">${partAny.display_num}</span>`
-      } else if (partAny.citation_type === 'audio') {
-
-        const segmentId = partAny.segment_id || ''
-        const disabledClass = segmentId ? '' : ' disabled'
-        currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}">${partAny.display_num}</span>`
-      } else {
-
-
-        const segmentId = partAny.segment_id || ''
-        const disabledClass = segmentId ? '' : ' disabled'
-        currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}">${partAny.display_num}</span>`
-      }
-    } else if (part.type === 'tool_status') {
-
-      if (currentText) {
-        renderTextWithThinking(currentText, isStreamingMode)
-        currentText = ''
-      }
-
-      segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(translateText(part.display))}</div>` })
-    }
-  }
-
-
-  if (currentText) {
-    renderTextWithThinking(currentText, isStreamingMode)
-  }
-
-
-  function renderTextWithThinking(text: string, isStreamingMode: boolean) {
-    if (ENABLE_THINK_PARSING) {
-      const { thinking, content, isThinkingComplete } = parseThinkingContent(text)
-
-
-      if (thinking) {
-
-        const blockId = messageId ? `${messageId}_think_${thinkingBlockIndex++}` : ''
-
-
-        const userExpanded = blockId && userExpandedThinkingBlocks.has(blockId)
-        const autoExpand = isStreamingMode && !content && !isThinkingComplete
-        const shouldExpand = userExpanded || autoExpand
-
-        segments.push({ type: 'thinking', html: renderThinkingBlock(thinking, shouldExpand, isStreamingMode && !isThinkingComplete, blockId, localizedThinkingLabel()) })
-      }
-
-
-      if (content) {
-        segments.push({ type: 'body', html: renderMarkdownWithLatex(processUnresolvedCitations(content)) })
-      }
-    } else {
-      segments.push({ type: 'body', html: renderMarkdownWithLatex(processUnresolvedCitations(text)) })
-    }
-  }
-
-  return segments
-}
-
-
-function renderMessageWithError(msg: Message): RenderedSegment[] {
-  const parsed = parseMessageContent(msg)
-
-  if (!parsed.hasError) {
-
-    return renderContentParts(getMessageParts(msg), false, msg.id)
-  }
-
-
-  const segments: RenderedSegment[] = []
-  const appendBodyHtml = (html: string) => {
-    if (!html) return
-    const last = segments[segments.length - 1]
-    if (last && last.type === 'body') {
-      last.html += html
-    } else {
-      segments.push({ type: 'body', html })
-    }
-  }
-
-
-  if (parsed.mainContent) {
-    if (parsed.hasPartial) {
-
-      const parts = getMessageParts(msg)
-      segments.push(...renderContentParts(parts, false, msg.id))
-    } else {
-
-      appendBodyHtml(`<div class="error-placeholder">${escapeHtml(parsed.mainContent)}</div>`)
-    }
-  }
-
-
-  if (parsed.systemHint) {
-    const icon = parsed.hasPartial ? '⚠️' : '❌'
-    appendBodyHtml(`
-      <div class="system-hint ${parsed.hasPartial ? 'warning' : 'error'}">
-        <span class="hint-icon">${icon}</span>
-        <span class="hint-text">${escapeHtml(parsed.systemHint)}</span>
-      </div>
-    `)
-  }
-
-  return segments
-}
-
-
-const streamingRendered = computed(() => {
-  return renderContentParts(streamingParts.value, true, 'streaming')
-})
-
-const renderedMessages = computed<Record<string, RenderedSegment[]>>(() => {
-  const map: Record<string, RenderedSegment[]> = {}
-  for (const msg of messages.value) {
-    if (msg.role === 'assistant' && msg.id) {
-      map[msg.id] = renderMessageWithError(msg)
-    }
-  }
-  return map
-})
-
-const emptyRenderedMessage: RenderedSegment[] = []
-
-function getRenderedMessage(msg: Message): RenderedSegment[] {
-  if (!msg.id) return emptyRenderedMessage
-  return renderedMessages.value[msg.id] || emptyRenderedMessage
-}
-
-
 const copyToastVisible = ref(false)
 const copyToastMessage = ref('')
 let copyToastTimer: ReturnType<typeof setTimeout> | null = null
@@ -3995,30 +3345,6 @@ function showCopyToast(message: string) {
   copyToastTimer = setTimeout(() => {
     copyToastVisible.value = false
   }, 2000)
-}
-
-
-function getMessageTextContent(msg: Message): string {
-  const parts = getMessageParts(msg)
-  let text = ''
-
-  for (const part of parts) {
-    if (part.type === 'text') {
-      text += part.content
-    }
-
-  }
-
-
-  const parsed = parseThinkingContent(text)
-  text = parsed.content
-
-
-  text = text.replace(/\[\[?\d+\]?\]/g, '')
-
-  text = text.replace(/  +/g, ' ').trim()
-
-  return text
 }
 
 
@@ -4357,100 +3683,6 @@ async function submitEditMessage(msg: Message) {
   )
 }
 
-function getMessageParts(msg: Message): ContentPart[] {
-  const parts: ContentPart[] = []
-
-  if (msg.reasoning_content && msg.reasoning_content.trim()) {
-    parts.push({ type: 'reasoning', content: msg.reasoning_content })
-  }
-
-  if (msg.content_parts && msg.content_parts.length > 0) {
-    parts.push(...msg.content_parts)
-  } else if (msg.content) {
-    parts.push({ type: 'text', content: msg.content })
-  }
-
-  const hasToolStatusInParts = parts.some(p => p.type === 'tool_status')
-
-  if (!hasToolStatusInParts && msg.tool_executing && msg.tool_executing.length > 0) {
-    for (const tool of msg.tool_executing) {
-      parts.push({ type: 'tool_status', display: tool.display })
-    }
-  }
-
-  return parts
-}
-
-function isToolOnlyMessage(msg: Message): boolean {
-  const parts = getMessageParts(msg)
-  if (!parts || parts.length === 0) return false
-
-  let hasToolStatus = false
-  for (const part of parts) {
-    if (part.type === 'tool_status') {
-      if (part.display && part.display.trim() !== '') {
-        hasToolStatus = true
-      }
-      continue
-    }
-    if (part.type === 'text') {
-      const text = part.content || ''
-      if (text.trim() !== '') {
-        const parsed = parseThinkingContent(text)
-        if (parsed.content && parsed.content.trim() !== '') {
-          return false
-        }
-      }
-      continue
-    }
-    return false
-  }
-
-  return hasToolStatus
-}
-
-function parseMessageContent(msg: Message): {
-  hasError: boolean
-  hasPartial: boolean
-  mainContent: string
-  systemHint: string | null
-} {
-  const hasError = !!msg._error || (msg.content && msg.content.includes('[系统提示：'))
-
-  if (!hasError) {
-    return {
-      hasError: false,
-      hasPartial: false,
-      mainContent: msg.content || '',
-      systemHint: null
-    }
-  }
-
-  const content = msg.content || ''
-  const systemHintMatch = content.match(/\[系统提示：([^\]]+)\]/)
-
-  if (systemHintMatch) {
-    const systemHint = systemHintMatch?.[1] ?? null
-    const mainContent = content.replace(/\[系统提示：[^\]]+\]/, '').trim()
-
-    const hasPartial = !mainContent.startsWith('⚠️')
-
-    return {
-      hasError: true,
-      hasPartial,
-      mainContent,
-      systemHint
-    }
-  }
-
-  return {
-    hasError: true,
-    hasPartial: !!msg.has_partial,
-    mainContent: content,
-    systemHint: null
-  }
-}
-
 function isLastAssistantMessage(index: number): boolean {
   for (let i = index + 1; i < messages.value.length; i++) {
     if (messages.value[i]?.role === 'assistant') {
@@ -4680,40 +3912,6 @@ async function regenerateMessage(assistantIndex: number) {
   )
 }
 
-function scrollToBottom() {
-  if (messagesRef.value && !isUserScrolling.value) {
-    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
-    showScrollToBottom.value = false
-  }
-}
-
-function forceScrollToBottom() {
-  if (messagesRef.value) {
-    isUserScrolling.value = false
-    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
-    showScrollToBottom.value = false
-  }
-}
-
-function handleMessagesScroll() {
-  if (!messagesRef.value) return
-
-  const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
-
-  if (distanceFromBottom > 100) {
-    isUserScrolling.value = true
-    showScrollToBottom.value = true
-  } else {
-    isUserScrolling.value = false
-    showScrollToBottom.value = false
-  }
-
-  if (scrollTop < 50 && hasMoreMessages.value && !isLoadingMoreMessages.value) {
-    loadOlderMessages()
-  }
-}
-
 function goBack() {
   router.push('/')
 }
@@ -4894,11 +4092,7 @@ async function handleSwitchSession(sessionId: string) {
     hasMoreMessages.value = messagesOffset.value < totalMessages.value
     streamingParts.value = []
     showSessionHistory.value = false
-    nextTick(() => {
-      if (messagesRef.value) {
-        messagesRef.value.scrollTop = messagesRef.value.scrollHeight
-      }
-    })
+    nextTick(() => forceScrollToBottom())
   } catch (error) {
     console.error('Failed to switch session:', error)
   }
@@ -4935,10 +4129,6 @@ function startSessionTitleEdit() {
   if (!currentSession.value) return
   editingSessionTitleValue.value = currentSession.value.title || ''
   isEditingSessionTitle.value = true
-  nextTick(() => {
-    sessionTitleInputRef.value?.focus()
-    sessionTitleInputRef.value?.select()
-  })
 }
 
 function cancelSessionTitleEdit() {
@@ -4971,19 +4161,6 @@ async function saveSessionTitle() {
     isEditingSessionTitle.value = false
   }
 }
-
-function handleSessionTitleBlur() {
-  if (!isSessionTitleComposing.value) {
-    saveSessionTitle()
-  }
-}
-
-function handleSessionTitleEnter() {
-  if (!isSessionTitleComposing.value) {
-    saveSessionTitle()
-  }
-}
-
 
 async function loadFeatures() {
 }
@@ -6635,965 +5812,6 @@ void [
 }
 
 
-.chat-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-white);
-  border-radius: 16px;
-  min-width: 400px;
-  position: relative;
-}
-
-.chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-}
-
-.session-title-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
-.chat-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-primary);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: background 0.15s;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-}
-
-.chat-title:hover {
-  background: var(--bg-hover);
-}
-
-.session-title-input {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-primary);
-  padding: 4px 8px;
-  border: 1px solid var(--primary-color);
-  border-radius: 6px;
-  outline: none;
-  background: var(--bg-white);
-  width: 280px;
-  max-width: 100%;
-}
-
-.chat-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.header-action-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.header-action-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--primary-color);
-}
-
-.header-action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-}
-
-.chat-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-
-.loading-more-messages,
-.load-more-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-.loading-more-messages .loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.load-more-hint {
-  opacity: 0.6;
-}
-
-.empty-upload-icon {
-  color: var(--text-tertiary);
-  margin-bottom: 16px;
-}
-
-.chat-empty h3 {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 16px;
-}
-
-.greeting-message {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: 1px;
-}
-
-.upload-btn {
-  padding: 10px 20px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
-.upload-btn:hover {
-  background: var(--bg-hover);
-}
-
-
-.message {
-  margin-bottom: 14px;
-  position: relative;
-  transition: all 0.2s;
-}
-
-.message.selection-mode {
-  padding-left: 40px;
-  cursor: pointer;
-}
-
-.message.selection-mode.user {
-  cursor: pointer;
-}
-
-
-.message.conversation-selected {
-  background-color: rgba(0, 127, 255, 0.06);
-  margin-left: -8px;
-  margin-right: -8px;
-  padding-left: 48px;
-  padding-right: 8px;
-}
-
-
-.message.conversation-selected.user {
-  border-radius: 12px 12px 0 0;
-  margin-bottom: 0;
-  padding-bottom: 12px;
-}
-
-
-.message.conversation-selected.assistant {
-  border-radius: 0 0 12px 12px;
-  margin-top: 0;
-  padding-top: 12px;
-}
-
-
-.message-selection-check {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 5;
-}
-
-.custom-checkbox {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-color);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-white);
-  color: #fff;
-  transition: all 0.2s;
-}
-
-.custom-checkbox.checked {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-}
-
-.user-message.selectable:hover {
-  background: var(--bg-hover);
-}
-
-.message.assistant + .message.assistant {
-  margin-top: 0;
-}
-
-.message.assistant.tool-only {
-  margin-bottom: 2px;
-}
-
-.message.assistant.tool-only + .message.assistant:not(.tool-only) {
-  margin-top: 8px;
-}
-
-.compact-divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 0;
-  color: var(--text-tertiary, #999);
-  font-size: 12px;
-
-  span {
-    background: var(--bg-secondary, #f5f5f5);
-    padding: 2px 12px;
-    border-radius: 10px;
-  }
-}
-
-.user-message {
-  position: relative;
-  max-width: 80%;
-  padding: 14px 20px;
-  background: var(--bg-main);
-  border-radius: 20px 20px 4px 20px;
-  color: var(--text-primary);
-  float: right;
-  clear: both;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
-  text-align: left;
-}
-
-.user-message-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-
-.user-action-btns {
-  position: absolute;
-  left: -60px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s;
-}
-
-.message.user:hover .user-action-btns {
-  opacity: 1;
-  visibility: visible;
-}
-
-.user-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.user-action-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-secondary);
-}
-
-.user-action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-
-.user-action-btn::before,
-.user-action-btn::after {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
-  pointer-events: none;
-}
-
-.user-action-btn::before {
-  content: attr(data-tooltip);
-  bottom: calc(100% + 6px);
-  padding: 4px 8px;
-  background: #1f2937;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.user-action-btn::after {
-  content: '';
-  bottom: calc(100% + 1px);
-  width: 8px;
-  height: 4px;
-  background: #1f2937;
-  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
-}
-
-.user-action-btn:hover::before,
-.user-action-btn:hover::after {
-  opacity: 1;
-  visibility: visible;
-}
-
-
-.user-message.editing {
-  width: 80%;
-  background: transparent;
-  padding: 0;
-}
-
-.user-message-edit {
-  width: 100%;
-}
-
-.user-edit-textarea {
-  display: block;
-  width: 100%;
-  padding: 8px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-white);
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  resize: none;
-  font-family: inherit;
-  box-sizing: border-box;
-  overflow-y: hidden;
-  min-height: 60px;
-  max-height: 300px;
-}
-
-.user-edit-textarea:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
-}
-
-.user-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.edit-cancel-btn {
-  padding: 6px 14px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.edit-cancel-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.edit-submit-btn {
-  padding: 6px 14px;
-  background: var(--primary-color);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.edit-submit-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.edit-submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.message.user {
-  text-align: right;
-}
-
-.message.user::after {
-  content: '';
-  display: table;
-  clear: both;
-}
-
-.assistant-message {
-  max-width: 80%;
-}
-
-
-.message-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
-}
-
-.message-actions .action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.message-actions .action-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.message-actions .action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.message-actions .actions-divider {
-  color: var(--border-color);
-  font-size: 12px;
-  margin: 0 4px;
-}
-
-.message-actions .agent-role-label {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.message-actions .message-time {
-  font-size: 12px;
-  color: #b0b0b0;
-  margin-left: 8px;
-}
-
-
-.message-actions .action-btn {
-  position: relative;
-}
-
-.message-actions .action-btn::before,
-.message-actions .action-btn::after {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
-  pointer-events: none;
-}
-
-.message-actions .action-btn::before {
-  content: attr(data-tooltip);
-  bottom: calc(100% + 6px);
-  padding: 6px 10px;
-  background: #1f2937;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  border-radius: 6px;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.message-actions .action-btn::after {
-  content: '';
-  bottom: calc(100% + 1px);
-  width: 10px;
-  height: 5px;
-  background: #1f2937;
-  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
-}
-
-.message-actions .action-btn:hover::before,
-.message-actions .action-btn:hover::after {
-  opacity: 1;
-  visibility: visible;
-}
-
-.assistant-content {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  letter-spacing: 0.02em;
-}
-
-
-.thinking-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-.thinking-spinner {
-  animation: spin 1s linear infinite;
-  color: var(--text-tertiary);
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-
-.assistant-content :deep(.thinking-block) {
-  margin-bottom: 2px;
-}
-
-.assistant-content :deep(.thinking-header) {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  user-select: none;
-}
-
-.assistant-content :deep(.thinking-header:hover) {
-  color: var(--text-secondary);
-}
-
-.assistant-content :deep(.thinking-header svg) {
-  flex-shrink: 0;
-}
-
-.assistant-content :deep(.thinking-content) {
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.2;
-  color: var(--text-tertiary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-
-.assistant-content :deep(.thinking-block.collapsed .thinking-content) {
-  display: none;
-}
-
-
-.assistant-content :deep(.thinking-block.expanded .thinking-content) {
-  display: block;
-}
-
-
-.assistant-content :deep(.thinking-citation) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  margin: 0 1px;
-  background: var(--primary-light, #e3f2fd);
-  color: var(--primary-color, #667eea);
-  border-radius: 7px;
-  font-size: 9px;
-  font-weight: 600;
-  vertical-align: baseline;
-  position: relative;
-  top: -1px;
-  cursor: default;
-}
-
-
-.assistant-content :deep(.thinking-streaming-dot) {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: var(--text-tertiary);
-  border-radius: 50%;
-  margin-left: 4px;
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-
-.assistant-content :deep(.inline-citation) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 2px;
-  margin: 0 2px;
-  background: var(--primary-light);
-  color: var(--primary-color);
-  border-radius: 9px;
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  vertical-align: middle;
-  transition: background 0.15s, color 0.15s, transform 0.15s;
-}
-
-.assistant-content :deep(.inline-citation:hover) {
-  background: var(--primary-color);
-  color: white;
-  transform: scale(1.15);
-}
-
-
-.assistant-content :deep(.inline-citation.active) {
-  background: var(--primary-color);
-  color: white;
-  transform: scale(1.15);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
-}
-
-
-.assistant-content :deep(.inline-citation.disabled) {
-  background: #e0e0e0;
-  color: #9e9e9e;
-  cursor: default;
-  position: relative;
-}
-
-.assistant-content :deep(.inline-citation.disabled:hover) {
-  background: #d0d0d0;
-  transform: none;
-}
-
-
-.assistant-content :deep(.inline-citation.disabled::after) {
-  content: '抱歉，暂时无法定位该引用来源';
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
-  padding: 8px 12px;
-  background: rgba(30, 30, 30, 0.9);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: nowrap;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-
-.assistant-content :deep(.inline-citation.disabled::before) {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
-  border: 6px solid transparent;
-  border-top-color: rgba(30, 30, 30, 0.9);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-.assistant-content :deep(.inline-citation.disabled:hover::after),
-.assistant-content :deep(.inline-citation.disabled:hover::before) {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) scale(1);
-}
-
-
-.chat-input-wrapper {
-  padding: 10px 14px;
-  position: relative;
-}
-
-.chat-input-wrapper.disabled-by-selection {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-
-.selection-action-bar {
-  position: absolute;
-  bottom: 80px;
-  left: 20px;
-  right: 20px;
-  padding: 12px 20px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-}
-
-.selection-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.select-all-btn {
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.select-all-btn:hover {
-  background: var(--bg-hover);
-}
-
-.selected-count {
-  font-size: 14px;
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.selection-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.selection-cancel-btn {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.selection-export-btn {
-  padding: 6px 16px;
-  background: var(--primary-color);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.selection-export-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.selection-export-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-
-.slide-up-enter-active, .slide-up-leave-active {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-.slide-up-enter-from, .slide-up-leave-to {
-  transform: translateY(20px);
-  opacity: 0;
-}
-
-.chat-input-box {
-  display: flex;
-  flex-direction: column;
-  padding: 10px 14px;
-  background: var(--bg-main);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  box-shadow: var(--shadow-sm);
-}
-
-.chat-input-box:focus-within {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--primary-light);
-}
-
-.input-main-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.input-main-row textarea {
-  flex: 1;
-  border: none;
-  outline: none;
-  resize: none;
-  font-size: 14px;
-  line-height: 1.5;
-  background: transparent;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.input-main-row textarea:focus {
-  box-shadow: none;
-}
-
-.input-options-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
-  margin-top: 8px;
-  border-top: 1px solid var(--border-light);
-}
-
-.source-count {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.send-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--primary-color);
-  color: white;
-  border-radius: 50%;
-}
-
-.send-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
-  transform: scale(1.05);
-}
-
-.send-btn:disabled {
-  background: var(--text-disabled);
-  border-radius: 50%;
-}
-
-
-.web-search-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.2s;
-  user-select: none;
-}
-
-.web-search-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.web-search-toggle.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.web-search-toggle input[type="checkbox"] {
-  display: none;
-}
-
-.web-search-toggle svg {
-  flex-shrink: 0;
-}
-
-
 .agent-role-toggle {
   display: inline-flex;
   align-items: center;
@@ -9087,324 +7305,6 @@ void [
 
 .spin {
   animation: spin 1s linear infinite;
-}
-
-
-.assistant-content :deep(.tool-status-item) {
-  padding: 0;
-  margin: 0;
-  color: var(--text-tertiary);
-  font-size: 13px;
-  line-height: 1.2;
-}
-
-.assistant-content :deep(.tool-status-item + .tool-status-item) {
-  margin-top: 2px;
-}
-
-
-.assistant-content :deep(.assistant-segment) {
-  margin: 0;
-}
-
-.assistant-content :deep(.assistant-segment.segment-thinking + .assistant-segment.segment-tool),
-.assistant-content :deep(.assistant-segment.segment-tool + .assistant-segment.segment-thinking),
-.assistant-content :deep(.assistant-segment.segment-tool + .assistant-segment.segment-tool) {
-  margin-top: 2px;
-}
-
-
-.markdown-body {
-  font-size: 15px;
-  line-height: 1.8;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
-}
-
-
-.markdown-body :deep(p) {
-  margin: 0.8em 0;
-}
-
-.markdown-body :deep(p:first-child) {
-  margin-top: 0;
-}
-
-.markdown-body :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-
-.assistant-content :deep(.assistant-segment.segment-thinking + .assistant-segment.segment-body),
-.assistant-content :deep(.assistant-segment.segment-tool + .assistant-segment.segment-body),
-.assistant-content :deep(.assistant-segment.segment-body + .assistant-segment.segment-thinking),
-.assistant-content :deep(.assistant-segment.segment-body + .assistant-segment.segment-tool) {
-  margin-top: 6px;
-}
-
-.markdown-body :deep(h1),
-.markdown-body :deep(h2),
-.markdown-body :deep(h3),
-.markdown-body :deep(h4) {
-  margin: 1.2em 0 0.6em;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.markdown-body :deep(h1) { font-size: 1.5em; }
-.markdown-body :deep(h2) { font-size: 1.3em; }
-.markdown-body :deep(h3) { font-size: 1.15em; }
-.markdown-body :deep(h4) { font-size: 1.05em; }
-
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-  margin: 0.8em 0;
-  padding-left: 1.8em;
-}
-
-.markdown-body :deep(li) {
-  margin: 0.4em 0;
-}
-
-.markdown-body :deep(code) {
-  padding: 2px 6px;
-  background: var(--bg-hover);
-  border-radius: 4px;
-  font-family: 'SF Mono', Consolas, monospace;
-  font-size: 0.9em;
-  color: #c53030;
-}
-
-.markdown-body :deep(pre) {
-  background: #1a202c;
-  padding: 16px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 1em 0;
-}
-
-.markdown-body :deep(pre code) {
-  padding: 0;
-  background: transparent;
-  color: #e2e8f0;
-}
-
-.markdown-body :deep(blockquote) {
-  margin: 1em 0;
-  padding: 12px 16px;
-  border-left: 4px solid var(--primary-color);
-  background: var(--bg-sidebar);
-  border-radius: 0 8px 8px 0;
-  color: var(--text-secondary);
-}
-
-.markdown-body :deep(hr) {
-  border: none;
-  height: 1px;
-  background: var(--border-color);
-  margin: 1.5em 0;
-}
-
-.markdown-body :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-}
-
-.markdown-body :deep(th),
-.markdown-body :deep(td) {
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  text-align: left;
-}
-
-.markdown-body :deep(th) {
-  background: var(--bg-sidebar);
-  font-weight: 600;
-}
-
-.markdown-body :deep(a) {
-  color: var(--primary-color);
-  text-decoration: none;
-}
-
-.markdown-body :deep(a:hover) {
-  text-decoration: underline;
-}
-
-
-.scroll-to-bottom-btn {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-white);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-  transition: all 0.2s;
-  z-index: 10;
-}
-
-.scroll-to-bottom-btn:hover {
-  background: var(--bg-hover);
-  color: var(--primary-color);
-  transform: translateX(-50%) scale(1.1);
-}
-
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-
-.assistant-content :deep(.inline-citation.image-citation) {
-  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-  border: 1px solid #81c784;
-}
-
-.assistant-content :deep(.inline-citation.image-citation:hover) {
-  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
-  border-color: #66bb6a;
-}
-
-.assistant-content :deep(.inline-citation.web-citation) {
-  width: auto;
-  min-width: 18px;
-  padding: 0 5px;
-  gap: 2px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-  border: 1px solid #64b5f6;
-  position: relative;
-}
-
-.assistant-content :deep(.inline-citation.web-citation .web-icon) {
-  flex-shrink: 0;
-  margin-left: 1px;
-}
-
-.assistant-content :deep(.inline-citation.web-citation .web-favicon) {
-  flex-shrink: 0;
-  margin-left: 2px;
-  border-radius: 2px;
-  vertical-align: middle;
-}
-
-.assistant-content :deep(.inline-citation.web-citation:hover) {
-  background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
-  border-color: #42a5f5;
-}
-
-
-.copy-toast {
-  position: absolute;
-  top: 10%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: rgba(240, 249, 240, 0.98);
-  backdrop-filter: blur(8px);
-  color: #2e7d32;
-  border: 1px solid rgba(76, 175, 80, 0.3);
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  pointer-events: none;
-}
-
-.copy-toast svg {
-  flex-shrink: 0;
-}
-
-
-.copy-toast-enter-active,
-.copy-toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.copy-toast-enter-from,
-.copy-toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.9);
-}
-
-
-.assistant-content.has-error {
-  border-left: 3px solid #f59e0b;
-  padding-left: 12px;
-}
-
-
-.assistant-content :deep(.error-placeholder) {
-  color: #dc2626;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-
-.assistant-content :deep(.system-hint) {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.5;
-}
-
-
-.assistant-content :deep(.system-hint.warning) {
-  background-color: #fef3c7;
-  border: 1px solid #fbbf24;
-  color: #92400e;
-}
-
-
-.assistant-content :deep(.system-hint.error) {
-  background-color: #fee2e2;
-  border: 1px solid #f87171;
-  color: #991b1b;
-}
-
-
-.assistant-content :deep(.system-hint .hint-icon) {
-  flex-shrink: 0;
-  font-size: 16px;
-  line-height: 1;
-}
-
-
-.assistant-content :deep(.system-hint .hint-text) {
-  flex: 1;
-}
-
-
-.action-btn.error-retry {
-  color: #f59e0b;
-}
-
-.action-btn.error-retry:hover:not(:disabled) {
-  background-color: #fef3c7;
-  color: #d97706;
 }
 
 
