@@ -63,7 +63,7 @@
           ref="sourcePanelRef"
           :collapsed="leftPanelCollapsed"
           :width="leftPanelWidth"
-          :show-preview="Boolean(isPreviewMode && (previewingFileContent || isPreviewingImage || isPdfFile))"
+          :show-preview="showSourcePreview"
           :files="files"
           :sorted-files="sortedFiles"
           :ready-files="readyFiles"
@@ -572,7 +572,7 @@
     <UploadSourceModal
       :visible="showUploadModal"
       :current-file-count="files.length"
-      :max-file-count="30"
+      :max-file-count="sourceMaxFileCount"
       :is-uploading="isUploading"
       @close="showUploadModal = false"
       @upload-files="handleUploadFiles"
@@ -668,33 +668,13 @@
     />
 
 
-    <Teleport to="body">
-      <div
-        v-if="copyPanelVisible && selectedPdfBlock && copyPanelPosition"
-        class="block-copy-panel-floating"
-        :style="{
-          top: copyPanelPosition.top + 'px',
-          left: copyPanelPosition.left + 'px'
-        }"
-      >
-        <div class="copy-panel-content">
-          <div class="copy-panel-text">{{ selectedPdfBlock.content }}</div>
-          <div class="copy-panel-actions">
-            <button class="copy-btn" @click.stop="copySelectedBlockText">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-              </svg>
-              复制文本
-            </button>
-            <button class="close-btn" @click.stop="clearSelectedBlock">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <SourceBlockCopyPanel
+      :visible="copyPanelVisible"
+      :block="selectedPdfBlock"
+      :position="copyPanelPosition"
+      @copy="copySelectedBlockText"
+      @close="clearSelectedBlock"
+    />
 
 
     <Toast :visible="toastVisible" :message="toastMessage" :type="toastType" />
@@ -717,6 +697,7 @@ import FeatureDetailPanel from '../components/project/FeatureDetailPanel.vue'
 import WorkflowDetailPanel from '../components/project/WorkflowDetailPanel.vue'
 import ChatPanel from '../components/project/chat/ChatPanel.vue'
 import CollapsedSourceRail from '../components/project/source/CollapsedSourceRail.vue'
+import SourceBlockCopyPanel from '../components/project/source/SourceBlockCopyPanel.vue'
 import SourcePanel from '../components/project/source/SourcePanel.vue'
 import SessionHistoryPanel from '../components/SessionHistoryPanel.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
@@ -727,12 +708,6 @@ import { useMessageExportSelection } from '../composables/useMessageExportSelect
 import { clearTokens, getDisplayUsername, isAdmin } from '../services/auth'
 import {
   getProject,
-  getFiles,
-  uploadFile,
-  deleteFile,
-  getFileContent,
-  getFilePageInfo,
-  getFilesStatusBatch,
   getSessions,
   createSession,
   getSession,
@@ -741,14 +716,8 @@ import {
   chatStream,
   editMessageAndRegenerate,
   type AgentRole,
-  getAudioPreviewUrl,
-  getBlocksLocation,
-  getFile,
   type CitationRef,
-  type FoundBlock,
-  type FilePageInfo,
   updateProject,
-  updateFile,
 
 
   generateFeature,
@@ -784,21 +753,19 @@ import {
   type FeatureEditCitationRef,
   type FeatureEditHistoryMessage,
 } from '../services/api'
-import type { Project, FileInfo, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, FileContent, Feature, FeatureCitationRefPart } from '../types'
+import type { Project, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, Feature, FeatureCitationRefPart } from '../types'
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
 import { getModelOutputLanguage, locale, translateText } from '../i18n'
 import { formatMessageTimestamp, formatRelativeTime } from '../utils/format'
 import {
-  checkFileSize,
   IMAGE_GENERATION_FILE_TYPES,
-  isAudioFile,
-  isImageFile,
-  MAX_FILE_COUNT,
   VIDEO_GENERATION_FILE_TYPES,
 } from './projectPage/fileHelpers'
 import { IMAGE_GENERATION_TYPES, TOOL_TYPES, VIDEO_GENERATION_TYPES } from './projectPage/toolTypes'
+import { useProjectSourceFiles } from './projectPage/useProjectSourceFiles'
+import { useSourcePreview } from './projectPage/useSourcePreview'
 import {
   buildWorkflowPrompt,
   formatWorkflowElapsed as formatWorkflowElapsedText,
@@ -827,14 +794,111 @@ function uiText(text: string): string {
 
 const route = useRoute()
 const router = useRouter()
+const projectId = route.params.id as string
 const displayUsername = computed(() => getDisplayUsername() || '用户')
 const canAdmin = computed(() => isAdmin())
 
 const project = ref<Project | null>(null)
-const files = ref<FileInfo[]>([])
 const sessions = ref<Session[]>([])
 const currentSession = ref<Session | null>(null)
 const messages = ref<Message[]>([])
+
+const leftPanelCollapsed = ref(false)
+const rightPanelCollapsed = ref(false)
+const leftPanelWidth = ref(400)
+const rightPanelWidth = ref(500)
+
+let handleDeletedSourceFile: ((fileId: string) => void) | null = null
+
+const {
+  files,
+  sortedFiles,
+  readyFiles,
+  hasReadyFiles,
+  selectedFileIds,
+  hoveringFileId,
+  openMenuFileId,
+  showUploadModal,
+  isUploading,
+  uploadingFiles,
+  isAllSelected,
+  maxFileCount: sourceMaxFileCount,
+  loadFiles,
+  toggleFileSelection,
+  toggleSelectAll,
+  triggerFileUpload,
+  handleUploadFiles,
+  handleInsertText,
+  stopFilePolling,
+  handleDeleteFile,
+  renameFile,
+  toggleFileMenu,
+  handleClickOutside,
+} = useProjectSourceFiles({
+  projectId,
+  showToast,
+  showConfirm,
+  onFileDeleted: (fileId) => handleDeletedSourceFile?.(fileId),
+})
+
+const {
+  sourcePanelRef,
+  isPreviewMode,
+  previewingFileContent,
+  previewingFileName,
+  previewingFile,
+  highlightBlockIds,
+  activeAudioBlockId,
+  isLoadingContent,
+  summaryExpanded,
+  isPdfFile,
+  supportsRawView,
+  viewMode,
+  pdfPageInfo,
+  currentPageNum,
+  jumpToPageInput,
+  selectedPdfBlock,
+  copyPanelVisible,
+  copyPanelPosition,
+  isRawViewMode,
+  parsedBlocksByPage,
+  visibleParsedPages,
+  currentTotalPages,
+  isPreviewingImage,
+  isPreviewingAudio,
+  audioPreviewUrl,
+  audioTranscriptGroups,
+  audioSpeakerCount,
+  previewSummary,
+  showSourcePreview,
+  previewMinWidth,
+  clearSourceHighlights,
+  clearSelectedBlock,
+  handlePdfPageChange,
+  handlePdfLoading,
+  handlePdfBlockClick,
+  handlePdfClearSelection,
+  copySelectedBlockText,
+  openFilePreview,
+  parseOptionalInt,
+  openImageCitationSource,
+  handleAudioPlay,
+  handleAudioTimeUpdate,
+  seekAudioToBlock,
+  switchViewMode,
+  closePreview,
+  jumpToPage,
+  handlePreviewScroll,
+  handleSourceFileDeleted,
+} = useSourcePreview({
+  files,
+  leftPanelWidth,
+  copyTextToClipboard,
+  showToast,
+})
+
+handleDeletedSourceFile = handleSourceFileDeleted
+void sourcePanelRef
 
 
 const totalMessages = ref(0)
@@ -876,22 +940,6 @@ const editingSessionTitleValue = ref('')
 const showSessionHistory = ref(false)
 
 
-const sortedFiles = computed(() => {
-  return [...files.value].sort((a, b) => {
-    const aIsImage = isImageFile(a)
-    const bIsImage = isImageFile(b)
-    if (aIsImage === bIsImage) return 0
-    return aIsImage ? 1 : -1
-  })
-})
-
-
-const readyFiles = computed(() => files.value.filter(f => f.status === 'ready'))
-
-
-const hasReadyFiles = computed(() => readyFiles.value.length > 0)
-
-
 const GREETINGS = [
   { zh: '小洛在此，您请讲', en: 'Xiaoluo is here. Go ahead.' },
   { zh: '今天想聊点什么呀？', en: 'What would you like to talk about today?' },
@@ -902,51 +950,6 @@ const randomGreeting = ref<(typeof GREETINGS)[number]>(
 )
 const localizedGreeting = computed(() => randomGreeting.value[locale.value])
 
-
-const selectedFileIds = ref<string[]>([])
-
-
-watch(readyFiles, (newReadyFiles, oldReadyFiles) => {
-  const oldIds = new Set((oldReadyFiles || []).map(f => f.id))
-  const currentSelected = new Set(selectedFileIds.value)
-
-
-  newReadyFiles.forEach(file => {
-    if (!oldIds.has(file.id)) {
-      currentSelected.add(file.id)
-    }
-  })
-
-
-  const newIds = new Set(newReadyFiles.map(f => f.id))
-  selectedFileIds.value = Array.from(currentSelected).filter(id => newIds.has(id))
-}, { immediate: true })
-
-function toggleFileSelection(fileId: string, event?: Event) {
-  event?.stopPropagation()
-  const index = selectedFileIds.value.indexOf(fileId)
-  if (index === -1) {
-    selectedFileIds.value.push(fileId)
-  } else {
-    selectedFileIds.value.splice(index, 1)
-  }
-}
-
-
-function toggleSelectAll() {
-  if (selectedFileIds.value.length === readyFiles.value.length) {
-
-    selectedFileIds.value = []
-  } else {
-
-    selectedFileIds.value = readyFiles.value.map(f => f.id)
-  }
-}
-
-
-const isAllSelected = computed(() =>
-  readyFiles.value.length > 0 && selectedFileIds.value.length === readyFiles.value.length
-)
 
 const inputMessage = ref('')
 const enableWebSearch = ref(localStorage.getItem('enableWebSearch') === 'true')
@@ -1023,15 +1026,6 @@ const webCitationTooltip = reactive({
   date: '',
   favicon: ''
 })
-
-
-const hoveringFileId = ref<string | null>(null)
-const pollingFileIds = ref<Set<string>>(new Set())
-const openMenuFileId = ref<string | null>(null)
-let filePollingTimer: ReturnType<typeof setInterval> | null = null
-
-
-const showUploadModal = ref(false)
 
 
 const features = ref<FeatureListItem[]>([])
@@ -1244,27 +1238,17 @@ async function handleEditCitationClick(citationId: string, displayNum: number, s
 
 function clearFeatureCitation() {
   activeFeatureCitationNum.value = null
-
-  highlightBlockIds.value = []
-  sourcePanelRef.value?.clearHighlights()
+  clearSourceHighlights()
 }
 
 
 function clearWorkflowCitation() {
   activeWorkflowCitationNum.value = null
   activeWorkflowFeatureId.value = null
-
-  highlightBlockIds.value = []
-  sourcePanelRef.value?.clearHighlights()
+  clearSourceHighlights()
 }
 
 
-const isPreviewMode = ref(false)
-const previewingFileContent = ref<FileContent | null>(null)
-const previewingFileName = ref<string>('')
-const previewingFile = ref<FileInfo | null>(null)
-const highlightBlockIds = ref<string[]>([])
-const activeAudioBlockId = ref<string | null>(null)
 const activeChatCitationNum = ref<number | null>(null)
 const activeFeatureCitationNum = ref<number | null>(null)
 const activeWorkflowCitationNum = ref<number | null>(null)
@@ -1291,33 +1275,6 @@ function closeWorkflowMenu() {
 const activeWorkflowFeatureId = ref<string | null>(null)
 const featureEditActiveCitationNum = ref<number | null>(null)
 const workflowEditActiveCitationNum = ref<number | null>(null)
-const fileContentCache = ref<Map<string, FileContent>>(new Map())
-const pageInfoCache = ref<Map<string, FilePageInfo>>(new Map())
-const isLoadingContent = ref(false)
-const sourcePanelRef = ref<InstanceType<typeof SourcePanel> | null>(null)
-const summaryExpanded = ref(true)
-
-function getPreviewContentEl(): HTMLDivElement | null {
-  return sourcePanelRef.value?.previewContentEl || null
-}
-
-function getAudioPlayerEl(): HTMLAudioElement | null {
-  return sourcePanelRef.value?.audioPlayerEl || null
-}
-
-
-const isPdfFile = ref(false)
-const supportsRawView = ref(false)
-const viewMode = ref<'raw' | 'parsed'>('raw')
-const currentBlockIds = ref<string[]>([])
-const pdfPageInfo = ref<FilePageInfo | null>(null)
-const currentPageNum = ref(1)
-const jumpToPageInput = ref('')
-
-
-const selectedPdfBlock = ref<FoundBlock | null>(null)
-const copyPanelVisible = ref(false)
-const copyPanelPosition = ref<{ top: number; left: number } | null>(null)
 
 
 const toastVisible = ref(false)
@@ -1382,21 +1339,6 @@ async function copyTextToClipboard(text: string) {
 }
 
 
-const isUploading = ref(false)
-
-
-interface UploadingFile {
-  name: string
-  progress: number
-  status: 'uploading' | 'success' | 'error'
-  error?: string
-}
-const uploadingFiles = ref<UploadingFile[]>([])
-
-
-const isRawViewMode = computed(() => isPdfFile.value && viewMode.value === 'raw')
-
-
 watch(activeChatCitationNum, (newNum, oldNum) => {
 
   if (oldNum !== null) {
@@ -1411,201 +1353,8 @@ watch(activeChatCitationNum, (newNum, oldNum) => {
 })
 
 
-const parsedBlocksByPage = computed(() => {
-  type BlocksType = NonNullable<typeof previewingFileContent.value>['blocks']
-  if (!previewingFileContent.value?.blocks) return new Map<number, BlocksType>()
-
-  const grouped = new Map<number, BlocksType>()
-  for (const block of previewingFileContent.value.blocks) {
-    const page = block.page || 1
-    if (!grouped.has(page)) {
-      grouped.set(page, [])
-    }
-    grouped.get(page)!.push(block)
-  }
-  return grouped
-})
-
-
-const parsedTotalPages = computed(() => {
-  if (!previewingFileContent.value?.blocks) return 0
-  let maxPage = 0
-  for (const block of previewingFileContent.value.blocks) {
-    if (block.page && block.page > maxPage) {
-      maxPage = block.page
-    }
-  }
-  return maxPage
-})
-
-
-const visibleParsedPages = computed(() => {
-  if (!isPdfFile.value || isRawViewMode.value || parsedTotalPages.value === 0) return []
-
-
-  const pages: number[] = []
-  for (let p = 1; p <= parsedTotalPages.value; p++) {
-    pages.push(p)
-  }
-  return pages
-})
-
-
-const currentTotalPages = computed(() => {
-  if (isRawViewMode.value) {
-
-    return sourcePanelRef.value?.totalPages || 0
-  }
-  return parsedTotalPages.value
-})
-
-
-function clearSelectedBlock() {
-  selectedPdfBlock.value = null
-  copyPanelVisible.value = false
-  copyPanelPosition.value = null
-
-  sourcePanelRef.value?.clearSelectedBlock()
-}
-
-
-function handlePdfPageChange(pageNum: number) {
-  currentPageNum.value = pageNum
-}
-
-
-function handlePdfLoading(loading: boolean) {
-  isLoadingContent.value = loading
-}
-
-
-function handlePdfBlockClick(block: FoundBlock, position: { top: number; left: number }) {
-  selectedPdfBlock.value = block
-  copyPanelVisible.value = true
-
-
-  const panelWidth = 320
-  const viewportWidth = window.innerWidth
-  let panelLeft = position.left + 8
-
-  if (panelLeft + panelWidth > viewportWidth - 20) {
-    panelLeft = position.left - panelWidth - 8
-  }
-
-  copyPanelPosition.value = {
-    top: position.top,
-    left: Math.max(8, panelLeft)
-  }
-}
-
-
-function handlePdfClearSelection() {
-  selectedPdfBlock.value = null
-  copyPanelVisible.value = false
-  copyPanelPosition.value = null
-}
-
-
-async function copySelectedBlockText() {
-  if (!selectedPdfBlock.value) return
-
-  try {
-    await copyTextToClipboard(selectedPdfBlock.value.content)
-    showToast('复制成功')
-  } catch (error) {
-    console.error('Failed to copy text:', error)
-    showToast('复制失败', 'error')
-  }
-}
-
-
-const isPreviewingImage = computed(() => {
-  return previewingFile.value ? isImageFile(previewingFile.value) : false
-})
-
-
-const isPreviewingAudio = computed(() => {
-  return previewingFile.value ? isAudioFile(previewingFile.value) : false
-})
-
-
-const audioPreviewUrl = computed(() => {
-  return previewingFile.value && isPreviewingAudio.value
-    ? getAudioPreviewUrl(previewingFile.value.id)
-    : ''
-})
-
-
-const audioSpeakerCount = computed(() => {
-  const fromMeta = previewingFileContent.value?.audio_meta?.speaker_count
-  if (fromMeta && fromMeta > 0) return fromMeta
-  const speakers = new Set<number>()
-  for (const block of previewingFileContent.value?.blocks || []) {
-    const speaker = Number(block.extra?.speaker)
-    if (Number.isFinite(speaker)) speakers.add(speaker)
-  }
-  return speakers.size
-})
-
-
-interface AudioTranscriptGroup {
-  key: string
-  speaker: number | null
-  speakerLabel: string
-  blocks: FileContent['blocks']
-}
-
-const audioTranscriptGroups = computed<AudioTranscriptGroup[]>(() => {
-  const blocks = previewingFileContent.value?.blocks || []
-  if (!blocks.length) return []
-
-  if (audioSpeakerCount.value <= 1) {
-    return [{
-      key: 'speaker-all',
-      speaker: null,
-      speakerLabel: '',
-      blocks
-    }]
-  }
-
-  const groups: AudioTranscriptGroup[] = []
-  for (const block of blocks) {
-    const speakerValue = Number(block.extra?.speaker)
-    const speaker = Number.isFinite(speakerValue) ? speakerValue : null
-    const previous = groups[groups.length - 1]
-    if (previous && previous.speaker === speaker) {
-      previous.blocks.push(block)
-      continue
-    }
-    groups.push({
-      key: `speaker-${speaker ?? 'unknown'}-${groups.length}`,
-      speaker,
-      speakerLabel: getAudioSpeakerLabel(block),
-      blocks: [block]
-    })
-  }
-  return groups
-})
-
-
-const previewSummary = computed(() => {
-
-  if (previewingFileContent.value?.summary) {
-    return previewingFileContent.value.summary
-  }
-
-  return ''
-})
-
-
 const clickedCitationElement = ref<HTMLElement | null>(null)
 const clickedCitationTop = ref<number>(0)
-
-
-const leftPanelCollapsed = ref(false)
-const rightPanelCollapsed = ref(false)
-const leftPanelWidth = ref(400)
-const rightPanelWidth = ref(500)
 
 
 const toolboxMode = ref<'tools' | 'oneclick'>('oneclick')
@@ -1645,10 +1394,6 @@ const showWorkflowDetail = ref(false)
 let pollErrorCount = 0
 const MAX_POLL_ERRORS = 5
 let workflowElapsedTimer: ReturnType<typeof setInterval> | null = null
-
-
-const PREVIEW_MIN_WIDTH = 700
-const leftPanelWidthBeforePreview = ref<number | null>(null)
 
 
 const REPORT_MIN_WIDTH = 700
@@ -1749,9 +1494,6 @@ function resolveStepDisplayName(configStepName: string | undefined, fallbackDisp
   if (configStepName && /[^\x00-\x7F]/.test(configStepName)) return configStepName
   return uiText('该步骤')
 }
-
-const projectId = route.params.id as string
-
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
@@ -1856,7 +1598,7 @@ async function handleCitationClickEvent(event: MouseEvent) {
 
         if (fileId) {
 
-          const willExpand = !isPreviewMode.value && leftPanelWidth.value < PREVIEW_MIN_WIDTH
+          const willExpand = !isPreviewMode.value && leftPanelWidth.value < previewMinWidth
 
           if (willExpand) {
 
@@ -1888,9 +1630,7 @@ function clearCitationHighlight() {
   featureEditActiveCitationNum.value = null
   workflowEditActiveCitationNum.value = null
 
-  sourcePanelRef.value?.clearHighlights()
-  highlightBlockIds.value = []
-  currentBlockIds.value = []
+  clearSourceHighlights()
 }
 
 
@@ -1977,20 +1717,6 @@ async function loadProject() {
   }
 }
 
-async function loadFiles() {
-  try {
-    files.value = await getFiles(projectId)
-
-    for (const file of files.value) {
-      if (file.status === 'processing' || file.status === 'pending') {
-        pollFileStatus(file.id)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load files:', error)
-  }
-}
-
 async function loadOrCreateSession() {
   try {
     const response = await getSessions(projectId)
@@ -2071,822 +1797,6 @@ async function loadOlderMessages() {
     console.error('Failed to load older messages:', error)
   } finally {
     isLoadingMoreMessages.value = false
-  }
-}
-
-function triggerFileUpload() {
-  showUploadModal.value = true
-}
-
-
-async function handleUploadFiles(fileList: File[]) {
-  const remainingCount = MAX_FILE_COUNT - files.value.length
-  if (remainingCount <= 0) {
-    showToast(`已达到文件数量上限（${MAX_FILE_COUNT} 个）`, 'error')
-    return
-  }
-
-  const filesToUpload = fileList.slice(0, remainingCount)
-
-
-  const validFiles: File[] = []
-  const sizeErrors: string[] = []
-  const typeErrors: string[] = []
-
-  for (const file of filesToUpload) {
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    if (ext === 'doc') {
-      typeErrors.push(`"${file.name}" 暂不支持旧版 .doc 格式，请另存为 .docx 后再上传`)
-      continue
-    }
-
-    const check = checkFileSize(file)
-    if (check.valid) {
-      validFiles.push(file)
-    } else {
-      sizeErrors.push(check.error!)
-    }
-  }
-
-
-  const errors = [...typeErrors, ...sizeErrors]
-  if (errors.length > 0) {
-    showToast(errors.join('\n'), 'error', 5000)
-    if (validFiles.length === 0) return
-  }
-
-  isUploading.value = true
-
-
-  uploadingFiles.value = validFiles.map(f => ({
-    name: f.name,
-    progress: 0,
-    status: 'uploading' as const
-  }))
-
-  let successCount = 0
-  let failedCount = 0
-
-  for (let i = 0; i < validFiles.length; i++) {
-    const file = validFiles[i]!
-    const uploadItem = uploadingFiles.value[i]!
-    try {
-      const uploaded = await uploadFile(
-        projectId,
-        file,
-        (progress) => {
-          uploadItem.progress = progress
-        },
-        getModelOutputLanguage()
-      )
-      files.value.push(uploaded)
-      uploadItem.status = 'success'
-      uploadItem.progress = 100
-      successCount++
-
-      if (uploaded.status !== 'ready' && uploaded.status !== 'failed') {
-        pollFileStatus(uploaded.id)
-      }
-    } catch (error: any) {
-      console.error('Failed to upload file:', error)
-      const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || '上传失败'
-      uploadItem.status = 'error'
-      uploadItem.error = errorMsg
-      failedCount++
-    }
-  }
-
-  isUploading.value = false
-
-
-  if (failedCount > 0 && successCount > 0) {
-    showToast(`${successCount} 个成功，${failedCount} 个失败`, 'info', 4000)
-  } else if (failedCount > 0) {
-    showToast(`${failedCount} 个文件上传失败`, 'error', 4000)
-  } else if (successCount > 0) {
-    showToast(`${successCount} 个文件上传成功`, 'success', 3000)
-  }
-
-
-  setTimeout(() => {
-    uploadingFiles.value = []
-  }, 3000)
-}
-
-
-async function handleInsertText(content: string) {
-  if (files.value.length >= MAX_FILE_COUNT) {
-    showToast(`已达到文件数量上限（${MAX_FILE_COUNT} 个）`, 'error')
-    return
-  }
-
-  const fileName = `粘贴文本_${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/[\/\s:]/g, '')}.txt`
-  const blob = new Blob([content], { type: 'text/plain' })
-  const file = new File([blob], fileName, { type: 'text/plain' })
-
-  isUploading.value = true
-  try {
-    const uploaded = await uploadFile(projectId, file, undefined, getModelOutputLanguage())
-    files.value.push(uploaded)
-
-    if (uploaded.status !== 'ready' && uploaded.status !== 'failed') {
-      pollFileStatus(uploaded.id)
-    }
-  } catch (error: any) {
-    console.error('Failed to upload pasted text:', error)
-    const msg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || '上传失败'
-    showToast(msg, 'error', 4000)
-  } finally {
-    isUploading.value = false
-  }
-}
-
-
-
-function pollFileStatus(fileId: string) {
-  pollingFileIds.value.add(fileId)
-
-  startFilePolling()
-}
-
-
-function startFilePolling() {
-  if (filePollingTimer) return
-
-  filePollingTimer = setInterval(async () => {
-    if (pollingFileIds.value.size === 0) {
-      stopFilePolling()
-      return
-    }
-
-    try {
-      const fileIds = Array.from(pollingFileIds.value)
-      const result = await getFilesStatusBatch(fileIds)
-
-      for (const fileStatus of result.files) {
-
-        const index = files.value.findIndex(f => f.id === fileStatus.id)
-        if (index !== -1) {
-          const existingFile = files.value[index]!
-          files.value[index] = {
-            ...existingFile,
-            status: fileStatus.status as FileInfo['status'],
-            error_message: fileStatus.error_message ?? undefined,
-            processing_current: fileStatus.processing_current ?? null,
-            processing_total: fileStatus.processing_total ?? null,
-            processing_message: fileStatus.processing_message ?? null
-          }
-        }
-
-
-        if (fileStatus.status === 'ready' || fileStatus.status === 'failed') {
-          pollingFileIds.value.delete(fileStatus.id)
-        }
-      }
-
-
-      if (pollingFileIds.value.size === 0) {
-        stopFilePolling()
-      }
-    } catch (error) {
-      console.error('Failed to poll file status:', error)
-    }
-  }, 2000)
-}
-
-
-function stopFilePolling() {
-  if (filePollingTimer) {
-    clearInterval(filePollingTimer)
-    filePollingTimer = null
-  }
-}
-
-async function handleDeleteFile(fileId: string) {
-
-  const file = files.value.find(f => f.id === fileId)
-  const fileName = file?.file_name || '此文件'
-
-
-  openMenuFileId.value = null
-
-
-  const confirmed = await showConfirm({
-    title: '删除文件',
-    message: `确定要删除"${fileName}"吗？\n⚠️ 对话中所有引用该文件的标注将失效，无法查看原文出处。此操作无法撤销。`,
-    type: 'danger',
-    confirmText: '删除',
-    cancelText: '取消'
-  })
-  if (!confirmed) return
-
-  try {
-    await deleteFile(fileId)
-    files.value = files.value.filter((f) => f.id !== fileId)
-
-
-    fileContentCache.value.delete(fileId)
-    pageInfoCache.value.delete(fileId)
-
-
-    if (previewingFileContent.value?.file_id === fileId) {
-      closePreview()
-    }
-  } catch (error) {
-    console.error('Failed to delete file:', error)
-  }
-}
-
-function toggleFileMenu(fileId: string) {
-  if (openMenuFileId.value === fileId) {
-    openMenuFileId.value = null
-  } else {
-    openMenuFileId.value = fileId
-  }
-}
-
-
-function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement
-  if (!target.closest('.source-menu-wrapper')) {
-    openMenuFileId.value = null
-  }
-
-}
-
-
-async function loadFileContent(fileId: string): Promise<FileContent | null> {
-
-  if (fileContentCache.value.has(fileId)) {
-    return fileContentCache.value.get(fileId)!
-  }
-
-  isLoadingContent.value = true
-  try {
-    const content = await getFileContent(fileId)
-    fileContentCache.value.set(fileId, content)
-    return content
-  } catch (error) {
-    console.error('Failed to load file content:', error)
-    return null
-  } finally {
-    isLoadingContent.value = false
-  }
-}
-
-
-async function openFilePreview(fileId: string, segmentId?: string) {
-  const file = files.value.find(f => f.id === fileId)
-  if (!file || file.status !== 'ready') return
-
-
-  const isSwitchingFile = previewingFile.value && previewingFile.value.id !== fileId
-  const isFirstOpen = !isPreviewMode.value
-  const isImage = isImageFile(file)
-
-
-  summaryExpanded.value = !segmentId
-
-
-  if (isFirstOpen) {
-    leftPanelWidthBeforePreview.value = leftPanelWidth.value
-    if (leftPanelWidth.value < PREVIEW_MIN_WIDTH) {
-      leftPanelWidth.value = PREVIEW_MIN_WIDTH
-    }
-  }
-
-
-  if (isSwitchingFile || isFirstOpen) {
-
-    previewingFileName.value = file.file_name
-    previewingFile.value = file
-    isPreviewMode.value = true
-    highlightBlockIds.value = []
-    isLoadingContent.value = true
-
-
-    previewingFileContent.value = null
-    isPdfFile.value = false
-    supportsRawView.value = false
-    viewMode.value = 'raw'
-    currentBlockIds.value = []
-    pdfPageInfo.value = null
-    currentPageNum.value = 1
-    jumpToPageInput.value = ''
-    activeAudioBlockId.value = null
-
-
-    if (isSwitchingFile) {
-      await nextTick()
-      const previewContent = getPreviewContentEl()
-      if (previewContent) {
-        previewContent.scrollTop = 0
-      }
-    }
-
-    if (!isImage) {
-
-      try {
-
-        const fileInfo = await getFile(fileId)
-
-
-        let pageInfo = pageInfoCache.value.get(fileId)
-        if (!pageInfo) {
-          pageInfo = await getFilePageInfo(fileId)
-          pageInfoCache.value.set(fileId, pageInfo)
-        }
-
-        if (pageInfo.has_pages && file.file_type === 'pdf') {
-
-          isPdfFile.value = true
-          supportsRawView.value = fileInfo.supports_raw_view ?? true
-          pdfPageInfo.value = pageInfo
-
-
-          viewMode.value = 'raw'
-        } else {
-
-          const content = await loadFileContent(fileId)
-          if (!content) {
-            isLoadingContent.value = false
-            return
-          }
-          previewingFileContent.value = content
-        }
-      } catch (error) {
-        console.error('[Preview] Failed to get page info:', error)
-
-        const content = await loadFileContent(fileId)
-        if (content) {
-          previewingFileContent.value = content
-        }
-      }
-    }
-
-
-    if (!isPdfFile.value || viewMode.value !== 'raw') {
-      isLoadingContent.value = false
-    }
-
-
-    await nextTick()
-    const previewContent = getPreviewContentEl()
-    if (previewContent) {
-      previewContent.scrollTop = 0
-    }
-  }
-
-
-  highlightBlockIds.value = []
-
-
-  if (segmentId && !isImage) {
-    await scrollToSegment(fileId, segmentId)
-  }
-}
-
-
-interface ImageCitationSource {
-  fileId: string
-  fileName?: string
-  imageName?: string
-  imageIndex?: number
-  page?: number
-}
-
-function parseOptionalInt(value?: string): number | undefined {
-  if (!value) return undefined
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function imageBlockMatches(extra: any, citation: ImageCitationSource) {
-  if (!extra?.is_image) return false
-  if (citation.imageIndex !== undefined && extra.image_index === citation.imageIndex) return true
-  if (citation.imageName && extra.image_name === citation.imageName) return true
-  return false
-}
-
-async function openImageCitationSource(citation: ImageCitationSource) {
-  await jumpToPdfImageLocation(citation)
-}
-
-async function jumpToPdfImageLocation(citation: ImageCitationSource) {
-
-  await openFilePreview(citation.fileId)
-
-  await nextTick()
-
-  const pageInfoImageBlock = pdfPageInfo.value?.blocks?.find(block =>
-    imageBlockMatches(block.extra, citation)
-  )
-  const targetPage = citation.page && citation.page > 0
-    ? citation.page
-    : pageInfoImageBlock?.page || 0
-  const targetBbox = pageInfoImageBlock?.extra?.bbox
-
-  if (isRawViewMode.value && pdfPageInfo.value && targetPage > 0) {
-
-    await nextTick()
-
-
-    const maxWait = 5000
-    const checkInterval = 50
-    let waited = 0
-    while (waited < maxWait) {
-      if (sourcePanelRef.value?.isDocumentLoaded) {
-        break
-      }
-      await new Promise(resolve => setTimeout(resolve, checkInterval))
-      waited += checkInterval
-    }
-
-
-    await waitForLayoutStable()
-
-
-    await sourcePanelRef.value?.scrollToPageAndHighlightBbox(targetPage, targetBbox)
-  } else if (previewingFileContent.value) {
-
-    const imageBlock = previewingFileContent.value.blocks.find(block =>
-      imageBlockMatches(block.extra, citation)
-    )
-
-    if (imageBlock) {
-      highlightBlockIds.value = [imageBlock.block_id]
-      currentBlockIds.value = [imageBlock.block_id]
-      await nextTick()
-      scrollToBlock(imageBlock.block_id)
-    } else if (targetPage > 0) {
-      const pageSection = getPreviewContentEl()?.querySelector(`[data-page="${targetPage}"]`) as HTMLElement
-      pageSection?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-}
-
-function getAudioSpeakerLabel(block: FileContent['blocks'][number]): string {
-  const speaker = Number(block.extra?.speaker)
-  if (!Number.isFinite(speaker)) return '说话人'
-  return `说话人 ${speaker + 1}`
-}
-
-
-function getAudioStartMs(block: FileContent['blocks'][number]): number | null {
-  const value = Number(block.extra?.time_start)
-  return Number.isFinite(value) ? value : null
-}
-
-
-function getAudioEndMs(block: FileContent['blocks'][number]): number | null {
-  const value = Number(block.extra?.time_end)
-  return Number.isFinite(value) ? value : null
-}
-
-
-function findAudioBlockAtTime(ms: number): FileContent['blocks'][number] | null {
-  const blocks = previewingFileContent.value?.blocks || []
-  for (const block of blocks) {
-    const start = getAudioStartMs(block)
-    const end = getAudioEndMs(block)
-    if (start === null || end === null) continue
-    if (ms >= start && ms < Math.max(end, start + 1)) return block
-  }
-  return null
-}
-
-
-function handleAudioPlay() {
-  highlightBlockIds.value = []
-}
-
-
-function handleAudioTimeUpdate() {
-  const player = getAudioPlayerEl()
-  if (!player) return
-  const currentMs = Math.round(player.currentTime * 1000)
-
-  const activeBlock = findAudioBlockAtTime(currentMs)
-  if (!activeBlock || activeBlock.block_id === activeAudioBlockId.value) return
-
-  activeAudioBlockId.value = activeBlock.block_id
-  if (!player.paused) {
-    nextTick(() => scrollToBlock(activeBlock.block_id))
-  }
-}
-
-
-async function seekAudioToBlock(block: FileContent['blocks'][number]) {
-  const start = getAudioStartMs(block)
-  if (start === null) return
-  await seekAudioToMs(start, [block.block_id])
-}
-
-
-async function seekAudioToMs(startMs: number, blockIds: string[]) {
-  await nextTick()
-  const player = getAudioPlayerEl()
-  if (player) {
-    player.currentTime = Math.max(0, startMs / 1000)
-  }
-  activeAudioBlockId.value = blockIds[0] || null
-  highlightBlockIds.value = blockIds
-  if (blockIds[0]) {
-    await nextTick()
-    scrollToBlock(blockIds[0])
-  }
-}
-
-
-function getAudioStartForBlockIds(blockIds: string[]): number | null {
-  const blocks = previewingFileContent.value?.blocks || []
-  const ids = new Set(blockIds)
-  const starts = blocks
-    .filter(block => ids.has(block.block_id))
-    .map(block => getAudioStartMs(block))
-    .filter((value): value is number => value !== null)
-  return starts.length ? Math.min(...starts) : null
-}
-
-
-async function scrollToSegment(_fileId: string, segmentId: string) {
-
-  let blockIds: string[] = []
-  if (pdfPageInfo.value) {
-    const segment = pdfPageInfo.value.segments.find((s: { segment_id: string }) => s.segment_id === segmentId)
-    if (segment) blockIds = segment.block_ids
-  } else if (previewingFileContent.value) {
-    const segment = previewingFileContent.value.segments.find(s => s.segment_id === segmentId)
-    if (segment) blockIds = segment.block_ids
-  }
-
-  if (blockIds.length === 0) return
-
-
-  currentBlockIds.value = blockIds
-
-  if (isPreviewingAudio.value && previewingFileContent.value) {
-    const startMs = getAudioStartForBlockIds(blockIds)
-    if (startMs !== null) {
-      await seekAudioToMs(startMs, blockIds)
-    } else {
-      highlightBlockIds.value = blockIds
-      await nextTick()
-      if (blockIds[0]) {
-        scrollToBlock(blockIds[0])
-      }
-    }
-    return
-  }
-
-  if (isRawViewMode.value && pdfPageInfo.value) {
-
-
-    await nextTick()
-
-
-    const maxWait = 5000
-    const checkInterval = 50
-    let waited = 0
-    while (waited < maxWait) {
-      if (sourcePanelRef.value?.isDocumentLoaded) {
-        break
-      }
-      await new Promise(resolve => setTimeout(resolve, checkInterval))
-      waited += checkInterval
-    }
-
-
-    await waitForLayoutStable()
-
-    await sourcePanelRef.value?.scrollToSegment(segmentId)
-  } else if (previewingFileContent.value) {
-
-    await new Promise(resolve => setTimeout(resolve, 100))
-    highlightBlockIds.value = blockIds
-    await nextTick()
-    const firstBlockId = blockIds[0]
-    if (firstBlockId) {
-      scrollToBlock(firstBlockId)
-    }
-  }
-}
-
-
-async function waitForLayoutStable(maxWait = 500): Promise<void> {
-  const previewContent = getPreviewContentEl()
-  if (!previewContent) {
-
-    await new Promise(resolve => setTimeout(resolve, 300))
-    return
-  }
-
-  let lastWidth = previewContent.clientWidth
-  let lastHeight = previewContent.clientHeight
-  let stableCount = 0
-  const startTime = Date.now()
-
-  while (Date.now() - startTime < maxWait) {
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-
-    const currentWidth = previewContent.clientWidth
-    const currentHeight = previewContent.clientHeight
-
-    if (currentWidth === lastWidth && currentHeight === lastHeight) {
-      stableCount++
-
-      if (stableCount >= 3) {
-        return
-      }
-    } else {
-      stableCount = 0
-      lastWidth = currentWidth
-      lastHeight = currentHeight
-    }
-  }
-}
-
-
-async function switchViewMode(mode: 'raw' | 'parsed') {
-  if (mode === viewMode.value || !previewingFile.value) return
-
-  const fileId = previewingFile.value.id
-  const savedPageNum = currentPageNum.value
-  const savedBlockIds = currentBlockIds.value
-
-  viewMode.value = mode
-
-  try {
-    if (mode === 'raw') {
-
-
-      isLoadingContent.value = true
-
-
-      previewingFileContent.value = null
-      highlightBlockIds.value = []
-
-
-      currentPageNum.value = savedPageNum
-
-
-      await nextTick()
-      await new Promise(resolve => setTimeout(resolve, 200))
-
-
-      if (savedBlockIds.length > 0 && pdfPageInfo.value) {
-
-        const segment = pdfPageInfo.value.segments.find(s =>
-          s.block_ids.some(bid => savedBlockIds.includes(bid))
-        )
-        if (segment) {
-          await sourcePanelRef.value?.scrollToSegment(segment.segment_id)
-        }
-      } else {
-
-        sourcePanelRef.value?.goToPage(savedPageNum)
-      }
-    } else {
-
-      isLoadingContent.value = true
-
-
-      const content = await loadFileContent(fileId)
-      if (content) {
-        previewingFileContent.value = content
-      }
-
-
-      if (savedBlockIds.length > 0) {
-        highlightBlockIds.value = savedBlockIds
-
-
-        try {
-          const locationResponse = await getBlocksLocation(fileId, savedBlockIds)
-          const firstBlockId = savedBlockIds[0]
-          if (firstBlockId) {
-            const location = locationResponse.blocks[firstBlockId]
-            if (location && location.exists) {
-              currentPageNum.value = location.page
-            }
-          }
-        } catch (error) {
-          console.error('Failed to get block location:', error)
-        }
-
-
-        await nextTick()
-        await new Promise(resolve => setTimeout(resolve, 100))
-        const firstBlockId = savedBlockIds[0]
-        if (firstBlockId) {
-          scrollToBlock(firstBlockId)
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Failed to switch view mode:', error)
-  } finally {
-
-
-    if (viewMode.value !== 'raw') {
-      isLoadingContent.value = false
-    }
-  }
-}
-
-function closePreview() {
-  isPreviewMode.value = false
-  previewingFileContent.value = null
-  previewingFileName.value = ''
-  previewingFile.value = null
-  highlightBlockIds.value = []
-  activeAudioBlockId.value = null
-
-
-  isPdfFile.value = false
-  supportsRawView.value = false
-  viewMode.value = 'raw'
-  currentBlockIds.value = []
-  pdfPageInfo.value = null
-  currentPageNum.value = 1
-  jumpToPageInput.value = ''
-
-
-  if (leftPanelWidthBeforePreview.value !== null) {
-    leftPanelWidth.value = leftPanelWidthBeforePreview.value
-    leftPanelWidthBeforePreview.value = null
-  }
-}
-
-function scrollToBlock(blockId: string) {
-  const container = getPreviewContentEl()
-  if (!container) return
-  const blockEl = container.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement
-  if (blockEl) {
-
-
-    const containerRect = container.getBoundingClientRect()
-    const blockRect = blockEl.getBoundingClientRect()
-    const targetScrollTop = container.scrollTop + (blockRect.top - containerRect.top) - (containerRect.height / 2) + (blockRect.height / 2)
-    container.scrollTo({ top: targetScrollTop, behavior: 'smooth' })
-  }
-}
-
-
-async function jumpToPage() {
-  if (currentTotalPages.value === 0 || !previewingFile.value) return
-
-  const pageNum = parseInt(jumpToPageInput.value)
-  if (isNaN(pageNum) || pageNum < 1 || pageNum > currentTotalPages.value) {
-    jumpToPageInput.value = ''
-    return
-  }
-
-  currentPageNum.value = pageNum
-  jumpToPageInput.value = ''
-
-  if (isRawViewMode.value) {
-
-    sourcePanelRef.value?.goToPage(pageNum)
-  } else {
-
-    await nextTick()
-    const pageSection = getPreviewContentEl()?.querySelector(`[data-page="${pageNum}"]`) as HTMLElement
-    if (pageSection) {
-      pageSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-}
-
-
-function handlePreviewScroll() {
-
-  if (isRawViewMode.value) return
-  const container = getPreviewContentEl()
-  if (!container || !isPdfFile.value || currentTotalPages.value === 0) return
-
-
-  if (copyPanelVisible.value) {
-    clearSelectedBlock()
-  }
-
-  const containerRect = container.getBoundingClientRect()
-  const containerTop = containerRect.top
-
-
-  const pageSections = container.querySelectorAll('[data-page]')
-  let currentVisiblePage = 1
-
-  for (const section of pageSections) {
-    const rect = section.getBoundingClientRect()
-
-    if (rect.top <= containerTop + containerRect.height / 2) {
-      currentVisiblePage = parseInt(section.getAttribute('data-page') || '1')
-    }
-  }
-
-  if (currentVisiblePage !== currentPageNum.value) {
-    currentPageNum.value = currentVisiblePage
   }
 }
 
@@ -4007,9 +2917,7 @@ async function handleRenameConfirm(newName: string) {
 
   try {
     if (renameModal.type === 'file') {
-      await updateFile(renameModal.id, { file_name: newName })
-      const file = files.value.find(f => f.id === renameModal.id)
-      if (file) file.file_name = newName
+      await renameFile(renameModal.id, newName)
     } else if (renameModal.type === 'workflow') {
       await renameWorkflow(renameModal.id, newName)
       const workflow = workflows.value.find(w => w.id === renameModal.id)
@@ -5731,86 +4639,6 @@ void [
 .studio-panel.collapsed > * {
   display: none;
 }
-
-.block-copy-panel-floating {
-  position: fixed;
-  z-index: 10000;
-  pointer-events: auto;
-}
-
-.copy-panel-content {
-  background: white;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
-  max-width: 320px;
-  overflow: hidden;
-}
-
-.copy-panel-text {
-  padding: 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  max-height: 150px;
-  overflow-y: auto;
-  border-bottom: 1px solid var(--border-color);
-  word-break: break-word;
-}
-
-.copy-panel-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-}
-
-.copy-panel-actions .copy-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.copy-panel-actions .copy-btn:hover {
-  background: var(--primary-hover);
-}
-
-.copy-panel-actions .close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.copy-panel-actions .close-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-
-@media (max-width: 600px) {
-  .block-copy-panel-floating {
-
-  }
-}
-
 
 .agent-role-toggle {
   display: inline-flex;
