@@ -59,464 +59,81 @@
 
       <div class="project-body">
 
-        <aside
-          class="sources-panel"
-          :class="{ collapsed: leftPanelCollapsed }"
-          :style="{ width: leftPanelCollapsed ? '0px' : leftPanelWidth + 'px' }"
+        <SourcePanel
+          ref="sourcePanelRef"
+          :collapsed="leftPanelCollapsed"
+          :width="leftPanelWidth"
+          :show-preview="Boolean(isPreviewMode && (previewingFileContent || isPreviewingImage || isPdfFile))"
+          :files="files"
+          :sorted-files="sortedFiles"
+          :ready-files="readyFiles"
+          :selected-file-ids="selectedFileIds"
+          :uploading-files="uploadingFiles"
+          :hovering-file-id="hoveringFileId"
+          :open-menu-file-id="openMenuFileId"
+          :is-all-selected="isAllSelected"
+          :previewing-file="previewingFile"
+          :previewing-file-name="previewingFileName"
+          :previewing-file-content="previewingFileContent"
+          :preview-summary="previewSummary"
+          :summary-expanded="summaryExpanded"
+          :is-previewing-image="isPreviewingImage"
+          :is-previewing-audio="isPreviewingAudio"
+          :is-pdf-file="isPdfFile"
+          :supports-raw-view="supportsRawView"
+          :view-mode="viewMode"
+          :is-raw-view-mode="isRawViewMode"
+          :is-loading-content="isLoadingContent"
+          :pdf-page-info="pdfPageInfo"
+          :visible-parsed-pages="visibleParsedPages"
+          :parsed-blocks-by-page="parsedBlocksByPage"
+          :highlight-block-ids="highlightBlockIds"
+          :audio-preview-url="audioPreviewUrl"
+          :audio-transcript-groups="audioTranscriptGroups"
+          :audio-speaker-count="audioSpeakerCount"
+          :active-audio-block-id="activeAudioBlockId"
+          :current-total-pages="currentTotalPages"
+          :current-page-num="currentPageNum"
+          :jump-to-page-input="jumpToPageInput"
+          @toggle-collapse="leftPanelCollapsed = !leftPanelCollapsed"
+          @trigger-file-upload="triggerFileUpload"
+          @toggle-select-all="toggleSelectAll"
+          @open-file-preview="openFilePreview"
+          @set-hovering-file="hoveringFileId = $event"
+          @toggle-file-menu="toggleFileMenu"
+          @rename-file="(fileId, fileName) => openRenameModal('file', fileId, fileName)"
+          @delete-file="handleDeleteFile"
+          @toggle-file-selection="toggleFileSelection"
+          @close-preview="closePreview"
+          @update:summary-expanded="summaryExpanded = $event"
+          @switch-view-mode="switchViewMode"
+          @keyword-click="handleKeywordClick"
+          @preview-scroll="handlePreviewScroll"
+          @page-change="handlePdfPageChange"
+          @pdf-block-click="handlePdfBlockClick"
+          @pdf-clear-selection="handlePdfClearSelection"
+          @pdf-loading="handlePdfLoading"
+          @audio-time-update="handleAudioTimeUpdate"
+          @audio-play="handleAudioPlay"
+          @seek-audio-to-block="seekAudioToBlock"
+          @update:jump-to-page-input="jumpToPageInput = $event"
+          @jump-to-page="jumpToPage"
+        />
+
+        <div
+          class="resizer left-resizer"
+          :class="{ hidden: leftPanelCollapsed }"
+          @mousedown="startResizeLeft"
         >
-
-        <template v-if="isPreviewMode && (previewingFileContent || isPreviewingImage || isPdfFile)">
-          <div class="panel-header">
-            <span class="panel-title">来源</span>
-            <button class="panel-toggle-btn" @click="closePreview" title="返回列表">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-              </svg>
-            </button>
-          </div>
-          <div class="preview-file-header">
-            <div class="preview-file-name">
-              <svg v-if="isPreviewingImage" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-              </svg>
-              <span>{{ previewingFileName }}</span>
-            </div>
-
-            <div v-if="isPdfFile && supportsRawView" class="view-toggle">
-              <button
-                class="view-toggle-btn"
-                :class="{ active: viewMode === 'raw' }"
-                @click="switchViewMode('raw')"
-                title="原文视图"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
-                </svg>
-                原文
-              </button>
-              <button
-                class="view-toggle-btn"
-                :class="{ active: viewMode === 'parsed' }"
-                @click="switchViewMode('parsed')"
-                title="解析视图"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                  <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
-                </svg>
-                解析
-              </button>
-            </div>
-          </div>
-
-
-          <template v-if="isPreviewingImage">
-            <div class="preview-content image-preview-content" ref="previewContentRef">
-              <div v-if="isLoadingContent" class="preview-loading">加载中...</div>
-              <div v-else class="image-preview-wrapper">
-                <img
-                  v-if="previewingFile"
-                  :src="getImagePreviewUrl(previewingFile.id)"
-                  :alt="previewingFileName"
-                  class="preview-image"
-                />
-              </div>
-            </div>
-          </template>
-
-
-          <template v-else>
-
-            <div v-if="previewSummary" class="source-guide-card">
-              <div class="source-guide-header">
-                <div class="source-guide-title">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
-                  </svg>
-                  <span>来源指南</span>
-                </div>
-                <button class="source-guide-toggle" @click="summaryExpanded = !summaryExpanded">
-                  <svg :class="{ rotated: !summaryExpanded }" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-                  </svg>
-                </button>
-              </div>
-              <div v-show="summaryExpanded" class="source-guide-content" v-html="renderSummary(previewSummary)"></div>
-
-              <div v-show="summaryExpanded" v-if="previewingFileContent?.keywords?.length" class="source-guide-keywords">
-                <span
-                  v-for="(keyword, index) in previewingFileContent.keywords"
-                  :key="index"
-                  class="keyword-tag"
-                  @click="handleKeywordClick(keyword)"
-                >{{ keyword }}</span>
-              </div>
-            </div>
-
-
-            <div class="preview-content-wrapper">
-              <div class="preview-content" ref="previewContentRef" @scroll="handlePreviewScroll">
-
-              <div v-if="isLoadingContent" class="preview-loading">加载中...</div>
-
-
-              <PdfViewer
-                v-if="isRawViewMode && pdfPageInfo && previewingFile"
-                ref="pdfViewerRef"
-                :file-id="previewingFile.id"
-                :page-info="pdfPageInfo"
-                @page-change="handlePdfPageChange"
-                @block-click="handlePdfBlockClick"
-                @clear-selection="handlePdfClearSelection"
-                @loading="handlePdfLoading"
-              />
-
-
-              <template v-else-if="isPdfFile && visibleParsedPages.length > 0">
-                <div
-                  v-for="pageNum in visibleParsedPages"
-                  :key="pageNum"
-                  :data-page="pageNum"
-                  class="parsed-page-section"
-                >
-
-                  <div class="page-divider">
-                    <span class="page-divider-line"></span>
-                    <span class="page-divider-text">第 {{ pageNum }} 页</span>
-                    <span class="page-divider-line"></span>
-                  </div>
-
-
-                  <div class="parsed-page-content">
-
-                    <template v-for="block in parsedBlocksByPage.get(pageNum) || []" :key="block.block_id">
-                      <div
-                        v-if="block.extra?.is_table"
-                        :data-block-id="block.block_id"
-                        class="preview-block table-block"
-                        :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
-                      >
-                        <div v-if="block.extra?.table_caption" class="table-caption">{{ block.extra.table_caption }}</div>
-                        <div class="table-content" v-html="block.extra?.table_html || renderLatexOnly(block.content)"></div>
-                        <div v-if="block.extra?.table_footnote" class="table-footnote">{{ block.extra.table_footnote }}</div>
-                      </div>
-
-                      <div
-                        v-else-if="block.extra?.is_image"
-                        :data-block-id="block.block_id"
-                        class="preview-block image-block"
-                        :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
-                      >
-                        <img
-                          v-if="getBlockImagePreviewUrl(block)"
-                          :src="getBlockImagePreviewUrl(block)"
-                          :alt="previewingFileName"
-                          class="parsed-block-image"
-                        />
-                        <span v-else v-html="renderLatexOnly(block.content)"></span>
-                      </div>
-
-                      <div
-                        v-else
-                        :data-block-id="block.block_id"
-                        class="preview-block"
-                        :class="{ [block.block_type]: true, highlighted: highlightBlockIds.includes(block.block_id) }"
-                      ><span v-if="highlightBlockIds.includes(block.block_id)" class="highlight-text" v-html="renderLatexOnly(block.content)"></span><span v-else v-html="renderLatexOnly(block.content)"></span></div>
-                    </template>
-                  </div>
-                </div>
-              </template>
-
-
-              <template v-else-if="isPreviewingAudio && previewingFileContent?.blocks">
-                <div class="audio-preview-shell">
-                  <div class="audio-player-bar">
-                    <audio
-                      v-if="previewingFile"
-                      ref="audioPlayerRef"
-                      class="audio-player"
-                      :src="audioPreviewUrl"
-                      controls
-                      preload="metadata"
-                      @timeupdate="handleAudioTimeUpdate"
-                      @play="handleAudioPlay"
-                    ></audio>
-                  </div>
-
-                  <div class="audio-transcript-list">
-                    <section
-                      v-for="group in audioTranscriptGroups"
-                      :key="group.key"
-                      class="audio-transcript-group"
-                    >
-                      <div v-if="audioSpeakerCount > 1" class="audio-speaker-label">
-                        {{ group.speakerLabel }}
-                      </div>
-                      <p class="audio-paragraph">
-                        <button
-                          v-for="block in group.blocks"
-                          :key="block.block_id"
-                          type="button"
-                          :data-block-id="block.block_id"
-                          class="audio-text-segment"
-                          :class="{
-                            highlighted: highlightBlockIds.includes(block.block_id),
-                            active: activeAudioBlockId === block.block_id
-                          }"
-                          @click="seekAudioToBlock(block)"
-                        >
-                          {{ block.content }}
-                        </button>
-                      </p>
-                    </section>
-                  </div>
-                </div>
-              </template>
-
-
-              <template v-else-if="previewingFileContent?.blocks">
-
-                <template v-for="block in previewingFileContent.blocks" :key="block.block_id">
-                  <div
-                    v-if="block.extra?.is_table"
-                    :data-block-id="block.block_id"
-                    class="preview-block table-block"
-                    :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
-                  >
-                    <div v-if="block.extra?.table_caption" class="table-caption">{{ block.extra.table_caption }}</div>
-                    <div class="table-content" v-html="block.extra?.table_html || renderLatexOnly(block.content)"></div>
-                    <div v-if="block.extra?.table_footnote" class="table-footnote">{{ block.extra.table_footnote }}</div>
-                  </div>
-
-                  <div
-                    v-else-if="block.extra?.is_image"
-                    :data-block-id="block.block_id"
-                    class="preview-block image-block"
-                    :class="{ highlighted: highlightBlockIds.includes(block.block_id) }"
-                  >
-                    <img
-                      v-if="getBlockImagePreviewUrl(block)"
-                      :src="getBlockImagePreviewUrl(block)"
-                      :alt="previewingFileName"
-                      class="parsed-block-image"
-                    />
-                    <span v-else v-html="renderLatexOnly(block.content)"></span>
-                  </div>
-
-                  <div
-                    v-else
-                    :data-block-id="block.block_id"
-                    class="preview-block"
-                    :class="{ [block.block_type]: true, highlighted: highlightBlockIds.includes(block.block_id) }"
-                  ><span v-if="highlightBlockIds.includes(block.block_id)" class="highlight-text" v-html="renderLatexOnly(block.content)"></span><span v-else v-html="renderLatexOnly(block.content)"></span></div>
-                </template>
-              </template>
-              </div>
-
-
-              <div v-if="isPdfFile && currentTotalPages > 0" class="page-nav-float">
-                <span class="page-indicator">第 {{ currentPageNum }} / {{ currentTotalPages }} 页</span>
-                <div class="page-jump">
-                  <input
-                    type="number"
-                    v-model="jumpToPageInput"
-                    :min="1"
-                    :max="currentTotalPages"
-                    placeholder="页码"
-                    @keyup.enter="jumpToPage"
-                  />
-                  <button class="jump-btn" @click="jumpToPage">跳转</button>
-                </div>
-              </div>
-            </div>
-          </template>
-        </template>
-
-
-        <template v-else>
-        <div class="panel-header">
-          <span class="panel-title">来源</span>
-          <button class="panel-toggle-btn" @click="leftPanelCollapsed = !leftPanelCollapsed" title="收起面板">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
-              <path d="M7 7h4v10H7z" opacity="0.5"/>
-            </svg>
-          </button>
+          <div class="resizer-line"></div>
         </div>
 
-        <button class="add-source-btn" @click="triggerFileUpload">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </svg>
-          添加来源
-        </button>
-
-
-        <div v-if="uploadingFiles.length > 0" class="upload-progress-container">
-          <div
-            v-for="(item, index) in uploadingFiles"
-            :key="index"
-            class="upload-progress-item"
-            :class="item.status"
-          >
-            <div class="upload-file-name">{{ item.name }}</div>
-            <div class="upload-progress-bar">
-              <div
-                class="upload-progress-fill"
-                :style="{ width: item.progress + '%' }"
-              ></div>
-            </div>
-            <div class="upload-status">
-              <template v-if="item.status === 'uploading'">{{ item.progress }}%</template>
-              <template v-else-if="item.status === 'success'">完成</template>
-              <template v-else-if="item.status === 'error'">失败</template>
-            </div>
-          </div>
-        </div>
-
-
-        <div v-if="readyFiles.length > 0" class="select-all-row" @click="toggleSelectAll">
-          <span>选择所有来源</span>
-          <div class="select-all-check" :class="{ checked: isAllSelected }">
-            <svg v-if="isAllSelected" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-            </svg>
-          </div>
-        </div>
-
-
-        <div class="sources-list">
-          <div v-if="files.length === 0" class="empty-sources">
-            <div class="empty-icon">
-              <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
-                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-              </svg>
-            </div>
-            <p>已保存的来源将显示在此处</p>
-            <p class="hint">点击上方的"添加来源"即可添加 PDF、文本文件。</p>
-          </div>
-
-          <div
-            v-for="file in sortedFiles"
-            :key="file.id"
-            class="source-item"
-            :class="{
-              selected: selectedFileIds.includes(file.id),
-              processing: file.status === 'processing',
-              pending: file.status === 'pending',
-              ready: file.status === 'ready'
-            }"
-            @click="file.status === 'ready' && openFilePreview(file.id)"
-            @mouseenter="hoveringFileId = file.id"
-            @mouseleave="hoveringFileId = null"
-          >
-
-            <div class="source-left">
-
-              <div v-if="hoveringFileId === file.id && (file.status === 'ready' || file.status === 'failed')" class="source-menu-wrapper">
-                <button
-                  class="source-menu-btn"
-                  @click.stop="toggleFileMenu(file.id)"
-                >
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                  </svg>
-                </button>
-
-                <div v-if="openMenuFileId === file.id" class="source-dropdown">
-                  <button v-if="file.status === 'ready'" class="dropdown-item" @click.stop="openRenameModal('file', file.id, file.file_name)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                    </svg>
-                    重命名
-                  </button>
-                  <button class="dropdown-item danger" @click.stop="handleDeleteFile(file.id)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                    </svg>
-                    删除
-                  </button>
-                </div>
-              </div>
-
-              <div v-else class="source-icon" :class="{ 'image-icon': isImageFile(file), 'audio-icon': isAudioFile(file) }">
-
-                <svg v-if="isImageFile(file)" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-                </svg>
-
-                <svg v-else-if="isAudioFile(file)" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                </svg>
-
-                <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-                </svg>
-              </div>
-            </div>
-            <div class="source-info">
-              <span class="source-name">{{ file.file_name }}</span>
-              <span
-                v-if="file.status !== 'ready'"
-                class="source-status"
-                :class="file.status"
-                :title="file.status === 'failed' ? (file.error_message || '') : ''"
-              >
-                {{ getStatusText(file.status) }}
-                <span v-if="file.status === 'failed' && file.error_message" class="source-status-reason">
-                  {{ file.error_message }}
-                </span>
-              </span>
-            </div>
-
-            <div v-if="file.status === 'ready'" class="source-right">
-              <div
-                class="source-checkbox"
-                :class="{ checked: selectedFileIds.includes(file.id) }"
-                @click="toggleFileSelection(file.id, $event)"
-              >
-                <svg v-if="selectedFileIds.includes(file.id)" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-        </template>
-      </aside>
-
-
-      <div
-        class="resizer left-resizer"
-        :class="{ hidden: leftPanelCollapsed }"
-        @mousedown="startResizeLeft"
-      >
-        <div class="resizer-line"></div>
-      </div>
-
-
-      <div v-if="leftPanelCollapsed" class="collapsed-sidebar left">
-        <div class="collapsed-icon-btn" @click="leftPanelCollapsed = false" title="展开来源面板">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
-            <path d="M7 7h4v10H7z" opacity="0.5"/>
-          </svg>
-        </div>
-        <div class="collapsed-icon-btn" @click="triggerFileUpload" title="添加来源">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </svg>
-        </div>
-        <div class="collapsed-icon-btn" @click="leftPanelCollapsed = false" :title="`${files.length} 个来源文件`">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-          </svg>
-          <span v-if="files.length > 0" class="icon-badge">{{ files.length }}</span>
-        </div>
-      </div>
-
+        <CollapsedSourceRail
+          v-if="leftPanelCollapsed"
+          :file-count="files.length"
+          @expand="leftPanelCollapsed = false"
+          @trigger-file-upload="triggerFileUpload"
+        />
 
       <main class="chat-panel">
         <div class="chat-header">
@@ -1365,7 +982,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import 'katex/dist/katex.min.css'
-import { escapeHtml, renderMarkdownWithLatex, renderLatexOnly, renderSummary } from '../utils'
+import { escapeHtml, renderMarkdownWithLatex } from '../utils'
 import { parseThinkingContent, renderThinkingBlock, ENABLE_THINK_PARSING } from '../utils/think'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import FeatureConfigModal from '../components/common/FeatureConfigModal.vue'
@@ -1376,7 +993,8 @@ import ImageGenerationModal, { type ImageFile } from '../components/common/Image
 import VideoGenerationModal, { type VideoFile, type VideoGenerationMode, type VideoGenerationConfig } from '../components/common/VideoGenerationModal.vue'
 import FeatureDetailPanel from '../components/project/FeatureDetailPanel.vue'
 import WorkflowDetailPanel from '../components/project/WorkflowDetailPanel.vue'
-import PdfViewer from '../components/PdfViewer.vue'
+import CollapsedSourceRail from '../components/project/source/CollapsedSourceRail.vue'
+import SourcePanel from '../components/project/source/SourcePanel.vue'
 import SessionHistoryPanel from '../components/SessionHistoryPanel.vue'
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 import { usePanelResize } from '../composables/usePanelResize'
@@ -1398,9 +1016,7 @@ import {
   chatStream,
   editMessageAndRegenerate,
   type AgentRole,
-  getImagePreviewUrl,
   getAudioPreviewUrl,
-  getEmbeddedImagePreviewUrl,
   getBlocksLocation,
   getFile,
   type CitationRef,
@@ -1451,7 +1067,6 @@ import { getModelOutputLanguage, locale, translateText } from '../i18n'
 import { formatMessageTimestamp, formatRelativeTime } from '../utils/format'
 import {
   checkFileSize,
-  getStatusText,
   IMAGE_GENERATION_FILE_TYPES,
   isAudioFile,
   isImageFile,
@@ -1600,8 +1215,8 @@ watch(readyFiles, (newReadyFiles, oldReadyFiles) => {
   selectedFileIds.value = Array.from(currentSelected).filter(id => newIds.has(id))
 }, { immediate: true })
 
-function toggleFileSelection(fileId: string, event: Event) {
-  event.stopPropagation()
+function toggleFileSelection(fileId: string, event?: Event) {
+  event?.stopPropagation()
   const index = selectedFileIds.value.indexOf(fileId)
   if (index === -1) {
     selectedFileIds.value.push(fileId)
@@ -1892,7 +1507,7 @@ function clearFeatureCitation() {
   activeFeatureCitationNum.value = null
 
   highlightBlockIds.value = []
-  pdfViewerRef.value?.clearHighlights()
+  sourcePanelRef.value?.clearHighlights()
 }
 
 
@@ -1901,7 +1516,7 @@ function clearWorkflowCitation() {
   activeWorkflowFeatureId.value = null
 
   highlightBlockIds.value = []
-  pdfViewerRef.value?.clearHighlights()
+  sourcePanelRef.value?.clearHighlights()
 }
 
 
@@ -1910,7 +1525,6 @@ const previewingFileContent = ref<FileContent | null>(null)
 const previewingFileName = ref<string>('')
 const previewingFile = ref<FileInfo | null>(null)
 const highlightBlockIds = ref<string[]>([])
-const audioPlayerRef = ref<HTMLAudioElement | null>(null)
 const activeAudioBlockId = ref<string | null>(null)
 const activeChatCitationNum = ref<number | null>(null)
 const activeFeatureCitationNum = ref<number | null>(null)
@@ -1941,9 +1555,16 @@ const workflowEditActiveCitationNum = ref<number | null>(null)
 const fileContentCache = ref<Map<string, FileContent>>(new Map())
 const pageInfoCache = ref<Map<string, FilePageInfo>>(new Map())
 const isLoadingContent = ref(false)
-const previewContentRef = ref<HTMLDivElement | null>(null)
-const pdfViewerRef = ref<InstanceType<typeof PdfViewer> | null>(null)
+const sourcePanelRef = ref<InstanceType<typeof SourcePanel> | null>(null)
 const summaryExpanded = ref(true)
+
+function getPreviewContentEl(): HTMLDivElement | null {
+  return sourcePanelRef.value?.previewContentEl || null
+}
+
+function getAudioPlayerEl(): HTMLAudioElement | null {
+  return sourcePanelRef.value?.audioPlayerEl || null
+}
 
 
 const isPdfFile = ref(false)
@@ -2094,7 +1715,7 @@ const visibleParsedPages = computed(() => {
 const currentTotalPages = computed(() => {
   if (isRawViewMode.value) {
 
-    return pdfViewerRef.value?.totalPages || 0
+    return sourcePanelRef.value?.totalPages || 0
   }
   return parsedTotalPages.value
 })
@@ -2105,7 +1726,7 @@ function clearSelectedBlock() {
   copyPanelVisible.value = false
   copyPanelPosition.value = null
 
-  pdfViewerRef.value?.clearSelectedBlock()
+  sourcePanelRef.value?.clearSelectedBlock()
 }
 
 
@@ -2581,7 +2202,7 @@ function clearCitationHighlight() {
   featureEditActiveCitationNum.value = null
   workflowEditActiveCitationNum.value = null
 
-  pdfViewerRef.value?.clearHighlights()
+  sourcePanelRef.value?.clearHighlights()
   highlightBlockIds.value = []
   currentBlockIds.value = []
 }
@@ -3080,8 +2701,9 @@ async function openFilePreview(fileId: string, segmentId?: string) {
 
     if (isSwitchingFile) {
       await nextTick()
-      if (previewContentRef.value) {
-        previewContentRef.value.scrollTop = 0
+      const previewContent = getPreviewContentEl()
+      if (previewContent) {
+        previewContent.scrollTop = 0
       }
     }
 
@@ -3132,8 +2754,9 @@ async function openFilePreview(fileId: string, segmentId?: string) {
 
 
     await nextTick()
-    if (previewContentRef.value) {
-      previewContentRef.value.scrollTop = 0
+    const previewContent = getPreviewContentEl()
+    if (previewContent) {
+      previewContent.scrollTop = 0
     }
   }
 
@@ -3195,7 +2818,7 @@ async function jumpToPdfImageLocation(citation: ImageCitationSource) {
     const checkInterval = 50
     let waited = 0
     while (waited < maxWait) {
-      if (pdfViewerRef.value?.isDocumentLoaded) {
+      if (sourcePanelRef.value?.isDocumentLoaded) {
         break
       }
       await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -3206,9 +2829,7 @@ async function jumpToPdfImageLocation(citation: ImageCitationSource) {
     await waitForLayoutStable()
 
 
-    if (pdfViewerRef.value) {
-      await pdfViewerRef.value.scrollToPageAndHighlightBbox(targetPage, targetBbox)
-    }
+    await sourcePanelRef.value?.scrollToPageAndHighlightBbox(targetPage, targetBbox)
   } else if (previewingFileContent.value) {
 
     const imageBlock = previewingFileContent.value.blocks.find(block =>
@@ -3221,19 +2842,11 @@ async function jumpToPdfImageLocation(citation: ImageCitationSource) {
       await nextTick()
       scrollToBlock(imageBlock.block_id)
     } else if (targetPage > 0) {
-      const pageSection = previewContentRef.value?.querySelector(`[data-page="${targetPage}"]`) as HTMLElement
+      const pageSection = getPreviewContentEl()?.querySelector(`[data-page="${targetPage}"]`) as HTMLElement
       pageSection?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 }
-
-function getBlockImagePreviewUrl(block: FileContent['blocks'][number]): string {
-  if (!previewingFile.value) return ''
-  const imageIndex = block.extra?.image_index
-  if (typeof imageIndex !== 'number') return ''
-  return getEmbeddedImagePreviewUrl(previewingFile.value.id, imageIndex)
-}
-
 
 function getAudioSpeakerLabel(block: FileContent['blocks'][number]): string {
   const speaker = Number(block.extra?.speaker)
@@ -3272,7 +2885,7 @@ function handleAudioPlay() {
 
 
 function handleAudioTimeUpdate() {
-  const player = audioPlayerRef.value
+  const player = getAudioPlayerEl()
   if (!player) return
   const currentMs = Math.round(player.currentTime * 1000)
 
@@ -3295,7 +2908,7 @@ async function seekAudioToBlock(block: FileContent['blocks'][number]) {
 
 async function seekAudioToMs(startMs: number, blockIds: string[]) {
   await nextTick()
-  const player = audioPlayerRef.value
+  const player = getAudioPlayerEl()
   if (player) {
     player.currentTime = Math.max(0, startMs / 1000)
   }
@@ -3359,7 +2972,7 @@ async function scrollToSegment(_fileId: string, segmentId: string) {
     const checkInterval = 50
     let waited = 0
     while (waited < maxWait) {
-      if (pdfViewerRef.value?.isDocumentLoaded) {
+      if (sourcePanelRef.value?.isDocumentLoaded) {
         break
       }
       await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -3369,9 +2982,7 @@ async function scrollToSegment(_fileId: string, segmentId: string) {
 
     await waitForLayoutStable()
 
-    if (pdfViewerRef.value) {
-      await pdfViewerRef.value.scrollToSegment(segmentId)
-    }
+    await sourcePanelRef.value?.scrollToSegment(segmentId)
   } else if (previewingFileContent.value) {
 
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -3386,7 +2997,7 @@ async function scrollToSegment(_fileId: string, segmentId: string) {
 
 
 async function waitForLayoutStable(maxWait = 500): Promise<void> {
-  const previewContent = previewContentRef.value
+  const previewContent = getPreviewContentEl()
   if (!previewContent) {
 
     await new Promise(resolve => setTimeout(resolve, 300))
@@ -3451,12 +3062,12 @@ async function switchViewMode(mode: 'raw' | 'parsed') {
         const segment = pdfPageInfo.value.segments.find(s =>
           s.block_ids.some(bid => savedBlockIds.includes(bid))
         )
-        if (segment && pdfViewerRef.value) {
-          await pdfViewerRef.value.scrollToSegment(segment.segment_id)
+        if (segment) {
+          await sourcePanelRef.value?.scrollToSegment(segment.segment_id)
         }
-      } else if (pdfViewerRef.value) {
+      } else {
 
-        pdfViewerRef.value.goToPage(savedPageNum)
+        sourcePanelRef.value?.goToPage(savedPageNum)
       }
     } else {
 
@@ -3531,8 +3142,8 @@ function closePreview() {
 }
 
 function scrollToBlock(blockId: string) {
-  if (!previewContentRef.value) return
-  const container = previewContentRef.value
+  const container = getPreviewContentEl()
+  if (!container) return
   const blockEl = container.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement
   if (blockEl) {
 
@@ -3559,11 +3170,11 @@ async function jumpToPage() {
 
   if (isRawViewMode.value) {
 
-    pdfViewerRef.value?.goToPage(pageNum)
+    sourcePanelRef.value?.goToPage(pageNum)
   } else {
 
     await nextTick()
-    const pageSection = previewContentRef.value?.querySelector(`[data-page="${pageNum}"]`) as HTMLElement
+    const pageSection = getPreviewContentEl()?.querySelector(`[data-page="${pageNum}"]`) as HTMLElement
     if (pageSection) {
       pageSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
@@ -3574,14 +3185,14 @@ async function jumpToPage() {
 function handlePreviewScroll() {
 
   if (isRawViewMode.value) return
-  if (!previewContentRef.value || !isPdfFile.value || currentTotalPages.value === 0) return
+  const container = getPreviewContentEl()
+  if (!container || !isPdfFile.value || currentTotalPages.value === 0) return
 
 
   if (copyPanelVisible.value) {
     clearSelectedBlock()
   }
 
-  const container = previewContentRef.value
   const containerRect = container.getBoundingClientRect()
   const containerTop = containerRect.top
 
@@ -6801,16 +6412,6 @@ void [
 }
 
 
-.sources-panel {
-  background: var(--bg-white);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  flex-shrink: 0;
-  transition: width 0.2s ease;
-}
-
 .panel-header {
   padding: 16px 20px;
   display: flex;
@@ -6940,7 +6541,6 @@ void [
 }
 
 
-.sources-panel.collapsed,
 .studio-panel.collapsed {
   padding: 0;
   border: none;
@@ -6948,658 +6548,9 @@ void [
   min-width: 0;
 }
 
-.sources-panel.collapsed > *,
 .studio-panel.collapsed > * {
   display: none;
 }
-
-.add-source-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 12px 20px;
-  padding: 12px 20px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  color: var(--text-primary);
-  font-size: 15px;
-}
-
-.add-source-btn:hover {
-  background: var(--bg-hover);
-}
-
-
-.select-all-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 28px 8px 16px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-
-.select-all-row:hover {
-  background: var(--bg-hover);
-}
-
-.select-all-check {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1.5px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-tertiary);
-  transition: all 0.15s;
-}
-
-
-.select-all-check::before {
-  content: '';
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: transparent;
-  transition: background 0.15s;
-}
-
-.select-all-row:hover .select-all-check::before {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.select-all-row:hover .select-all-check {
-  border-color: var(--text-tertiary);
-}
-
-.select-all-check.checked {
-  background: var(--text-tertiary);
-  border-color: var(--text-tertiary);
-  color: white;
-}
-
-.select-all-row:hover .select-all-check.checked::before {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.sources-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.empty-sources {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.empty-sources .empty-icon {
-  color: var(--text-tertiary);
-  margin-bottom: 12px;
-}
-
-.empty-sources p {
-  font-size: 14px;
-  margin-bottom: 10px;
-}
-
-.empty-sources .hint {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-
-.source-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.3s;
-  position: relative;
-}
-
-.source-item:hover {
-  background: var(--bg-hover);
-}
-
-
-.source-item.ready:hover {
-  background: var(--bg-hover);
-}
-
-
-.source-item.pending {
-  cursor: not-allowed;
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.source-item.pending:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-
-.source-item.processing {
-  cursor: not-allowed;
-  background: linear-gradient(
-    90deg,
-    rgba(74, 155, 168, 0.05) 0%,
-    rgba(74, 155, 168, 0.12) 50%,
-    rgba(74, 155, 168, 0.05) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite;
-}
-
-.source-item.processing:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(74, 155, 168, 0.08) 0%,
-    rgba(74, 155, 168, 0.15) 50%,
-    rgba(74, 155, 168, 0.08) 100%
-  );
-  background-size: 200% 100%;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-
-.source-left {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.source-icon {
-  color: #1a73e8;
-  flex-shrink: 0;
-}
-
-.source-icon.image-icon {
-  color: #34a853;
-}
-
-.source-icon.audio-icon {
-  color: #9333ea;
-}
-
-
-.source-checkbox {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--border-color);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  background: transparent;
-  cursor: pointer;
-}
-
-
-.source-checkbox::before {
-  content: '';
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: transparent;
-  transition: background 0.15s;
-}
-
-.source-checkbox:hover::before {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.source-checkbox:hover {
-  border-color: var(--text-tertiary);
-}
-
-.source-checkbox.checked {
-  background: var(--text-tertiary);
-  border-color: var(--text-tertiary);
-  color: white;
-}
-
-.source-checkbox.checked:hover::before {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.source-right {
-  cursor: pointer;
-}
-
-
-.source-menu-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.source-menu-btn:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
-}
-
-
-.source-menu-wrapper {
-  position: relative;
-}
-
-
-.source-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  min-width: 120px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-  overflow: hidden;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.dropdown-item:hover:not(.disabled) {
-  background: var(--bg-hover);
-}
-
-.dropdown-item.disabled {
-  color: var(--text-disabled);
-  cursor: not-allowed;
-}
-
-
-.source-right {
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-
-.preview-file-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.preview-file-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 0;
-  flex: 1;
-}
-
-.preview-file-name span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-file-name svg {
-  color: #1a73e8;
-  flex-shrink: 0;
-}
-
-
-.view-toggle {
-  display: flex;
-  gap: 4px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  padding: 3px;
-  flex-shrink: 0;
-}
-
-.view-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.view-toggle-btn:hover {
-  color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.view-toggle-btn.active {
-  background: white;
-  color: var(--primary-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.view-toggle-btn svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-
-
-.source-guide-card {
-  margin: 12px 16px;
-  border: 1.5px dashed rgba(0, 0, 0, 0.12);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(249, 250, 251, 0.8) 0%, rgba(243, 244, 246, 0.6) 100%);
-  overflow: hidden;
-}
-
-.source-guide-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px 8px;
-}
-
-.source-guide-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.source-guide-title svg {
-  color: var(--primary-color);
-  width: 20px;
-  height: 20px;
-}
-
-.source-guide-toggle {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border-radius: 50%;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.source-guide-toggle svg {
-  width: 22px;
-  height: 22px;
-}
-
-.source-guide-toggle:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--text-secondary);
-}
-
-.source-guide-toggle svg {
-  transition: transform 0.2s;
-}
-
-.source-guide-toggle svg.rotated {
-  transform: rotate(-90deg);
-}
-
-.source-guide-content {
-  padding: 0 14px 14px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #1a1a1a;
-}
-
-.source-guide-content :deep(strong) {
-  color: #1a5c5c;
-  font-weight: 600;
-}
-
-.source-guide-keywords {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 4px 14px 14px;
-}
-
-.keyword-tag {
-  display: inline-block;
-  padding: 4px 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.keyword-tag:hover {
-  background: var(--primary-light);
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
-.preview-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-  scroll-behavior: smooth;
-}
-
-
-.preview-content-wrapper {
-  position: relative;
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-
-.page-nav-float {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-  backdrop-filter: blur(8px);
-}
-
-.page-nav-float .page-indicator {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.page-nav-float .page-jump {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.page-nav-float .page-jump input {
-  width: 50px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 12px;
-  text-align: center;
-  background: var(--bg-white);
-  color: var(--text-primary);
-}
-
-.page-nav-float .page-jump input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-}
-
-.page-nav-float .page-jump input::-webkit-outer-spin-button,
-.page-nav-float .page-jump input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.page-nav-float .page-jump input[type=number] {
-  -moz-appearance: textfield;
-}
-
-.page-nav-float .jump-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--bg-hover);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.page-nav-float .jump-btn:hover {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
-}
-
-
-.pdf-page-section {
-  margin-bottom: 24px;
-}
-
-
-.parsed-page-section {
-  margin-bottom: 24px;
-}
-
-.parsed-page-content {
-  padding: 0 4px;
-}
-
-.pdf-page-container {
-  display: flex;
-  justify-content: center;
-  background: #f0f0f0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.pdf-page-wrapper {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-}
-
-.pdf-canvas {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-
-.pdf-highlight-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.pdf-highlight-box {
-  position: absolute;
-  border: 2px solid #8b5cf6;
-  background: rgba(139, 92, 246, 0.15);
-  border-radius: 2px;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
-  animation: highlight-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes highlight-pulse {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
-  }
-}
-
-
-.pdf-selected-block-highlight {
-  position: absolute;
-  border: 2px solid #10b981;
-  background: rgba(16, 185, 129, 0.1);
-  border-radius: 2px;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-  pointer-events: auto;
-  cursor: default;
-}
-
 
 .block-copy-panel-floating {
   position: fixed;
@@ -7678,364 +6629,6 @@ void [
   .block-copy-panel-floating {
 
   }
-}
-
-
-.pdf-page-loading {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-
-.page-section {
-  margin-bottom: 16px;
-}
-
-.page-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0 16px;
-  padding: 0 4px;
-}
-
-.page-divider:first-child {
-  margin-top: 0;
-}
-
-.page-divider-line {
-  flex: 1;
-  height: 1px;
-  background: var(--border-color);
-}
-
-.page-divider-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-
-.page-loading,
-.page-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-.page-placeholder {
-  cursor: pointer;
-  background: var(--bg-hover);
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-
-.page-placeholder:hover {
-  background: var(--bg-active);
-  color: var(--text-secondary);
-}
-
-
-.image-preview-content {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 20px;
-}
-
-.image-preview-wrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.preview-image {
-  max-width: 100%;
-  max-height: 600px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.preview-loading {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-tertiary);
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.preview-loading::before {
-  content: '';
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: loadingSpin 0.8s linear infinite;
-}
-
-@keyframes loadingSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-
-.audio-preview-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.audio-player-bar {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  padding: 0 0 6px;
-  background: var(--bg-white);
-}
-
-.audio-player {
-  width: 100%;
-  height: 36px;
-}
-
-.audio-transcript-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.audio-transcript-group {
-  padding: 2px 0;
-}
-
-.audio-speaker-label {
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-}
-
-.audio-paragraph {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.9;
-  word-break: break-word;
-}
-
-.audio-text-segment {
-  display: inline;
-  margin: 0 2px 0 0;
-  padding: 1px 2px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.audio-text-segment:hover {
-  background: var(--bg-hover);
-}
-
-.audio-text-segment.highlighted {
-  background: rgba(147, 51, 234, 0.12);
-  animation: highlightFadeIn 0.3s ease-out;
-}
-
-.audio-text-segment.active {
-  background: rgba(37, 99, 235, 0.16);
-  color: var(--primary-color);
-}
-
-.preview-block {
-  margin-bottom: 8px;
-  line-height: 1.6;
-  color: #1a1a1a;
-  font-size: 14px;
-  transition: background 0.3s;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.preview-block.heading {
-  font-size: 18px;
-  font-weight: 600;
-  margin-top: 16px;
-  margin-bottom: 8px;
-}
-
-.preview-block.quote {
-  border-left: 3px solid var(--primary-color);
-  padding-left: 12px;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-
-.preview-block.table-block {
-  margin: 16px 0;
-  padding: 0;
-  overflow-x: auto;
-}
-
-.preview-block.image-block {
-  margin: 16px 0;
-  padding: 0;
-}
-
-.parsed-block-image {
-  display: block;
-  max-width: 100%;
-  max-height: 520px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  border-radius: 6px;
-}
-
-.preview-block.image-block.highlighted {
-  padding: 8px;
-  background: rgba(216, 180, 254, 0.2);
-}
-
-.table-caption {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  padding: 0 8px;
-}
-
-.table-content {
-  overflow-x: auto;
-}
-
-.table-content table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 13px;
-}
-
-.table-content td,
-.table-content th {
-  border: 1px solid var(--border-color);
-  padding: 8px 12px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.table-content th {
-  background: var(--bg-secondary);
-  font-weight: 600;
-}
-
-.table-content tr:nth-child(even) {
-  background-color: var(--bg-main);
-}
-
-.table-content tr:hover {
-  background-color: var(--bg-hover);
-}
-
-.table-footnote {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 6px;
-  padding: 0 8px;
-}
-
-.preview-block.table-block.highlighted .table-content table {
-  background: rgba(216, 180, 254, 0.2);
-}
-
-
-.preview-block.highlighted {
-  animation: highlightFadeIn 0.3s ease-out;
-}
-
-
-.highlight-text {
-  background: rgba(216, 180, 254, 0.5);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  padding: 0 4px;
-  border-radius: 3px;
-  font-weight: 700;
-}
-
-@keyframes highlightFadeIn {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.source-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.source-name {
-  display: block;
-  font-size: 14px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.source-status {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.source-status.ready {
-  color: var(--success-color);
-}
-
-.source-status.processing {
-  color: var(--primary-color);
-}
-
-.source-status.error {
-  color: var(--error-color);
-}
-
-.source-status.failed {
-  color: var(--error-color);
-}
-
-.source-status-reason {
-  margin-left: 6px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
 }
 
 
@@ -8791,83 +7384,6 @@ void [
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) scale(1);
-}
-
-
-.upload-progress-container {
-  padding: 8px 12px;
-  margin-top: 8px;
-  background: var(--bg-main);
-  border-radius: 8px;
-}
-
-.upload-progress-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--bg-white);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  border: 1px solid var(--border-color);
-}
-
-.upload-progress-item:last-child {
-  margin-bottom: 0;
-}
-
-.upload-progress-item.success {
-  background: rgba(82, 196, 26, 0.08);
-  border-color: rgba(82, 196, 26, 0.3);
-}
-
-.upload-progress-item.error {
-  background: rgba(255, 77, 79, 0.08);
-  border-color: rgba(255, 77, 79, 0.3);
-}
-
-.upload-file-name {
-  font-size: 13px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.upload-progress-bar {
-  height: 6px;
-  background: var(--border-color);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.upload-progress-fill {
-  height: 100%;
-  background: var(--primary-color);
-  border-radius: 3px;
-  transition: width 0.2s ease;
-}
-
-.upload-progress-item.success .upload-progress-fill {
-  background: #52c41a;
-}
-
-.upload-progress-item.error .upload-progress-fill {
-  background: #ff4d4f;
-}
-
-.upload-status {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-align: right;
-}
-
-.upload-progress-item.success .upload-status {
-  color: #52c41a;
-}
-
-.upload-progress-item.error .upload-status {
-  color: #ff4d4f;
 }
 
 
