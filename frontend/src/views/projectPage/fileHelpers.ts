@@ -1,7 +1,7 @@
 import type { FileInfo } from '../../types'
 
 export const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
-export const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
+export const AUDIO_TYPES = ['wav', 'mp3', 'm4a']
 export const IMAGE_GENERATION_FILE_TYPES = [...IMAGE_TYPES, 'webp']
 export const VIDEO_GENERATION_FILE_TYPES = [...IMAGE_TYPES]
 

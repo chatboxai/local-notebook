@@ -183,16 +183,22 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
             file_name = hit.get("file_name", "")
             content = hit.get("content", "")
             summary = hit.get("summary") or (content[:150] + "..." if len(content) > 150 else content)
+            audio_meta = QueryKnowledgeBaseTool._get_audio_segment_meta(segment_id)
 
             if segment_id in state.segment_to_citation:
                 existing_id = state.segment_to_citation[segment_id]
-                results.append({
+                if audio_meta and existing_id in state.citations_map:
+                    state.citations_map[existing_id].update(audio_meta)
+                reused = {
                     "citation_id": f"[{existing_id}]",
                     "file_name": file_name,
                     "summary": summary,
                     "type": "text",
                     "_reused": True,
-                })
+                }
+                if audio_meta:
+                    reused["time_range"] = audio_meta.get("time_range", "")
+                results.append(reused)
                 continue
 
             citation_id = f"citation_{state.citation_counter}"
@@ -204,18 +210,113 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 "segment_index": hit["segment_index"],
                 "content": content[:300] + "..." if len(content) > 300 else content,
                 "summary": summary,
+                **audio_meta,
             }
             state.segment_to_citation[segment_id] = citation_id
             state.citation_counter += 1
 
-            results.append({
+            item = {
                 "citation_id": f"[{citation_id}]",
                 "file_name": file_name,
                 "summary": summary,
                 "type": "text",
-            })
+            }
+            if audio_meta:
+                item["time_range"] = audio_meta.get("time_range", "")
+            results.append(item)
 
         return results
+
+    @staticmethod
+    def _get_audio_segment_meta(segment_id: str) -> dict:
+        db_path = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./local_notebook.db")
+        if db_path.startswith("sqlite"):
+            db_path = db_path.split("///")[-1]
+
+        conn = None
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            seg_row = conn.execute(
+                "SELECT s.file_id, s.block_ids, f.file_type "
+                "FROM segments s JOIN files f ON s.file_id = f.id "
+                "WHERE s.id = ? LIMIT 1",
+                (segment_id,),
+            ).fetchone()
+            if not seg_row or (seg_row["file_type"] or "").lower() not in {"wav", "mp3", "m4a"}:
+                return {}
+
+            block_ids = json.loads(seg_row["block_ids"]) if seg_row["block_ids"] else []
+            if not block_ids:
+                return {}
+
+            placeholders = ",".join("?" for _ in block_ids)
+            rows = conn.execute(
+                f"SELECT extra FROM blocks WHERE file_id = ? AND block_id IN ({placeholders})",
+                [seg_row["file_id"], *block_ids],
+            ).fetchall()
+
+            starts = []
+            ends = []
+            speakers = set()
+            for row in rows:
+                try:
+                    extra = json.loads(row["extra"]) if row["extra"] else {}
+                except (json.JSONDecodeError, TypeError):
+                    extra = {}
+                if not isinstance(extra, dict):
+                    continue
+                start = QueryKnowledgeBaseTool._int_or_none(extra.get("time_start"))
+                end = QueryKnowledgeBaseTool._int_or_none(extra.get("time_end"))
+                speaker = QueryKnowledgeBaseTool._int_or_none(extra.get("speaker"))
+                if start is not None:
+                    starts.append(start)
+                if end is not None:
+                    ends.append(end)
+                if speaker is not None:
+                    speakers.add(speaker)
+
+            if not starts or not ends:
+                return {}
+
+            start_ms = min(starts)
+            end_ms = max(ends)
+            return {
+                "media_type": "audio",
+                "time_start": start_ms,
+                "time_end": end_ms,
+                "time_range": QueryKnowledgeBaseTool._format_audio_time_range(start_ms, end_ms),
+                "speaker_count": len(speakers),
+            }
+        except Exception:
+            return {}
+        finally:
+            if conn is not None:
+                conn.close()
+
+    @staticmethod
+    def _int_or_none(value) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _format_audio_time_range(start_ms: int, end_ms: int) -> str:
+        return (
+            f"{QueryKnowledgeBaseTool._format_audio_time(start_ms)}-"
+            f"{QueryKnowledgeBaseTool._format_audio_time(end_ms)}"
+        )
+
+    @staticmethod
+    def _format_audio_time(ms: int) -> str:
+        total_seconds = max(0, int(ms or 0) // 1000)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        if hours:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
 
     @staticmethod
     def _add_image_citations(hits: list[dict], state: CitationState) -> list[dict]:

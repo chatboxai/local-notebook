@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
             vad_model="fsmn-vad",
             punc_model="ct-punc",
             spk_model="cam++",
+            disable_update=True,
             **({"model_path": MODEL_DIR} if MODEL_DIR else {}),
         )
         logger.info("FunASR model loaded")

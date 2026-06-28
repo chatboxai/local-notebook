@@ -114,7 +114,7 @@ function uiText(text: string): string {
   return translateText(text)
 }
 
-const AUDIO_TYPES = ['wav', 'mp3', 'm4a', 'wma']
+const AUDIO_TYPES = ['wav', 'mp3', 'm4a']
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp']
 const localPrompt = ref('')
 const localSelectedIds = ref<string[]>([])

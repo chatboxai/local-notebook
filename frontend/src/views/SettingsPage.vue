@@ -134,12 +134,16 @@
               </div>
 
 
-              <div class="overview-card disabled-card">
+              <div class="overview-card" @click="activeTab = 'funasr'">
                 <div class="overview-card-header">
                   <span class="overview-card-title">FunASR 语音转写</span>
-                  <span class="overview-badge coming-soon">即将支持</span>
+                  <span class="overview-badge" :class="overviewFunasrReady ? 'configured' : 'unconfigured'">
+                    {{ overviewFunasrReady ? '已配置' : '未配置' }}
+                  </span>
                 </div>
-                <p class="overview-card-detail muted">音频文件解析功能开发中</p>
+                <p class="overview-card-detail">
+                  本地服务 · {{ saved.funasr_base_url || '未设置地址' }}
+                </p>
               </div>
 
 
@@ -563,11 +567,32 @@
               <h2>FunASR 语音转写</h2>
               <p class="section-desc">音频文件自动转文字，支持中文长音频</p>
             </div>
-            <div class="coming-soon-placeholder">
-              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
-              <p>该功能正在开发中，敬请期待</p>
+
+            <div class="form-group">
+              <label>服务地址</label>
+              <input
+                type="text"
+                v-model="draft.funasr_base_url"
+                placeholder="http://127.0.0.1:8003"
+                class="input"
+              />
+              <p class="field-hint">
+                本地 FunASR 服务地址，启动方式：cd services/funasr && python server.py。
+                Docker 部署时不能用 localhost（容器内 localhost 指容器自身），
+                Mac/Win 用 <code>host.docker.internal</code>，Linux 用宿主机内网 IP。
+              </p>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn-test" @click="testFunasr" :disabled="testing.funasr">
+                {{ testing.funasr ? '测试中...' : '测试连接' }}
+              </button>
+              <span v-if="testResult.funasr" class="test-result" :class="testResult.funasr.ok ? 'ok' : 'fail'">
+                {{ testResult.funasr.msg }}
+              </span>
+              <button class="btn-save" @click="save('funasr')" :disabled="saving">
+                {{ saving ? '保存中...' : '保存' }}
+              </button>
             </div>
           </section>
 
@@ -794,16 +819,18 @@ const overviewMineruReady = computed(() => {
   if (saved.mineru_source === 'local') return !!saved.mineru_base_url
   return !!saved.mineru_api_key
 })
+const overviewFunasrReady = computed(() => !!saved.funasr_base_url)
 
-const testing = reactive({ llm: false, easytask: false, vlm: false, embedding: false, mineru: false, websearch: false })
+const testing = reactive({ llm: false, easytask: false, vlm: false, embedding: false, mineru: false, funasr: false, websearch: false })
 const testResult = reactive<{
   llm: { ok: boolean; msg: string } | null
   easytask: { ok: boolean; msg: string } | null
   vlm: { ok: boolean; msg: string } | null
   embedding: { ok: boolean; msg: string } | null
   mineru: { ok: boolean; msg: string } | null
+  funasr: { ok: boolean; msg: string } | null
   websearch: { ok: boolean; msg: string } | null
-}>({ llm: null, easytask: null, vlm: null, embedding: null, mineru: null, websearch: null })
+}>({ llm: null, easytask: null, vlm: null, embedding: null, mineru: null, funasr: null, websearch: null })
 
 const toast = reactive({ show: false, msg: '', type: 'success' as 'success' | 'error' })
 
@@ -1060,6 +1087,24 @@ async function testMineru() {
     testResult.mineru = { ok: false, msg: '无法连接' }
   } finally {
     testing.mineru = false
+  }
+}
+
+async function testFunasr() {
+  testing.funasr = true
+  testResult.funasr = null
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/settings/test/funasr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ base_url: draft.funasr_base_url || '' }),
+    })
+    const data = await res.json()
+    testResult.funasr = { ok: !!data.ok, msg: data.msg || (data.ok ? '连接成功' : '连接失败') }
+  } catch {
+    testResult.funasr = { ok: false, msg: '无法连接' }
+  } finally {
+    testing.funasr = false
   }
 }
 

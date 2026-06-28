@@ -175,10 +175,10 @@
                             <sup
                               v-else-if="part.type === 'citation_ref'"
                               class="inline-citation"
-                              :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature) }"
+                              :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource(part, feature) }"
                               :title="undefined"
                               :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
-                              @click="handleCitationClick({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature)"
+                              @click="handleCitationClick(part, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
                         </th>
@@ -202,10 +202,10 @@
                             <sup
                               v-else-if="part.type === 'citation_ref'"
                               class="inline-citation"
-                              :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature) }"
+                              :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource(part, feature) }"
                               :title="undefined"
                               :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
-                              @click="handleCitationClick({ type: 'citation_ref', citation_id: part.citation_id, display_num: part.display_num }, feature)"
+                              @click="handleCitationClick(part, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
                         </td>
@@ -499,7 +499,7 @@ function handleCitationClick(part: CitationPart, feature: WorkflowContentFeature
     citation_id: part.citation_id,
     display_num: part.display_num,
     segment_id: part.segment_id || feature.citations?.[part.citation_id!]?.segment_id,
-    summary: part.summary
+    summary: part.summary || feature.citations?.[part.citation_id!]?.summary
   }
   emit('citationClick', fullPart, feature)
 }
@@ -749,12 +749,16 @@ function handleWebCitationClick(citationId: string, feature: WorkflowContentFeat
 }
 
 
-interface TableCellPart {
-  type: 'text' | 'citation_ref'
+interface TableTextPart {
+  type: 'text'
   content?: string
-  citation_id?: string
-  display_num?: number
 }
+
+interface TableCitationPart extends CitationPart {
+  type: 'citation_ref'
+}
+
+type TableCellPart = TableTextPart | TableCitationPart
 
 
 interface ParsedTable {
@@ -804,7 +808,8 @@ function parseTableCellContent(cellText: string, feature: WorkflowContentFeature
     parts.push({
       type: 'citation_ref',
       citation_id: citationId,
-      display_num: citation?.display_num || 0
+      display_num: citation?.display_num || 0,
+      summary: citation?.summary
     })
 
     lastIndex = regex.lastIndex

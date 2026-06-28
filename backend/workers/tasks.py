@@ -592,7 +592,7 @@ async def _extract_text_and_blocks(
 ) -> tuple[str, list, list]:
     from workers.parsers import get_parser_for_file
 
-    if file_type in ("txt", "pdf", "docx", "epub"):
+    if file_type in ("txt", "pdf", "docx", "epub", "wav", "mp3", "m4a"):
         parser = get_parser_for_file(file_path)
         if file_type == "pdf":
             result = await parser.parse(file_path, file_id=file_id, db=db)

@@ -4,6 +4,10 @@ funasr>=1.1.0
 
 # setuptools 81+ 删除了 pkg_resources,部分 ML 库还在 import 它,先锁版本
 setuptools<81
+# 系统依赖: mp3/m4a 等音频解码需要 ffmpeg。
+# macOS: brew install ffmpeg
+# Ubuntu/Debian: sudo apt install ffmpeg
+#
 # PyTorch: 安装 GPU 版本 (CUDA 12.1)
 # pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 # 如果没有 GPU，使用 CPU 版本:
