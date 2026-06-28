@@ -83,6 +83,7 @@ async def _agent_sse(
 
     try:
         last_assistant_id = None
+        last_assistant_msg: Optional[Message] = None
         for msg in conversation_history:
             role = msg.get("role")
             content = msg.get("content") or ""
@@ -101,7 +102,7 @@ async def _agent_sse(
                     finished_at=finished_at,
                 )
                 db.add(assistant_msg)
-                last_assistant_id = assistant_msg.id
+                last_assistant_msg = assistant_msg
 
             elif role == "tool":
                 tool_meta = {
@@ -119,6 +120,8 @@ async def _agent_sse(
                     citations=citations_json,
                 ))
 
+        await db.flush()
+        last_assistant_id = last_assistant_msg.id if last_assistant_msg else None
         await db.commit()
 
         saved_count = len(conversation_history) + 1
