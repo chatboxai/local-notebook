@@ -37,7 +37,7 @@
           class="panel-title"
           :class="{ editable: canEditTitle, pending: !canEditTitle }"
           @click="startEditTitle"
-          :title="canEditTitle ? uiText('点击重命名') : uiText('标题生成后可重命名')"
+          :title="canEditTitle ? t('ui.clickToRename') : t('ui.youCanRenameItAfterTheTitleIs')"
         >{{ workflowTitleText }}</span>
       </div>
       <span class="workflow-status-badge" :class="getWorkflowStatusClass(workflow.status)">
@@ -47,12 +47,12 @@
         v-if="canCancelWorkflow"
         class="panel-stop-btn"
         @click="$emit('cancel', workflow.id)"
-        :title="uiText('停止生成')"
+        :title="t('ui.stopGeneration')"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
           <path d="M6 6h12v12H6z"/>
         </svg>
-        <span>{{ uiText('停止') }}</span>
+        <span>{{ t('ui.stop2') }}</span>
       </button>
 
 
@@ -63,7 +63,7 @@
         :class="{ loading: isExporting }"
         :disabled="isExporting"
         @click="handleExportWord"
-        :title="uiText('导出为 Word 文档')"
+        :title="t('ui.exportAsWordDocument')"
       >
         <svg v-if="!isExporting" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -72,7 +72,7 @@
           <path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/>
         </svg>
       </button>
-      <button class="panel-toggle-btn" @click="$emit('close')" :title="uiText('关闭')">
+      <button class="panel-toggle-btn" @click="$emit('close')" :title="t('ui.close')">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
         </svg>
@@ -81,11 +81,11 @@
     <div ref="contentRef" class="workflow-report-content" @click="handleContentClick">
 
       <div class="floating-toc" :class="{ expanded: tocExpanded }">
-        <button class="toc-toggle" @click="tocExpanded = !tocExpanded" :title="uiText('目录导航')">
+        <button class="toc-toggle" @click="tocExpanded = !tocExpanded" :title="t('ui.contentsNavigation')">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
           </svg>
-          <span class="toc-title">{{ uiText('目录') }}</span>
+          <span class="toc-title">{{ t('ui.contents') }}</span>
         </button>
         <div v-if="tocExpanded" class="toc-list">
           <div
@@ -115,12 +115,12 @@
                 class="step-regenerate-btn"
                 :disabled="!canRegenerate(feature.status)"
                 @click="handleRegenerateStep(feature.step_index)"
-                :title="uiText('重新生成')"
+                :title="t('ui.regenerate')"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                   <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                 </svg>
-                <span>{{ uiText('重新生成') }}</span>
+                <span>{{ t('ui.regenerate') }}</span>
               </button>
             </div>
           </div>
@@ -147,7 +147,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
-                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                      :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></component>
 
@@ -177,7 +177,7 @@
                               class="inline-citation"
                               :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource(part, feature) }"
                               :title="undefined"
-                              :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                              :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                               @click="handleCitationClick(part, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
@@ -204,7 +204,7 @@
                               class="inline-citation"
                               :class="{ active: isCitationActive(part.display_num || 0, feature.id), disabled: !hasCitationSource(part, feature) }"
                               :title="undefined"
-                              :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                              :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                               @click="handleCitationClick(part, feature)"
                             >{{ part.display_num }}</sup>
                           </template>
@@ -229,7 +229,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
-                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                      :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template>
                 </p>
@@ -247,7 +247,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
-                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                      :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></blockquote>
 
@@ -255,7 +255,7 @@
                 <figure v-else-if="processed.block.block_type === 'image'" class="feature-image">
                   <div class="image-wrapper">
                     <img v-if="processed.block.asset" :src="getAssetUrl(processed.block.asset.url)" :alt="processed.block.caption || ''" />
-                    <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" :title="uiText('下载图片')">
+                    <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" :title="t('ui.downloadImage')">
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                       </svg>
@@ -269,7 +269,7 @@
                   <figure v-for="(asset, ai) in processed.block.assets" :key="ai" class="feature-image">
                     <div class="image-wrapper">
                       <img :src="getAssetUrl(asset.url)" :alt="processed.block.caption || ''" />
-                      <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" :title="uiText('下载图片')">
+                      <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" :title="t('ui.downloadImage')">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                         </svg>
@@ -300,7 +300,7 @@
                       class="inline-citation"
                       :class="{ active: isCitationActive(part.display_num, feature.id), disabled: !hasCitationSource(part, feature) }"
                       :title="hasCitationSource(part, feature) ? part.summary : undefined"
-                      :data-disabled-title="uiText('抱歉，暂时无法定位该引用来源')"
+                      :data-disabled-title="t('ui.sorryThisCitationSourceCannotBeLocated')"
                       @click="handleCitationClick(part, feature)"
                     >{{ part.display_num }}</sup></template></li>
               </ul>
@@ -308,7 +308,7 @@
           </div>
           <div v-else class="report-body empty-blocks">
             <div v-if="feature.status === 'processing'" class="empty-placeholder">
-              <span class="loading-text">{{ uiText('正在生成') }}</span>
+              <span class="loading-text">{{ t('ui.generating') }}</span>
               <span class="loading-dots" aria-hidden="true">
                 <span class="dot dot-1">.</span>
                 <span class="dot dot-2">.</span>
@@ -324,13 +324,13 @@
               </span>
             </div>
             <div v-else-if="feature.status === 'failed'" class="workflow-feature-error">
-              {{ feature.error_message || uiText('生成失败，请点击“重新生成”按钮重试') }}
+              {{ feature.error_message || t('ui.generationFailedClickRegenerateToTryAgain') }}
             </div>
             <div v-else-if="feature.status === 'cancelled'" class="empty-placeholder">
-              {{ uiText('已停止生成') }}
+              {{ t('ui.generationStopped') }}
             </div>
             <div v-else class="empty-placeholder">
-              {{ uiText('暂无内容') }}
+              {{ t('ui.noContentYet') }}
             </div>
           </div>
         </div>
@@ -338,7 +338,7 @@
 
 
       <div v-if="features.length === 0 && workflow.steps.filter(s => s.status === 'failed').length === 0" class="workflow-empty">
-        <p>{{ uiText('暂无生成结果') }}</p>
+        <p>{{ t('ui.noGeneratedResults') }}</p>
       </div>
     </div>
 
@@ -364,7 +364,7 @@ import type { WorkflowDetail, WorkflowStatus, WorkflowContentFeature } from '../
 import type { FeatureBlock, CitationMetadata } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
 import { getAssetUrl, exportWorkflowToWord } from '../../services/api'
-import { locale, translateText } from '../../i18n'
+import { locale, t } from '../../i18n'
 
 import WebCitationTooltip from '../common/WebCitationTooltip.vue'
 
@@ -391,18 +391,13 @@ const emit = defineEmits<{
   (e: 'update-title', id: string, title: string): void
 }>()
 
-function uiText(text: string): string {
-  return translateText(text)
-}
-
-
 const isEditingTitle = ref(false)
 const titleInputRef = ref<HTMLInputElement | null>(null)
 const editingTitleValue = ref('')
 const workflowTitleText = computed(() => {
   const title = (props.workflow.title || '').trim()
   if (title && title !== 'custom') return title
-  return uiText('正在生成标题')
+  return t('ui.generatingTitle')
 })
 const canEditTitle = computed(() => {
   const title = (props.workflow.title || '').trim()
@@ -435,7 +430,7 @@ function getPendingDependencyNames(feature: WorkflowContentFeature): string[] {
   return dependsOn
     .map(depStepId => getDependencyFeature(depStepId))
     .filter((dep): dep is WorkflowContentFeature => Boolean(dep && dep.status !== 'completed'))
-    .map(dep => dep.step_name || dep.title || dep.step_id || uiText('该步骤'))
+    .map(dep => dep.step_name || dep.title || dep.step_id || t('ui.thisStep'))
 }
 
 function hasPendingDependencies(feature: WorkflowContentFeature): boolean {
@@ -453,11 +448,9 @@ function getFeatureWaitingText(feature: WorkflowContentFeature): string {
   const dependencyNames = getPendingDependencyNames(feature)
   if (dependencyNames.length > 0) {
     const names = formatDependencyNames(dependencyNames)
-    return locale.value === 'en'
-      ? `Waiting for ${names} to finish`
-      : `正在等待：${names} 生成完成`
+    return t('ui.waitingForDependencies', { names })
   }
-  return uiText('正在排队')
+  return t('ui.queued')
 }
 
 function startEditTitle() {
@@ -623,15 +616,15 @@ async function handleExportWord() {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    emit('showToast', uiText('导出成功'), 'success')
+    emit('showToast', t('ui.exportedSuccessfully'), 'success')
   } catch (error: any) {
     console.error('导出失败:', error)
     const message = error.response?.status === 429
-      ? '操作过于频繁，请稍后再试'
+      ? t('ui.tooManyRequestsTryAgainLater')
       : error.response?.status === 400
-        ? '当前状态不支持导出'
-        : '导出失败，请稍后重试'
-    emit('showToast', uiText(message), 'error')
+        ? t('ui.exportIsNotSupportedInTheCurrentState')
+        : t('ui.exportFailedTryAgainLater')
+    emit('showToast', message, 'error')
   } finally {
     isExporting.value = false
   }
@@ -701,15 +694,15 @@ async function downloadImage(url: string) {
 
 function getWorkflowStatusText(status: WorkflowStatus): string {
   const map: Record<WorkflowStatus, string> = {
-    pending: '等待中',
-    processing: '生成中',
-    cancelling: '取消中',
-    completed: '已完成',
-    failed: '失败',
-    partial: '部分完成',
-    cancelled: '已取消'
+    pending: t('ui.waiting'),
+    processing: t('ui.generating2'),
+    cancelling: t('ui.cancelling'),
+    completed: t('ui.completed'),
+    failed: t('ui.failed'),
+    partial: t('ui.partiallyCompleted'),
+    cancelled: t('ui.cancelled')
   }
-  return uiText(map[status] || status)
+  return map[status] || status
 }
 
 function isWorkflowPlanning(): boolean {
@@ -717,7 +710,7 @@ function isWorkflowPlanning(): boolean {
 }
 
 function getWorkflowDisplayStatusText(): string {
-  if (isWorkflowPlanning()) return uiText('规划中')
+  if (isWorkflowPlanning()) return t('ui.planning')
   return getWorkflowStatusText(props.workflow.status)
 }
 

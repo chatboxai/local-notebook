@@ -1,5 +1,7 @@
 
 
+import { t } from '../i18n'
+
 export const ENABLE_THINK_PARSING = true
 
 export interface ThinkingParseResult {
@@ -75,7 +77,7 @@ export function renderThinkingBlock(
   isExpanded: boolean,
   isStreaming: boolean = false,
   blockId: string = '',
-  headerLabel: string = '思考过程'
+  headerLabel: string = t('ui.thoughtProcess')
 ): string {
   if (!thinking) return ''
 

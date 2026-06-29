@@ -6,9 +6,9 @@
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
           </svg>
-          返回
+          {{ $t('ui.back') }}
         </button>
-        <h1>用户管理</h1>
+        <h1>{{ $t('ui.userManagement') }}</h1>
       </div>
       <div class="header-right">
         <span class="admin-badge">
@@ -23,27 +23,27 @@
     <main class="admin-main">
       <div class="toolbar">
         <div class="toolbar-summary">
-          <span>共 {{ total }} 位用户</span>
-          <span>{{ adminCount }} 位管理员</span>
+          <span>{{ $t('ui.totalUsersCount', { count: total }) }}</span>
+          <span>{{ $t('ui.adminUsersCount', { count: adminCount }) }}</span>
         </div>
         <button class="primary-btn" @click="openCreateModal">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
           </svg>
-          开通用户
+          {{ $t('ui.provisionUser') }}
         </button>
       </div>
 
-      <div v-if="loading" class="state-row">加载中...</div>
-      <div v-else-if="users.length === 0" class="state-row">暂无用户</div>
+      <div v-if="loading" class="state-row">{{ $t('ui.loading') }}</div>
+      <div v-else-if="users.length === 0" class="state-row">{{ $t('ui.noUsers') }}</div>
       <div v-else class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>用户名</th>
-              <th>角色</th>
-              <th>创建时间</th>
-              <th>操作</th>
+              <th>{{ $t('ui.username') }}</th>
+              <th>{{ $t('ui.role') }}</th>
+              <th>{{ $t('ui.createdAt') }}</th>
+              <th>{{ $t('ui.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -55,12 +55,12 @@
                 </div>
               </td>
               <td>
-                <span class="role-badge" :class="user.role">{{ user.role === 'admin' ? '管理员' : '普通用户' }}</span>
+                <span class="role-badge" :class="user.role">{{ user.role === 'admin' ? $t('ui.admin') : $t('ui.regularUser') }}</span>
               </td>
               <td>{{ formatDateTime(user.created_at) }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="icon-btn" title="重置密码" @click="openResetModal(user)">
+                  <button class="icon-btn" :title="$t('ui.resetPassword')" @click="openResetModal(user)">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                       <path d="M12 17a2 2 0 0 0 2-2c0-.74-.4-1.38-1-1.72V11h2V9h-2V7h-2v2H9v2h2v2.28c-.6.34-1 .98-1 1.72a2 2 0 0 0 2 2zm6-8h-1V7A5 5 0 0 0 7 7v2H6c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-9c0-1.1-.9-2-2-2zM9 7a3 3 0 0 1 6 0v2H9V7z" />
                     </svg>
@@ -75,46 +75,46 @@
       <section class="usage-section">
         <div class="section-header">
           <div>
-            <h2>模型用量</h2>
-            <p>按日期、用户、模型聚合</p>
+            <h2>{{ $t('ui.modelUsage') }}</h2>
+            <p>{{ $t('ui.usageGroupedByDateUserModel') }}</p>
           </div>
           <div class="usage-filters">
             <input v-model="usageFilters.start_date" type="date" />
             <input v-model="usageFilters.end_date" type="date" />
             <select v-model="usageFilters.user_id">
-              <option value="">全部用户</option>
+              <option value="">{{ $t('ui.allUsers') }}</option>
               <option v-for="user in users" :key="user.user_id" :value="user.user_id">
                 {{ user.username }}
               </option>
             </select>
-            <button class="plain-btn" @click="loadUsage">刷新</button>
+            <button class="plain-btn" @click="loadUsage">{{ $t('ui.refresh') }}</button>
           </div>
         </div>
 
         <div class="usage-summary">
-          <span>调用 {{ formatNumber(usageTotals.call_count) }} 次</span>
-          <span>总计 {{ formatNumber(usageTotals.total_tokens) }} tokens</span>
-          <span>输入 {{ formatNumber(usageTotals.input_uncached_tokens) }}</span>
-          <span>缓存读 {{ formatNumber(usageTotals.input_cache_read_tokens) }}</span>
-          <span>缓存写 {{ formatNumber(usageTotals.input_cache_write_tokens) }}</span>
-          <span>输出 {{ formatNumber(usageTotals.output_tokens) }}</span>
+          <span>{{ $t('ui.usageCallsCount', { count: formatNumber(usageTotals.call_count) }) }}</span>
+          <span>{{ $t('ui.usageTotalTokensCount', { count: formatNumber(usageTotals.total_tokens) }) }}</span>
+          <span>{{ $t('ui.usageInputCount', { count: formatNumber(usageTotals.input_uncached_tokens) }) }}</span>
+          <span>{{ $t('ui.usageCacheReadCount', { count: formatNumber(usageTotals.input_cache_read_tokens) }) }}</span>
+          <span>{{ $t('ui.usageCacheWriteCount', { count: formatNumber(usageTotals.input_cache_write_tokens) }) }}</span>
+          <span>{{ $t('ui.usageOutputCount', { count: formatNumber(usageTotals.output_tokens) }) }}</span>
         </div>
 
-        <div v-if="usageLoading" class="state-row">加载用量中...</div>
-        <div v-else-if="usageRows.length === 0" class="state-row">暂无用量记录</div>
+        <div v-if="usageLoading" class="state-row">{{ $t('ui.loadingUsage') }}</div>
+        <div v-else-if="usageRows.length === 0" class="state-row">{{ $t('ui.noUsageRecords') }}</div>
         <div v-else class="table-wrap usage-table">
           <table>
             <thead>
               <tr>
-                <th>日期</th>
-                <th>用户</th>
-                <th>模型</th>
-                <th>次数</th>
-                <th>未缓存输入</th>
-                <th>缓存读</th>
-                <th>缓存写</th>
-                <th>输出</th>
-                <th>合计</th>
+                <th>{{ $t('ui.date') }}</th>
+                <th>{{ $t('ui.defaultUser') }}</th>
+                <th>{{ $t('ui.model') }}</th>
+                <th>{{ $t('ui.count') }}</th>
+                <th>{{ $t('ui.uncachedInput') }}</th>
+                <th>{{ $t('ui.cacheRead') }}</th>
+                <th>{{ $t('ui.cacheWrite') }}</th>
+                <th>{{ $t('ui.outputTokens') }}</th>
+                <th>{{ $t('ui.total') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -139,20 +139,20 @@
 
     <div v-if="showCreate" class="modal-overlay" @click.self="closeCreateModal">
       <form class="modal" @submit.prevent="submitCreate">
-        <h2>开通用户</h2>
+        <h2>{{ $t('ui.provisionUser') }}</h2>
         <label>
-          用户名
+          {{ $t('ui.username') }}
           <input v-model="createForm.username" type="text" autocomplete="off" />
         </label>
         <label>
-          初始密码
+          {{ $t('ui.initialPassword') }}
           <input v-model="createForm.password" type="password" autocomplete="new-password" />
         </label>
         <p v-if="formError" class="form-error">{{ formError }}</p>
         <div class="modal-actions">
-          <button type="button" class="plain-btn" @click="closeCreateModal">取消</button>
+          <button type="button" class="plain-btn" @click="closeCreateModal">{{ $t('ui.cancel') }}</button>
           <button type="submit" class="primary-btn" :disabled="submitting">
-            {{ submitting ? '创建中...' : '创建' }}
+            {{ submitting ? $t('ui.creating') : $t('ui.create') }}
           </button>
         </div>
       </form>
@@ -160,17 +160,17 @@
 
     <div v-if="resetTarget" class="modal-overlay" @click.self="closeResetModal">
       <form class="modal" @submit.prevent="submitReset">
-        <h2>重置密码</h2>
+        <h2>{{ $t('ui.resetPassword') }}</h2>
         <p class="modal-desc">{{ resetTarget.username }}</p>
         <label>
-          新密码
+          {{ $t('ui.newPassword') }}
           <input v-model="resetPassword" type="password" autocomplete="new-password" />
         </label>
         <p v-if="formError" class="form-error">{{ formError }}</p>
         <div class="modal-actions">
-          <button type="button" class="plain-btn" @click="closeResetModal">取消</button>
+          <button type="button" class="plain-btn" @click="closeResetModal">{{ $t('ui.cancel') }}</button>
           <button type="submit" class="primary-btn" :disabled="submitting">
-            {{ submitting ? '保存中...' : '保存' }}
+            {{ submitting ? $t('ui.saving') : $t('ui.save') }}
           </button>
         </div>
       </form>
@@ -191,6 +191,7 @@ import {
   type AdminUser,
 } from '../services/api'
 import { getDisplayUsername } from '../services/auth'
+import { locale, t } from '../i18n'
 
 const router = useRouter()
 
@@ -224,7 +225,7 @@ const usageFilters = reactive({
   user_id: '',
 })
 
-const currentUsername = computed(() => getDisplayUsername() || 'admin')
+const currentUsername = computed(() => getDisplayUsername() || t('ui.admin'))
 const adminCount = computed(() => users.value.filter(user => user.role === 'admin').length)
 
 function toast(message: string, type: 'success' | 'error' = 'success') {
@@ -232,11 +233,11 @@ function toast(message: string, type: 'success' | 'error' = 'success') {
 }
 
 function errorMessage(error: any): string {
-  return error?.response?.data?.detail || error?.message || '操作失败'
+  return error?.response?.data?.detail || error?.message || t('ui.operationFailed')
 }
 
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('zh-CN', {
+  return new Date(value).toLocaleString(locale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -257,7 +258,7 @@ function toDateInputValue(date: Date): string {
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN').format(value || 0)
+  return new Intl.NumberFormat(locale.value).format(value || 0)
 }
 
 async function loadUsers() {
@@ -304,11 +305,11 @@ function closeCreateModal() {
 async function submitCreate() {
   const username = createForm.username.trim()
   if (username.length < 2) {
-    formError.value = '用户名至少 2 位'
+    formError.value = t('ui.usernameMinLength')
     return
   }
   if (createForm.password.length < 6) {
-    formError.value = '密码至少 6 位'
+    formError.value = t('ui.passwordMinLength')
     return
   }
 
@@ -321,7 +322,7 @@ async function submitCreate() {
     users.value = [created, ...users.value]
     total.value += 1
     showCreate.value = false
-    toast('用户已开通')
+    toast(t('ui.userProvisioned'))
   } catch (error) {
     formError.value = errorMessage(error)
   } finally {
@@ -342,7 +343,7 @@ function closeResetModal() {
 async function submitReset() {
   if (!resetTarget.value) return
   if (resetPassword.value.length < 6) {
-    formError.value = '密码至少 6 位'
+    formError.value = t('ui.passwordMinLength')
     return
   }
 
@@ -350,7 +351,7 @@ async function submitReset() {
     submitting.value = true
     await resetAdminUserPassword(resetTarget.value.user_id, resetPassword.value)
     closeResetModal()
-    toast('密码已重置')
+    toast(t('ui.passwordReset'))
   } catch (error) {
     formError.value = errorMessage(error)
   } finally {

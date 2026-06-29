@@ -14,13 +14,13 @@
           @compositionend="isComposing = false"
         />
         <div class="rename-modal-actions">
-          <button class="btn-cancel" @click="handleClose">取消</button>
+          <button class="btn-cancel" @click="handleClose">{{ $t('ui.cancel') }}</button>
           <button
             class="btn-confirm"
             :disabled="!inputValue.trim() || saving"
             @click="handleConfirm"
           >
-            {{ saving ? '保存中...' : '保存' }}
+            {{ saving ? $t('ui.saving') : $t('ui.save') }}
           </button>
         </div>
       </div>

@@ -16,16 +16,16 @@
       <span
         v-else
         class="chat-title"
-        title="点击编辑会话标题"
+        :title="$t('ui.clickToEditChatTitle')"
         @click="emit('start-title-edit')"
-      >{{ title || '新对话' }}</span>
+      >{{ title || $t('ui.newChat') }}</span>
     </div>
 
     <div class="chat-header-actions">
       <button
         class="header-action-btn"
         :disabled="isStreaming"
-        title="新建对话"
+        :title="$t('ui.newChat2')"
         @click="emit('create-session')"
       >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -34,7 +34,7 @@
       </button>
       <button
         class="header-action-btn"
-        title="历史对话"
+        :title="$t('ui.chatHistory')"
         @click="emit('open-history')"
       >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">

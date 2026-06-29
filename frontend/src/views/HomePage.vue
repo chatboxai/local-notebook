@@ -10,12 +10,12 @@
       </div>
       <div class="header-right">
         <LanguageSwitcher />
-        <button v-if="canAdmin" class="btn-settings" @click="router.push('/admin')" title="用户管理">
+        <button v-if="canAdmin" class="btn-settings" @click="router.push('/admin')" :title="$t('ui.userManagement')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zM8 11c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
           </svg>
         </button>
-        <button v-if="canAdmin" class="btn-settings" @click="router.push('/settings')" title="设置">
+        <button v-if="canAdmin" class="btn-settings" @click="router.push('/settings')" :title="$t('ui.settings')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/>
           </svg>
@@ -26,7 +26,7 @@
           </svg>
           <span>{{ displayUsername }}</span>
         </span>
-        <button class="btn-settings" @click="logout" title="退出登录">
+        <button class="btn-settings" @click="logout" :title="$t('ui.logOut')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3h-8v2h8v14h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
           </svg>
@@ -37,7 +37,7 @@
     
     <main class="home-main">
       <section class="projects-section">
-        <div v-if="loading" class="loading">加载中...</div>
+        <div v-if="loading" class="loading">{{ $t('ui.loading') }}</div>
 
         <div v-else-if="projects.length === 0" class="empty-state">
           <div class="empty-icon">
@@ -45,9 +45,9 @@
               <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
             </svg>
           </div>
-          <p>还没有项目</p>
+          <p>{{ $t('ui.noProjectsYet') }}</p>
           <button class="btn-primary" @click="showCreateModal = true">
-            创建第一个项目
+            {{ $t('ui.createYourFirstProject') }}
           </button>
         </div>
 
@@ -64,7 +64,7 @@
                       <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                     </svg>
                   </div>
-                  <span>新建项目</span>
+                  <span>{{ $t('ui.newProject') }}</span>
                 </div>
               </div>
               <div
@@ -95,7 +95,7 @@
                   <button
                     class="card-menu-btn"
                     @click.stop="toggleProjectMenu(project.id)"
-                    title="更多操作"
+                    :title="$t('ui.moreActions')"
                   >
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -106,13 +106,13 @@
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                       </svg>
-                      重命名
+                      {{ $t('ui.rename') }}
                     </button>
                     <button class="card-dropdown-item danger" @click.stop="handleDeleteProject(project.id)">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
                       </svg>
-                      删除
+                      {{ $t('ui.delete') }}
                     </button>
                   </div>
                 </div>
@@ -122,7 +122,7 @@
 
           
           <div v-if="groupedProjects.length === 0 && projects.length > 0" class="project-group">
-            <h3 class="group-title">今天</h3>
+            <h3 class="group-title">{{ $t('ui.today') }}</h3>
             <div class="projects-grid">
               <div class="project-card new-card" @click="showCreateModal = true">
                 <div class="new-card-content">
@@ -131,7 +131,7 @@
                       <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                     </svg>
                   </div>
-                  <span>新建项目</span>
+                  <span>{{ $t('ui.newProject') }}</span>
                 </div>
               </div>
             </div>
@@ -143,11 +143,11 @@
     
     <div v-if="showCreateModal" class="modal-overlay" @click="showCreateModal = false">
       <div class="modal" @click.stop>
-        <h3 class="modal-title">新建项目</h3>
+        <h3 class="modal-title">{{ $t('ui.newProject') }}</h3>
         <input
           type="text"
           class="modal-input"
-          placeholder="输入项目名称"
+          :placeholder="$t('ui.enterProjectName')"
           v-model="newProjectName"
           @keydown.enter="handleCreateEnter"
           @compositionstart="isComposing = true"
@@ -155,13 +155,13 @@
           ref="inputRef"
         />
         <div class="modal-actions">
-          <button class="btn-cancel" @click="showCreateModal = false">取消</button>
+          <button class="btn-cancel" @click="showCreateModal = false">{{ $t('ui.cancel') }}</button>
           <button
             class="btn-primary"
             @click="handleCreateProject"
             :disabled="!newProjectName.trim() || creating"
           >
-            {{ creating ? '创建中...' : '创建' }}
+            {{ creating ? $t('ui.creating') : $t('ui.create') }}
           </button>
         </div>
       </div>
@@ -170,16 +170,16 @@
     
     <div v-if="showPreflightWarning" class="modal-overlay" @click="showPreflightWarning = false">
       <div class="modal" @click.stop>
-        <h3 class="modal-title">基础配置未完成</h3>
+        <h3 class="modal-title">{{ $t('ui.basicConfigurationIsIncomplete') }}</h3>
         <p class="preflight-desc">
-          {{ canAdmin ? '创建项目前，请先完成以下配置：' : '系统基础配置未完成，请联系管理员处理：' }}
+          {{ canAdmin ? $t('ui.completeTheFollowingConfigurationBeforeCreatingAProject') : $t('ui.systemConfigurationIncompleteContactAdmin') }}
         </p>
         <ul class="preflight-list">
           <li v-for="item in preflightMissing" :key="item">{{ item }}</li>
         </ul>
         <div class="modal-actions">
-          <button class="btn-cancel" @click="showPreflightWarning = false">稍后再说</button>
-          <button v-if="canAdmin" class="btn-primary" @click="goToSettings">前往设置</button>
+          <button class="btn-cancel" @click="showPreflightWarning = false">{{ $t('ui.later') }}</button>
+          <button v-if="canAdmin" class="btn-primary" @click="goToSettings">{{ $t('ui.goToSettings') }}</button>
         </div>
       </div>
     </div>
@@ -187,11 +187,11 @@
     
     <div v-if="showRenameModal" class="modal-overlay" @click="closeRenameModal">
       <div class="modal" @click.stop>
-        <h3 class="modal-title">重命名项目</h3>
+        <h3 class="modal-title">{{ $t('ui.renameProject') }}</h3>
         <input
           type="text"
           class="modal-input"
-          placeholder="输入新的项目名称"
+          :placeholder="$t('ui.enterANewProjectName')"
           v-model="renameProjectName"
           @keydown.enter="handleRenameEnter"
           @compositionstart="isComposing = true"
@@ -199,13 +199,13 @@
           ref="renameInputRef"
         />
         <div class="modal-actions">
-          <button class="btn-cancel" @click="closeRenameModal">取消</button>
+          <button class="btn-cancel" @click="closeRenameModal">{{ $t('ui.cancel') }}</button>
           <button
             class="btn-primary"
             @click="handleRenameProject"
             :disabled="!renameProjectName.trim() || renaming"
           >
-            {{ renaming ? '保存中...' : '保存' }}
+            {{ renaming ? $t('ui.saving') : $t('ui.save') }}
           </button>
         </div>
       </div>
@@ -222,9 +222,10 @@ import LanguageSwitcher from '../components/common/LanguageSwitcher.vue'
 import { formatDate } from '../utils/format'
 import { usePollingTask } from '../composables/usePollingTask'
 import { clearTokens, getDisplayUsername, isAdmin } from '../services/auth'
+import { t } from '../i18n'
 
 const router = useRouter()
-const displayUsername = computed(() => getDisplayUsername() || '用户')
+const displayUsername = computed(() => getDisplayUsername() || t('ui.defaultUser'))
 const canAdmin = computed(() => isAdmin())
 
 const projects = ref<Project[]>([])
@@ -303,13 +304,13 @@ const groupedProjects = computed((): ProjectGroup[] => {
 
   
   const result: ProjectGroup[] = []
-  result.push({ label: '今天', projects: todayList })
-  if (yesterdayList.length > 0) result.push({ label: '昨天', projects: yesterdayList })
-  if (dayBeforeYesterdayList.length > 0) result.push({ label: '前天', projects: dayBeforeYesterdayList })
-  if (threeDaysList.length > 0) result.push({ label: '三天内', projects: threeDaysList })
-  if (sevenDaysList.length > 0) result.push({ label: '七天内', projects: sevenDaysList })
-  if (thirtyDaysList.length > 0) result.push({ label: '一个月内', projects: thirtyDaysList })
-  if (olderList.length > 0) result.push({ label: '更早', projects: olderList })
+  result.push({ label: t('ui.today'), projects: todayList })
+  if (yesterdayList.length > 0) result.push({ label: t('ui.yesterday'), projects: yesterdayList })
+  if (dayBeforeYesterdayList.length > 0) result.push({ label: t('ui.twoDaysAgo'), projects: dayBeforeYesterdayList })
+  if (threeDaysList.length > 0) result.push({ label: t('ui.last3Days'), projects: threeDaysList })
+  if (sevenDaysList.length > 0) result.push({ label: t('ui.last7Days'), projects: sevenDaysList })
+  if (thirtyDaysList.length > 0) result.push({ label: t('ui.lastMonth'), projects: thirtyDaysList })
+  if (olderList.length > 0) result.push({ label: t('ui.older'), projects: olderList })
 
   return result
 })
@@ -429,7 +430,7 @@ function logout() {
 
 async function handleDeleteProject(projectId: string) {
   activeProjectMenu.value = null
-  if (!confirm('确定要删除这个项目吗？')) return
+  if (!confirm(t('ui.confirmDeleteProject'))) return
 
   try {
     await deleteProject(projectId)
@@ -513,8 +514,8 @@ function getProjectColor(color: ProjectColor | null): string {
 
 
 function formatFileCount(fileCount: number | null | undefined): string {
-  if (!Number.isFinite(fileCount)) return '个文件'
-  return `${fileCount} 个文件`
+  if (!Number.isFinite(fileCount)) return t('ui.files')
+  return t('ui.fileCount', { count: fileCount })
 }
 
 

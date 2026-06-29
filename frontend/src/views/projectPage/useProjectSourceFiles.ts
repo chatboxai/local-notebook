@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue'
-import { getModelOutputLanguage } from '@/i18n'
+import { getModelOutputLanguage, locale, t } from '@/i18n'
 import {
   deleteFile,
   getFiles,
@@ -112,7 +112,7 @@ export function useProjectSourceFiles({
   async function handleUploadFiles(fileList: File[]) {
     const remainingCount = MAX_FILE_COUNT - files.value.length
     if (remainingCount <= 0) {
-      showToast(`已达到文件数量上限（${MAX_FILE_COUNT} 个）`, 'error')
+      showToast(t('ui.fileLimitReachedWithCount', { count: MAX_FILE_COUNT }), 'error')
       return
     }
 
@@ -124,7 +124,7 @@ export function useProjectSourceFiles({
     for (const file of filesToUpload) {
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       if (ext === 'doc') {
-        typeErrors.push(`"${file.name}" 暂不支持旧版 .doc 格式，请另存为 .docx 后再上传`)
+        typeErrors.push(t('ui.unsupportedLegacyDocFile', { name: file.name }))
         continue
       }
 
@@ -174,7 +174,7 @@ export function useProjectSourceFiles({
         }
       } catch (error: any) {
         console.error('Failed to upload file:', error)
-        const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || '上传失败'
+        const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || t('ui.uploadFailed')
         uploadItem.status = 'error'
         uploadItem.error = errorMsg
         failedCount++
@@ -184,11 +184,11 @@ export function useProjectSourceFiles({
     isUploading.value = false
 
     if (failedCount > 0 && successCount > 0) {
-      showToast(`${successCount} 个成功，${failedCount} 个失败`, 'info', 4000)
+      showToast(t('ui.uploadMixedResult', { success: successCount, failed: failedCount }), 'info', 4000)
     } else if (failedCount > 0) {
-      showToast(`${failedCount} 个文件上传失败`, 'error', 4000)
+      showToast(t('ui.filesUploadFailed', { count: failedCount }), 'error', 4000)
     } else if (successCount > 0) {
-      showToast(`${successCount} 个文件上传成功`, 'success', 3000)
+      showToast(t('ui.filesUploadSucceeded', { count: successCount }), 'success', 3000)
     }
 
     setTimeout(() => {
@@ -198,11 +198,11 @@ export function useProjectSourceFiles({
 
   async function handleInsertText(content: string) {
     if (files.value.length >= MAX_FILE_COUNT) {
-      showToast(`已达到文件数量上限（${MAX_FILE_COUNT} 个）`, 'error')
+      showToast(t('ui.fileLimitReachedWithCount', { count: MAX_FILE_COUNT }), 'error')
       return
     }
 
-    const fileName = `粘贴文本_${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/[\/\s:]/g, '')}.txt`
+    const fileName = `${t('ui.pastedTextFileNamePrefix')}_${new Date().toLocaleString(locale.value, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/[\/\s:]/g, '')}.txt`
     const blob = new Blob([content], { type: 'text/plain' })
     const file = new File([blob], fileName, { type: 'text/plain' })
 
@@ -216,7 +216,7 @@ export function useProjectSourceFiles({
       }
     } catch (error: any) {
       console.error('Failed to upload pasted text:', error)
-      const msg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || '上传失败'
+      const msg = error?.response?.data?.error || error?.response?.data?.detail || error?.message || t('ui.uploadFailed')
       showToast(msg, 'error', 4000)
     } finally {
       isUploading.value = false
@@ -278,16 +278,16 @@ export function useProjectSourceFiles({
 
   async function handleDeleteFile(fileId: string) {
     const file = files.value.find(f => f.id === fileId)
-    const fileName = file?.file_name || '此文件'
+    const fileName = file?.file_name || t('ui.thisFile')
 
     openMenuFileId.value = null
 
     const confirmed = await showConfirm({
-      title: '删除文件',
-      message: `确定要删除"${fileName}"吗？\n⚠️ 对话中所有引用该文件的标注将失效，无法查看原文出处。此操作无法撤销。`,
+      title: t('ui.deleteFile'),
+      message: t('ui.deleteFileMessage', { name: fileName }),
       type: 'danger',
-      confirmText: '删除',
-      cancelText: '取消'
+      confirmText: t('ui.delete'),
+      cancelText: t('ui.cancel')
     })
     if (!confirmed) return
 

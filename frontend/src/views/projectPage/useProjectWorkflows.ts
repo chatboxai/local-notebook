@@ -16,7 +16,7 @@ import {
   type WorkflowDetail,
   type WorkflowListItem,
 } from '@/services/api'
-import { getModelOutputLanguage, translateText } from '@/i18n'
+import { t, getModelOutputLanguage } from '@/i18n'
 import {
   buildWorkflowPrompt,
   formatWorkflowElapsed as formatWorkflowElapsedText,
@@ -49,10 +49,6 @@ interface UseProjectWorkflowsOptions {
   showToast: (message: string, type?: ToastType, duration?: number) => void
   showConfirm: (options: ConfirmOptions) => Promise<boolean>
   openRenameModal: (type: 'workflow', id: string, name: string) => void
-}
-
-function uiText(text: string): string {
-  return translateText(text)
 }
 
 export function useProjectWorkflows({
@@ -90,8 +86,8 @@ export function useProjectWorkflows({
     visible: false,
     title: '',
     message: '',
-    confirmText: '重新生成',
-    cancelText: '取消',
+    confirmText: t('ui.regenerate'),
+    cancelText: t('ui.cancel'),
     stepIndex: null as number | null,
     prompt: '',
     selectedFileIds: [] as string[]
@@ -134,7 +130,7 @@ export function useProjectWorkflows({
     const preset = activeWorkflowPreset.value
     const finalPrompt = buildWorkflowPrompt(preset, prompt)
     closeWorkflowConfig()
-    await handleOneclickWorkflow(title, finalPrompt, fileIds, preset.title, preset.key)
+    await handleOneclickWorkflow(title, finalPrompt, fileIds, t(preset.titleKey), preset.key)
   }
 
   async function handleOneclickWorkflow(
@@ -163,7 +159,7 @@ export function useProjectWorkflows({
       showToast(formatWorkflowGeneratingMessage(displayName), 'success')
     } catch (error) {
       console.error('创建工作流失败:', error)
-      showToast(uiText('创建任务失败，请稍后重试'), 'error')
+      showToast(t('ui.failedToCreateTheTaskTryAgainLater'), 'error')
     }
   }
 
@@ -210,7 +206,7 @@ export function useProjectWorkflows({
         if (pollErrorCount >= MAX_POLL_ERRORS) {
           stopWorkflowPolling()
           workflowLoading.value = false
-          showToast(uiText('状态获取失败，请刷新页面'), 'error')
+          showToast(t('ui.failedToGetStatusRefreshThePage'), 'error')
         }
         return
       }
@@ -241,13 +237,13 @@ export function useProjectWorkflows({
       }
 
       if (status.status === 'completed') {
-        showToast(uiText('生成完成'), 'success')
+        showToast(t('ui.generationCompleted'), 'success')
       } else if (status.status === 'partial') {
-        showToast(uiText('部分内容生成完成'), 'info')
+        showToast(t('ui.someContentWasGenerated'), 'info')
       } else if (status.status === 'failed') {
-        showToast(uiText('生成失败，请重试'), 'error')
+        showToast(t('ui.generationFailedTryAgain'), 'error')
       } else if (status.status === 'cancelled') {
-        showToast(uiText('已停止生成'), 'info')
+        showToast(t('ui.generationStopped'), 'info')
       }
     } catch (error) {
       console.error('获取工作流状态失败:', error)
@@ -255,7 +251,7 @@ export function useProjectWorkflows({
       if (pollErrorCount >= MAX_POLL_ERRORS) {
         stopWorkflowPolling()
         workflowLoading.value = false
-        showToast(uiText('网络连接不稳定，请刷新页面重试'), 'error')
+        showToast(t('ui.theNetworkConnectionIsUnstableRefreshThePage'), 'error')
       }
     }
   }
@@ -293,7 +289,7 @@ export function useProjectWorkflows({
       showWorkflowDetail.value = true
     } catch (error) {
       console.error('获取工作流详情失败:', error)
-      showToast(uiText('获取详情失败'), 'error')
+      showToast(t('ui.failedToLoadDetails'), 'error')
     }
   }
 
@@ -310,9 +306,9 @@ export function useProjectWorkflows({
 
   function openFeatureConfigDialog(stepIndex: number, dialogTitle: string, prompt: string, fileIds: string[]) {
     featureConfigDialog.title = dialogTitle
-    featureConfigDialog.message = uiText('确定要重新生成该步骤吗？')
-    featureConfigDialog.confirmText = uiText('重新生成')
-    featureConfigDialog.cancelText = uiText('取消')
+    featureConfigDialog.message = t('ui.regenerateThisStep')
+    featureConfigDialog.confirmText = t('ui.regenerate')
+    featureConfigDialog.cancelText = t('ui.cancel')
     featureConfigDialog.stepIndex = stepIndex
     featureConfigDialog.prompt = prompt
     featureConfigDialog.selectedFileIds = fileIds
@@ -331,7 +327,7 @@ export function useProjectWorkflows({
   function resolveStepDisplayName(configStepName: string | undefined, fallbackDisplayName: string | undefined): string {
     if (fallbackDisplayName && fallbackDisplayName.trim()) return fallbackDisplayName
     if (configStepName && /[^\x00-\x7F]/.test(configStepName)) return configStepName
-    return uiText('该步骤')
+    return t('ui.thisStep')
   }
 
   async function handleWorkflowStepRegenerate(stepIndex: number) {
@@ -353,9 +349,9 @@ export function useProjectWorkflows({
     } catch (error: any) {
       const status = error?.response?.status
       if (status === 404) {
-        showToast(uiText('该步骤不存在，无法重新生成'), 'error')
+        showToast(t('ui.thisStepDoesNotExistAndCannotBe'), 'error')
       } else {
-        showToast(uiText('获取步骤配置失败，请稍后重试'), 'error')
+        showToast(t('ui.failedToLoadStepConfigurationTryAgainLater'), 'error')
       }
 
       const dialogTitle = `${workflowTitle} - ${resolveStepDisplayName(undefined, fallbackStepName)}`
@@ -382,7 +378,7 @@ export function useProjectWorkflows({
       await refreshWorkflowDetail(workflowId)
     } catch (error) {
       console.error('重新生成步骤失败:', error)
-      showToast(uiText('重新生成失败，请稍后重试'), 'error')
+      showToast(t('ui.regenerationFailedTryAgainLater'), 'error')
     }
   }
 
@@ -406,8 +402,8 @@ export function useProjectWorkflows({
 
   async function handleDeleteWorkflow(workflowId: string) {
     const confirmed = await showConfirm({
-      title: uiText('确认删除'),
-      message: uiText('确定要删除这个生成记录吗？'),
+      title: t('ui.confirmDelete'),
+      message: t('ui.deleteThisGeneratedRecord'),
       type: 'danger'
     })
     if (!confirmed) return
@@ -418,10 +414,10 @@ export function useProjectWorkflows({
         currentWorkflow.value = null
       }
       await loadWorkflows()
-      showToast(uiText('已删除'), 'success')
+      showToast(t('ui.deleted'), 'success')
     } catch (error) {
       console.error('删除工作流失败:', error)
-      showToast(uiText('删除失败'), 'error')
+      showToast(t('ui.deleteFailed'), 'error')
     }
   }
 
@@ -442,14 +438,14 @@ export function useProjectWorkflows({
       await loadWorkflows()
       if (isWorkflowActiveStatus(status.status)) {
         startWorkflowPolling(workflowId)
-        showToast(uiText('正在停止生成'), 'info')
+        showToast(t('ui.stoppingGeneration'), 'info')
       } else {
         stopWorkflowPolling()
-        showToast(uiText('已停止生成'), 'info')
+        showToast(t('ui.generationStopped'), 'info')
       }
     } catch (error) {
       console.error('停止工作流失败:', error)
-      showToast(uiText('停止生成失败，请稍后重试'), 'error')
+      showToast(t('ui.failedToStopGenerationTryAgainLater'), 'error')
     }
   }
 
@@ -472,12 +468,12 @@ export function useProjectWorkflows({
         if (currentWorkflow.value?.id === id) {
           currentWorkflow.value.is_finalized = true
         }
-        showToast(uiText('已成功定稿'), 'success')
+        showToast(t('ui.finalizedSuccessfully'), 'success')
         await loadWorkflows()
       }
     } catch (error) {
       console.error('Finalize failed:', error)
-      showToast(uiText('定稿失败'), 'error')
+      showToast(t('ui.finalizationFailed'), 'error')
     } finally {
       finalizeConfirmVisible.value = false
       workflowToFinalizeId.value = null
@@ -500,7 +496,7 @@ export function useProjectWorkflows({
       await renameWorkflowTitle(id, title)
     } catch (error) {
       console.error('Failed to update workflow title:', error)
-      showToast(uiText('重命名失败'), 'error')
+      showToast(t('ui.renameFailed'), 'error')
     }
   }
 

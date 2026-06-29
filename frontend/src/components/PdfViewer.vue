@@ -7,7 +7,7 @@
       :style="{ height: placeholderBefore.height + 'px' }"
     >
       <div class="placeholder-hint" v-if="placeholderBefore.pages > 0">
-        第 1 - {{ placeholderBefore.pages }} 页
+        {{ $t('ui.pageRange', { start: 1, end: placeholderBefore.pages }) }}
       </div>
     </div>
 
@@ -21,7 +21,7 @@
       
       <div class="page-divider">
         <span class="page-divider-line"></span>
-        <span class="page-divider-text">第 {{ pageNum }} 页</span>
+        <span class="page-divider-text">{{ $t('ui.pageNumber', { page: pageNum }) }}</span>
         <span class="page-divider-line"></span>
       </div>
 
@@ -64,7 +64,7 @@
 
           
           <div v-if="!isPageRendered(pageNum)" class="pdf-page-loading">
-            <span>渲染中...</span>
+            <span>{{ $t('ui.rendering') }}</span>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@
       :style="{ height: placeholderAfter.height + 'px' }"
     >
       <div class="placeholder-hint" v-if="placeholderAfter.pages > 0">
-        第 {{ totalPages - placeholderAfter.pages + 1 }} - {{ totalPages }} 页
+        {{ $t('ui.pageRange', { start: totalPages - placeholderAfter.pages + 1, end: totalPages }) }}
       </div>
     </div>
   </div>

@@ -1,0 +1,25 @@
+export default {
+  quickRead: [
+    'Generate a "Quick Read" report from the selected sources. The goal is to help readers grasp the main thread quickly.',
+    '',
+    'Prioritize:',
+    '1. The source theme and core conclusions.',
+    '2. Key facts, people/organizations, timeline, or core concepts.',
+    '3. The most important highlights, anomalies, disputes, or gaps.',
+    '4. Questions worth asking next or areas worth reading more deeply.',
+    '',
+    'Requirements: keep the structure compact and clear; only include source-supported content; keep citations for all factual statements.',
+  ].join('\n'),
+  deepDive: [
+    'Generate a "Core Deep Dive" report from the selected sources. The goal is to systematically unpack the most important problems, arguments, and relationships in the material.',
+    '',
+    'Prioritize:',
+    '1. Background and problem definition.',
+    '2. Key arguments and their evidence chains.',
+    '3. Important concepts, mechanisms, causal chains, or structural relationships.',
+    '4. Different viewpoints, disagreements, uncertainties, and possible counterexamples.',
+    '5. Conclusions, risks, and actionable recommendations.',
+    '',
+    'Requirements: keep the structure clear and the analysis deep; avoid generic summary; every factual statement must be grounded in the sources and keep citations.',
+  ].join('\n'),
+} as const

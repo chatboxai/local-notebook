@@ -3,7 +3,7 @@
     <div v-if="visible" class="image-gen-overlay" @click.self="handleClose">
       <div class="image-gen-modal">
         <div class="image-gen-header">
-          <h3>{{ mode === 'text_to_image' ? '文生图' : '图生图' }}</h3>
+          <h3>{{ mode === 'text_to_image' ? $t('ui.textToImage') : $t('ui.imageToImage') }}</h3>
           <button class="image-gen-close" @click="handleClose">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -15,15 +15,15 @@
           
           <div v-if="mode === 'reference_to_image'" class="form-section">
             <label class="form-label">
-              选择参考图片
-              <span class="label-hint">（1-3张）</span>
+              {{ $t('ui.selectReferenceImage') }}
+              <span class="label-hint">{{ $t('ui.referenceImageCountHint') }}</span>
             </label>
             <div v-if="imageFiles.length === 0" class="no-images">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
                 <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
               </svg>
-              <p>暂无可用的图片文件</p>
-              <p class="hint">请先上传 jpg、png 或 webp 格式的图片</p>
+              <p>{{ $t('ui.noImageFilesAvailable') }}</p>
+              <p class="hint">{{ $t('ui.uploadJpgPngOrWebpImagesFirst') }}</p>
             </div>
             <div v-else class="image-selector">
               <div
@@ -42,20 +42,20 @@
                 </span>
               </div>
             </div>
-            <p class="selected-count">已选择 {{ selectedFileIds.length }}/3 张</p>
+            <p class="selected-count">{{ $t('ui.selectedImagesCount', { count: selectedFileIds.length }) }}</p>
           </div>
 
           
           <div class="form-section">
             <label class="form-label">
-              {{ mode === 'text_to_image' ? '图片描述' : '修改要求' }}
+              {{ mode === 'text_to_image' ? $t('ui.imageDescription') : $t('ui.editInstructions') }}
             </label>
             <textarea
               v-model="prompt"
               class="form-textarea"
               :placeholder="mode === 'text_to_image'
-                ? '描述您想要生成的图片，例如：\n• 一只可爱的橘猫在阳光下打盹\n• 未来城市的夜景，霓虹灯闪烁'
-                : '描述您想要的修改，例如：\n• 将图片转换为水彩画风格\n• 保持构图，改为黑白色调'"
+                ? $t('ui.textToImagePlaceholder')
+                : $t('ui.imageEditPlaceholder')"
               rows="4"
               maxlength="500"
             ></textarea>
@@ -64,7 +64,7 @@
 
           
           <div class="form-section">
-            <label class="form-label">输出比例</label>
+            <label class="form-label">{{ $t('ui.aspectRatio2') }}</label>
             <div class="aspect-ratio-selector">
               <button
                 v-for="ratio in ASPECT_RATIOS"
@@ -84,18 +84,18 @@
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
             </svg>
-            <span>图片生成通常需要 30-90 秒，请耐心等待</span>
+            <span>{{ $t('ui.imageGenerationUsuallyTakes3090Seconds') }}</span>
           </div>
         </div>
 
         <div class="image-gen-footer">
-          <button class="btn-cancel" @click="handleClose">取消</button>
+          <button class="btn-cancel" @click="handleClose">{{ $t('ui.cancel') }}</button>
           <button
             class="btn-confirm"
             :disabled="!canSubmit"
             @click="handleConfirm"
           >
-            开始生成
+            {{ $t('ui.generate') }}
           </button>
         </div>
       </div>

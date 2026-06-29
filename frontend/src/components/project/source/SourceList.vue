@@ -1,7 +1,7 @@
 <template>
   <div class="panel-header">
-    <span class="panel-title">来源</span>
-    <button class="panel-toggle-btn" @click="emit('toggle-collapse')" title="收起面板">
+    <span class="panel-title">{{ $t('ui.sources2') }}</span>
+    <button class="panel-toggle-btn" @click="emit('toggle-collapse')" :title="$t('ui.collapsePanel')">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
         <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
         <path d="M7 7h4v10H7z" opacity="0.5"/>
@@ -13,7 +13,7 @@
     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
       <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
     </svg>
-    添加来源
+    {{ $t('ui.addSource') }}
   </button>
 
   <div v-if="uploadingFiles.length > 0" class="upload-progress-container">
@@ -32,14 +32,14 @@
       </div>
       <div class="upload-status">
         <template v-if="item.status === 'uploading'">{{ item.progress }}%</template>
-        <template v-else-if="item.status === 'success'">完成</template>
-        <template v-else-if="item.status === 'error'">失败</template>
+        <template v-else-if="item.status === 'success'">{{ $t('ui.done') }}</template>
+        <template v-else-if="item.status === 'error'">{{ $t('ui.failed') }}</template>
       </div>
     </div>
   </div>
 
   <div v-if="readyFiles.length > 0" class="select-all-row" @click="emit('toggle-select-all')">
-    <span>选择所有来源</span>
+    <span>{{ $t('ui.selectAllSources') }}</span>
     <div class="select-all-check" :class="{ checked: isAllSelected }">
       <svg v-if="isAllSelected" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -54,8 +54,8 @@
           <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
         </svg>
       </div>
-      <p>已保存的来源将显示在此处</p>
-      <p class="hint">点击上方的"添加来源"即可添加 PDF、文本文件。</p>
+      <p>{{ $t('ui.savedSourcesWillAppearHere') }}</p>
+      <p class="hint">{{ $t('ui.clickAddSourceAboveToAddPdfOr') }}</p>
     </div>
 
     <div
@@ -88,13 +88,13 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
               </svg>
-              重命名
+              {{ $t('ui.rename') }}
             </button>
             <button class="dropdown-item danger" @click.stop="emit('delete-file', file.id)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
               </svg>
-              删除
+              {{ $t('ui.delete') }}
             </button>
           </div>
         </div>
@@ -152,6 +152,7 @@
 
 <script setup lang="ts">
 import type { FileInfo } from '@/types'
+import { t } from '@/i18n'
 import {
   getStatusText,
   isAudioFile,
@@ -203,8 +204,8 @@ function getProcessingProgressPercent(file: FileInfo): number {
 function getSourceStatusText(file: FileInfo): string {
   if (file.status === 'processing') {
     const progress = getProcessingNumbers(file)
-    if (progress) return `正在处理 ${progress.current}/${progress.total}`
-    return file.processing_message || '准备处理...'
+    if (progress) return t('ui.processingProgress', progress)
+    return file.processing_message || t('ui.readyToProcess')
   }
   return getStatusText(file.status)
 }

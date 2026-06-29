@@ -9,6 +9,7 @@ from sqlalchemy import func, select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.citation_parser import CitationParser
+from agent.tool_display import get_tool_display_info
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
 from dependencies.permissions import require_project, require_session
@@ -224,15 +225,6 @@ async def get_session(
     }
 
 
-TOOL_DISPLAY_NAMES = {
-    "query_knowledge_base": "\u6b63\u5728\u68c0\u7d22\u77e5\u8bc6\u5e93...",
-    "read_segments": "\u6b63\u5728\u8bfb\u53d6\u539f\u6587...",
-    "list_files": "\u6b63\u5728\u5217\u51fa\u6587\u4ef6...",
-    "get_file_meta": "\u6b63\u5728\u83b7\u53d6\u6587\u4ef6\u4fe1\u606f...",
-    "ask_image": "\u6b63\u5728\u5206\u6790\u56fe\u7247...",
-}
-
-
 def _process_messages_citations(messages: list) -> list:
     citations_map: dict = {}
     for m in messages:
@@ -284,9 +276,10 @@ def _process_messages_citations(messages: list) -> list:
             for tc in tool_calls:
                 name = tc.get("function", {}).get("name", "") if isinstance(tc, dict) else ""
                 if name:
+                    display_info = get_tool_display_info(name)
                     parts.append({
                         "type": "tool_status",
-                        "display": TOOL_DISPLAY_NAMES.get(name, f"\u6b63\u5728\u6267\u884c {name}..."),
+                        **display_info,
                     })
 
         content = m.get("content") or ""

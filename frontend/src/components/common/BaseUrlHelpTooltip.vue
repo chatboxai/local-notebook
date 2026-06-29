@@ -1,15 +1,15 @@
 <template>
-  <span class="help-tooltip" tabindex="0" role="button" aria-label="Base URL 填写提示">
+  <span class="help-tooltip" tabindex="0" role="button" :aria-label="$t('ui.baseUrlHelp')">
     <span class="help-tooltip-icon">!</span>
     <span class="tooltip-panel" role="tooltip">
-      <strong>填写规则</strong>
-      <span>只填服务根地址，不填最终 endpoint。</span>
-      <span>OpenAI Chat 会请求 /chat/completions。</span>
-      <span>Anthropic Messages 会请求 /v1/messages。</span>
-      <strong>常见例子</strong>
+      <strong>{{ $t('ui.rules') }}</strong>
+      <span>{{ $t('ui.enterTheServiceBaseUrlNotTheFinal') }}</span>
+      <span>{{ $t('ui.openaiChatRequestsChatCompletions') }}</span>
+      <span>{{ $t('ui.anthropicMessagesRequestsV1Messages') }}</span>
+      <strong>{{ $t('ui.examples') }}</strong>
       <span>DeepSeek OpenAI: https://api.deepseek.com</span>
       <span>DeepSeek Anthropic: https://api.deepseek.com/anthropic</span>
-      <span>Claude 官方: https://api.anthropic.com</span>
+      <span>{{ $t('ui.officialClaude') }}</span>
       <span>NeoRouter Claude: https://api.neorouter.ai</span>
     </span>
   </span>

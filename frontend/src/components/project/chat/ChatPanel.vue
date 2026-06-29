@@ -60,7 +60,7 @@
         v-if="showScrollToBottom"
         class="scroll-to-bottom-btn"
         :style="{ bottom: scrollBtnBottom + (isExportSelectionMode ? 60 : 0) + 'px' }"
-        title="滚动到底部"
+        :title="$t('ui.scrollToBottom')"
         @click="emit('force-scroll-to-bottom')"
       >
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">

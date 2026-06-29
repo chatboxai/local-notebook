@@ -5,7 +5,7 @@
         <textarea
           ref="textareaRef"
           :value="inputMessage"
-          :placeholder="hasReadyFiles ? '有什么想问的？' : '上传来源即可开始使用'"
+          :placeholder="hasReadyFiles ? $t('ui.whatWouldYouLikeToAsk') : $t('ui.uploadSourcesToGetStarted')"
           :disabled="!hasCurrentSession || isStreaming || !hasReadyFiles"
           rows="1"
           @input="handleInput"
@@ -17,7 +17,7 @@
           v-if="!isStreaming"
           class="send-btn"
           :disabled="!inputMessage.trim() || !hasCurrentSession || !hasReadyFiles"
-          title="发送"
+          :title="$t('ui.send')"
           @click="emit('send-message')"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -27,7 +27,7 @@
         <button
           v-else
           class="send-btn"
-          title="暂停"
+          :title="$t('ui.stop')"
           @click="emit('stop-streaming')"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -41,10 +41,10 @@
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
           </svg>
-          <span>联网搜索</span>
+          <span>{{ $t('ui.webSearch') }}</span>
         </label>
 
-        <span class="source-count">{{ sourceCount }} 个来源</span>
+        <span class="source-count">{{ $t('ui.sourceCount', { count: sourceCount }) }}</span>
       </div>
     </div>
   </div>

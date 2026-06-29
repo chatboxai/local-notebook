@@ -5,30 +5,30 @@
         <div class="logo">
           <img src="/logo/logo.png" alt="Local Notebook" class="logo-img" />
         </div>
-        <h1>文档问答系统</h1>
-        <p class="subtitle">登录以继续</p>
+        <h1>{{ $t('ui.documentQaSystem') }}</h1>
+        <p class="subtitle">{{ $t('ui.logInToContinue') }}</p>
       </div>
 
       <form class="login-form" @submit.prevent="handleLogin">
         <div class="form-group">
-          <label for="username">用户名</label>
+          <label for="username">{{ $t('ui.username') }}</label>
           <input
             id="username"
             v-model="username"
             type="text"
-            placeholder="请输入用户名"
+            :placeholder="$t('ui.enterUsername')"
             :disabled="loading"
             autocomplete="username"
           />
         </div>
 
         <div class="form-group">
-          <label for="password">密码</label>
+          <label for="password">{{ $t('ui.password') }}</label>
           <input
             id="password"
             v-model="password"
             type="password"
-            placeholder="请输入密码"
+            :placeholder="$t('ui.enterPassword')"
             :disabled="loading"
             autocomplete="current-password"
           />
@@ -39,7 +39,7 @@
         </div>
 
         <button type="submit" class="login-btn" :disabled="loading || !username || !password">
-          {{ loading ? '登录中...' : '登录' }}
+          {{ loading ? $t('ui.loggingIn') : $t('ui.logIn') }}
         </button>
       </form>
     </div>
@@ -51,6 +51,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, getCurrentUser } from '../services/api'
 import { setTokens, setUser } from '../services/auth'
+import { t } from '../i18n'
 
 const router = useRouter()
 
@@ -93,10 +94,10 @@ async function handleLogin() {
 
       router.push('/')
     } else {
-      error.value = response.error || '登录失败'
+      error.value = response.error || t('ui.loginFailed')
     }
   } catch (err: any) {
-    error.value = err.response?.data?.detail || err.response?.data?.error || '登录失败，请检查网络连接'
+    error.value = err.response?.data?.detail || err.response?.data?.error || t('ui.loginFailedCheckYourNetworkConnection')
   } finally {
     loading.value = false
   }

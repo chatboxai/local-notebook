@@ -1,7 +1,7 @@
 import { computed, type Ref } from 'vue'
 import { escapeHtml, renderMarkdownWithLatex } from '../utils'
 import { ENABLE_THINK_PARSING, parseThinkingContent, renderThinkingBlock } from '../utils/think'
-import { translateText } from '../i18n'
+import { t } from '../i18n'
 import type { ContentPart, Message } from '../types'
 
 type RenderedSegmentType = 'thinking' | 'tool' | 'body'
@@ -31,7 +31,19 @@ export function useMessageRendering({
   const userExpandedThinkingBlocks = new Set<string>()
 
   function localizedThinkingLabel() {
-    return escapeHtml(translateText('思考过程'))
+    return escapeHtml(t('ui.thoughtProcess'))
+  }
+
+  function localizedToolStatus(part: ContentPart): string {
+    if (part.type !== 'tool_status') return ''
+
+    const displayKey = part.display_key || part.displayKey
+    const displayParams = part.display_params || part.displayParams
+
+    if (!displayKey) return part.display
+
+    const localized = t(displayKey, displayParams)
+    return localized === displayKey && part.display ? part.display : localized
   }
 
   function renderThinkingToggleContent(isExpanded: boolean) {
@@ -74,8 +86,9 @@ export function useMessageRendering({
   }
 
   function processUnresolvedCitations(text: string): string {
+    const disabledTitle = escapeHtml(t('ui.sorryThisCitationSourceCannotBeLocated'))
     const unresolvedHtml = (displayNum: string) =>
-      `<span class="inline-citation segment-citation disabled unresolved" data-citation-type="segment">${displayNum}</span>`
+      `<span class="inline-citation segment-citation disabled unresolved" data-citation-type="segment" data-disabled-title="${disabledTitle}">${displayNum}</span>`
 
     let processed = text.replace(/\[citation:([^\]]+)\]/gi, (_match, value) => {
       const trimmed = String(value || '').trim()
@@ -208,11 +221,13 @@ export function useMessageRendering({
         } else if (partAny.citation_type === 'audio') {
           const segmentId = partAny.segment_id || ''
           const disabledClass = segmentId ? '' : ' disabled'
-          currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}">${partAny.display_num}</span>`
+          const disabledTitle = segmentId ? '' : ` data-disabled-title="${escapeHtml(t('ui.sorryThisCitationSourceCannotBeLocated'))}"`
+          currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}"${disabledTitle}>${partAny.display_num}</span>`
         } else {
           const segmentId = partAny.segment_id || ''
           const disabledClass = segmentId ? '' : ' disabled'
-          currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}">${partAny.display_num}</span>`
+          const disabledTitle = segmentId ? '' : ` data-disabled-title="${escapeHtml(t('ui.sorryThisCitationSourceCannotBeLocated'))}"`
+          currentText += `<span class="inline-citation segment-citation${disabledClass}" data-citation-type="segment" data-display-num="${partAny.display_num}" data-file="${escapeHtml(partAny.file_name || '')}" data-segment-id="${escapeHtml(segmentId)}"${disabledTitle}>${partAny.display_num}</span>`
         }
       } else if (part.type === 'tool_status') {
         if (currentText) {
@@ -220,7 +235,7 @@ export function useMessageRendering({
           currentText = ''
         }
 
-        segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(translateText(part.display))}</div>` })
+        segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(localizedToolStatus(part))}</div>` })
       }
     }
 
@@ -269,7 +284,12 @@ export function useMessageRendering({
 
     if (!hasToolStatusInParts && msg.tool_executing && msg.tool_executing.length > 0) {
       for (const tool of msg.tool_executing) {
-        parts.push({ type: 'tool_status', display: tool.display })
+        parts.push({
+          type: 'tool_status',
+          display: tool.display,
+          display_key: tool.display_key || tool.displayKey,
+          display_params: tool.display_params || tool.displayParams,
+        })
       }
     }
 
@@ -283,7 +303,7 @@ export function useMessageRendering({
     let hasToolStatus = false
     for (const part of parts) {
       if (part.type === 'tool_status') {
-        if (part.display && part.display.trim() !== '') {
+        if (localizedToolStatus(part).trim() !== '') {
           hasToolStatus = true
         }
         continue
