@@ -912,6 +912,22 @@ const toolboxMode = ref<'tools' | 'oneclick'>('oneclick')
 
 
 const transitionName = ref('slide-left')
+const COMPACTING_CHAT_HISTORY_KEY = 'ui.compactingChatHistory'
+
+function toToolStatusPart(tool: ToolExecuting): ToolStatusPart {
+  return {
+    type: 'tool_status',
+    display: tool.display,
+    display_key: tool.display_key || tool.displayKey,
+    display_params: tool.display_params || tool.displayParams,
+  }
+}
+
+function isCompactingToolStatus(part: ContentPart): boolean {
+  if (part.type !== 'tool_status') return false
+  const displayKey = part.display_key || part.displayKey
+  return displayKey === COMPACTING_CHAT_HISTORY_KEY || part.display === t(COMPACTING_CHAT_HISTORY_KEY)
+}
 
 watch(() => toolboxMode.value, (newVal, oldVal) => {
   if (newVal === 'tools' && oldVal === 'oneclick') {
@@ -1557,10 +1573,7 @@ async function sendMessage() {
       onToolExecuting: (tools: ToolExecuting[]) => {
 
         for (const tool of tools) {
-          streamingParts.value.push({
-            type: 'tool_status',
-            display: tool.display
-          } as ToolStatusPart)
+          streamingParts.value.push(toToolStatusPart(tool))
 
 
           if (tool.name === 'create_generation_task') {
@@ -1595,13 +1608,14 @@ async function sendMessage() {
       onCompacting: () => {
         streamingParts.value.push({
           type: 'tool_status',
-          display: t('ui.compactingChatHistory')
+          display: t(COMPACTING_CHAT_HISTORY_KEY),
+          display_key: COMPACTING_CHAT_HISTORY_KEY,
         })
       },
       onCompactDone: () => {
 
         streamingParts.value = streamingParts.value.filter(
-          p => !(p.type === 'tool_status' && p.display === t('ui.compactingChatHistory'))
+          p => !isCompactingToolStatus(p)
         )
         streamingParts.value.push({
           type: 'text',
@@ -1610,7 +1624,7 @@ async function sendMessage() {
       },
       onCompactFailed: (message: string) => {
         streamingParts.value = streamingParts.value.filter(
-          p => !(p.type === 'tool_status' && p.display === t('ui.compactingChatHistory'))
+          p => !isCompactingToolStatus(p)
         )
         console.warn('Compact failed:', message)
       },
@@ -1956,10 +1970,7 @@ async function submitEditMessage(msg: Message) {
       },
       onToolExecuting: (tools) => {
         for (const tool of tools) {
-          streamingParts.value.push({
-            type: 'tool_status',
-            display: tool.display
-          } as any)
+          streamingParts.value.push(toToolStatusPart(tool))
 
           if (tool.name === 'create_generation_task') {
             const category = tool.arguments?.category
@@ -2212,10 +2223,7 @@ async function regenerateMessage(assistantIndex: number) {
       },
       onToolExecuting: (tools) => {
         for (const tool of tools) {
-          streamingParts.value.push({
-            type: 'tool_status',
-            display: tool.display
-          } as any)
+          streamingParts.value.push(toToolStatusPart(tool))
 
           if (tool.name === 'create_generation_task') {
             const category = tool.arguments?.category

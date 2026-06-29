@@ -1362,7 +1362,14 @@ export interface FeatureEditHistoryMessage {
   role: 'user' | 'assistant'
   content: string
   content_parts?: Array<{ type: 'text'; content: string } | FeatureEditCitationRef>
-  tool_executing?: Array<{ name: string; display: string }>
+  tool_executing?: Array<{
+    name: string
+    display: string
+    display_key?: string
+    display_params?: Record<string, unknown>
+    displayKey?: string
+    displayParams?: Record<string, unknown>
+  }>
 }
 
 
@@ -1745,6 +1752,10 @@ export interface EditSessionMessage {
   tool_executing?: Array<{
     name: string
     display: string
+    display_key?: string
+    display_params?: Record<string, unknown>
+    displayKey?: string
+    displayParams?: Record<string, unknown>
   }>
   tool_call_id?: string
   name?: string

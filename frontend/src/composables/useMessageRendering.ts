@@ -34,6 +34,18 @@ export function useMessageRendering({
     return escapeHtml(t('ui.thoughtProcess'))
   }
 
+  function localizedToolStatus(part: ContentPart): string {
+    if (part.type !== 'tool_status') return ''
+
+    const displayKey = part.display_key || part.displayKey
+    const displayParams = part.display_params || part.displayParams
+
+    if (!displayKey) return part.display
+
+    const localized = t(displayKey, displayParams)
+    return localized === displayKey && part.display ? part.display : localized
+  }
+
   function renderThinkingToggleContent(isExpanded: boolean) {
     const iconPath = isExpanded
       ? 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'
@@ -223,7 +235,7 @@ export function useMessageRendering({
           currentText = ''
         }
 
-        segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(part.display)}</div>` })
+        segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(localizedToolStatus(part))}</div>` })
       }
     }
 
@@ -272,7 +284,12 @@ export function useMessageRendering({
 
     if (!hasToolStatusInParts && msg.tool_executing && msg.tool_executing.length > 0) {
       for (const tool of msg.tool_executing) {
-        parts.push({ type: 'tool_status', display: tool.display })
+        parts.push({
+          type: 'tool_status',
+          display: tool.display,
+          display_key: tool.display_key || tool.displayKey,
+          display_params: tool.display_params || tool.displayParams,
+        })
       }
     }
 
@@ -286,7 +303,7 @@ export function useMessageRendering({
     let hasToolStatus = false
     for (const part of parts) {
       if (part.type === 'tool_status') {
-        if (part.display && part.display.trim() !== '') {
+        if (localizedToolStatus(part).trim() !== '') {
           hasToolStatus = true
         }
         continue

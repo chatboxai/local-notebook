@@ -104,6 +104,10 @@ export type CitationRefPart = SegmentCitationRefPart | AudioCitationRefPart | Im
 export interface ToolStatusPart {
   type: 'tool_status'
   display: string
+  display_key?: string
+  display_params?: Record<string, unknown>
+  displayKey?: string
+  displayParams?: Record<string, unknown>
 }
 
 
@@ -118,6 +122,10 @@ export type ContentPart = TextPart | CitationRefPart | ToolStatusPart | Reasonin
 export interface ToolExecuting {
   name: string
   display: string
+  display_key?: string
+  display_params?: Record<string, unknown>
+  displayKey?: string
+  displayParams?: Record<string, unknown>
   arguments?: Record<string, any>
 }
 

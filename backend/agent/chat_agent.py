@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 import config
 from agent.citation_parser import CitationParser
 from agent.prompts import CHAT_AGENT_SYSTEM_PROMPT
+from agent.tool_display import get_tool_display_info
 from agent.tools.query_knowledge_base import (
     CitationState,
     QueryKnowledgeBaseTool,
@@ -239,7 +240,7 @@ class ChatAgent:
                 tools_display = [
                     {
                         "name": tc.function.name,
-                        "display": self._tool_display_name(tc.function.name),
+                        **get_tool_display_info(tc.function.name),
                     }
                     for tc in step_result.tool_calls
                 ]
@@ -599,16 +600,6 @@ class ChatAgent:
                 citations.append({"id": cid, **self._citation_state.citations_map[cid]})
 
         return {"answer": answer, "citations": citations}
-
-    @staticmethod
-    def _tool_display_name(name: str) -> str:
-        return {
-            "query_knowledge_base": "正在检索知识库...",
-            "read_segments": "正在读取原文...",
-            "list_files": "正在列出文件...",
-            "get_file_meta": "正在获取文件信息...",
-            "ask_image": "正在分析图片...",
-        }.get(name, f"正在执行 {name}...")
 
     @staticmethod
     def _estimate_tokens(text: str) -> int:
