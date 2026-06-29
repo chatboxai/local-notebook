@@ -16,7 +16,7 @@
           <div v-if="mode === 'reference_to_image'" class="form-section">
             <label class="form-label">
               {{ $t('ui.selectReferenceImage') }}
-              <span class="label-hint">（1-3张）</span>
+              <span class="label-hint">{{ $t('ui.referenceImageCountHint') }}</span>
             </label>
             <div v-if="imageFiles.length === 0" class="no-images">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
