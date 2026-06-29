@@ -64,7 +64,7 @@
 
           
           <div v-if="!isPageRendered(pageNum)" class="pdf-page-loading">
-            <span>渲染中...</span>
+            <span>{{ $t('ui.rendering') }}</span>
           </div>
         </div>
       </div>

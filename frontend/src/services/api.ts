@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { Project, FileInfo, Session, ToolExecuting, FileContent, Feature, FeatureBlock, ImageFileInfo } from '../types'
 import { getToken, clearTokens } from './auth'
+import { t } from '../i18n'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
@@ -52,7 +53,7 @@ api.interceptors.response.use(
   async (error) => {
 
     if (is429Error(error)) {
-      showGlobalToast('操作过于频繁，请稍后再试')
+      showGlobalToast(t('ui.tooManyRequestsTryAgainLater'))
       return Promise.reject(error)
     }
 
@@ -394,7 +395,7 @@ export interface CreateSessionResponse extends Session {
   reused: boolean
 }
 
-export async function createSession(projectId: string, title: string = '新对话'): Promise<CreateSessionResponse> {
+export async function createSession(projectId: string, title: string = t('ui.newChat')): Promise<CreateSessionResponse> {
   const response = await api.post(`/api/projects/${projectId}/sessions`, { title })
   return response.data
 }
@@ -514,8 +515,8 @@ export function chatStream(
         return
       }
       if (response.status === 429) {
-        showGlobalToast('操作过于频繁，请稍后再试')
-        callbacks.onError('操作过于频繁，请稍后再试')
+        showGlobalToast(t('ui.tooManyRequestsTryAgainLater'))
+        callbacks.onError(t('ui.tooManyRequestsTryAgainLater'))
         return
       }
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
@@ -720,12 +721,12 @@ export function editMessageAndRegenerate(
       if (response.status === 402) {
 
         const data = await response.json()
-        callbacks.onError(data.error || '点数不足，请充值后继续使用')
+        callbacks.onError(data.error || t('ui.pointsInsufficientRecharge'))
         return
       }
       if (response.status === 429) {
-        showGlobalToast('操作过于频繁，请稍后再试')
-        callbacks.onError('操作过于频繁，请稍后再试')
+        showGlobalToast(t('ui.tooManyRequestsTryAgainLater'))
+        callbacks.onError(t('ui.tooManyRequestsTryAgainLater'))
         return
       }
       if (!response.ok) {

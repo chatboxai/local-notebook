@@ -1,12 +1,12 @@
 <template>
-  <div class="language-switcher" :aria-label="t('language')">
+  <div class="language-switcher" :aria-label="t('locale.language')">
     <button
       class="language-switcher-btn"
-      :class="{ active: locale === 'zh' }"
+      :class="{ active: locale === 'zh-CN' }"
       type="button"
-      @click="setLocale('zh')"
+      @click="setLocale('zh-CN')"
     >
-      {{ t('chinese') }}
+      {{ t('locale.chinese') }}
     </button>
     <button
       class="language-switcher-btn"
@@ -14,13 +14,13 @@
       type="button"
       @click="setLocale('en')"
     >
-      {{ t('english') }}
+      {{ t('locale.english') }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { locale, setLocale, t } from '../../i18n'
+import { locale, t, setLocale } from '../../i18n'
 </script>
 
 <style scoped>

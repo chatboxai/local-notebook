@@ -18,18 +18,18 @@
             <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" />
           </svg>
         </div>
-        <h3>添加来源即可开始使用</h3>
-        <button class="upload-btn" @click="emit('trigger-upload')">上传来源</button>
+        <h3>{{ $t('ui.addSourcesToGetStarted') }}</h3>
+        <button class="upload-btn" @click="emit('trigger-upload')">{{ $t('ui.uploadSources') }}</button>
       </template>
     </div>
 
     <template v-else>
       <div v-if="isLoadingMoreMessages" class="loading-more-messages">
         <span class="loading-spinner"></span>
-        <span>加载历史消息...</span>
+        <span>{{ $t('ui.loadingEarlierMessages') }}</span>
       </div>
       <div v-else-if="hasMoreMessages && isMessagesScrollable" class="load-more-hint">
-        <span>向上滚动加载更多</span>
+        <span>{{ $t('ui.scrollUpToLoadMore') }}</span>
       </div>
 
       <div
@@ -52,7 +52,7 @@
         </div>
 
         <div v-if="msg.role === 'compact_divider'" class="compact-divider">
-          <span>── 更早的对话已压缩 ──</span>
+          <span>{{ $t('ui.compactDivider') }}</span>
         </div>
 
         <div v-else-if="msg.role === 'user'" class="user-message" :class="{ editing: editingMessageId === msg.id, selectable: isExportSelectionMode }">
@@ -66,13 +66,13 @@
               @keydown.escape="emit('cancel-edit-message')"
             ></textarea>
             <div class="user-edit-actions">
-              <button class="edit-cancel-btn" @click="emit('cancel-edit-message')">取消</button>
+              <button class="edit-cancel-btn" @click="emit('cancel-edit-message')">{{ $t('ui.cancel') }}</button>
               <button
                 class="edit-submit-btn"
                 :disabled="!editingContent.trim() || isStreaming"
                 @click="emit('submit-edit-message', msg)"
               >
-                保存并重新生成
+                {{ $t('ui.saveAndRegenerate') }}
               </button>
             </div>
           </div>
@@ -82,7 +82,7 @@
             <div v-if="!isExportSelectionMode" class="user-action-btns">
               <button
                 class="user-action-btn"
-                :data-tooltip="isPreCompactMessage(index) ? '已压缩的消息不可编辑' : '编辑'"
+                :data-tooltip="isPreCompactMessage(index) ? $t('ui.compactedMessagesCannotBeEdited') : $t('ui.edit')"
                 :disabled="isStreaming || isPreCompactMessage(index)"
                 @click="emit('start-edit-message', msg)"
               >
@@ -91,7 +91,7 @@
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
               </button>
-              <button class="user-action-btn" data-tooltip="复制" @click="emit('copy-user-message', msg)">
+              <button class="user-action-btn" :data-tooltip="$t('ui.copy')" @click="emit('copy-user-message', msg)">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -125,13 +125,13 @@
           </div>
 
           <div v-if="shouldShowMessageActions(index)" class="message-actions">
-            <button class="action-btn" data-tooltip="复制纯文本" @click="emit('copy-message-as-text', msg)">
+            <button class="action-btn" :data-tooltip="$t('ui.copyPlainText')" @click="emit('copy-message-as-text', msg)">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
             </button>
-            <button class="action-btn" data-tooltip="复制 Markdown" @click="emit('copy-message-as-markdown', msg)">
+            <button class="action-btn" :data-tooltip="$t('ui.copyMarkdown')" @click="emit('copy-message-as-markdown', msg)">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 3v4a1 1 0 001 1h4"></path>
                 <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
@@ -139,12 +139,12 @@
                 <path d="M11 13v4"></path>
               </svg>
             </button>
-            <button class="action-btn" disabled data-tooltip="喜欢（即将推出）">
+            <button class="action-btn" disabled :data-tooltip="$t('ui.likeComingSoon')">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
               </svg>
             </button>
-            <button class="action-btn" disabled data-tooltip="不喜欢（即将推出）">
+            <button class="action-btn" disabled :data-tooltip="$t('ui.dislikeComingSoon')">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path>
               </svg>
@@ -153,7 +153,7 @@
               class="action-btn"
               :class="{ 'error-retry': parseMessageContent(msg).hasError }"
               :disabled="!isLastAssistantMessage(index) || isStreaming || isPreCompactMessage(index)"
-              :data-tooltip="isPreCompactMessage(index) ? '已压缩的消息不可重新生成' : (parseMessageContent(msg).hasError ? '重新生成（上次出错）' : (isLastAssistantMessage(index) ? '重新生成' : '仅最后一条消息可重新生成'))"
+              :data-tooltip="regenerateTooltip(index, msg)"
               @click="emit('regenerate-message', index)"
             >
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
@@ -163,7 +163,7 @@
             </button>
             <button
               class="action-btn"
-              data-tooltip="下载对话"
+              :data-tooltip="$t('ui.downloadChat')"
               :disabled="isStreaming"
               @click.stop="emit('enter-export-mode-with-selection', index)"
             >
@@ -174,7 +174,7 @@
               </svg>
             </button>
             <span class="actions-divider">|</span>
-            <span class="agent-role-label">{{ msg.agent_role === 'analysis' ? '分析助手' : '小洛' }}</span>
+            <span class="agent-role-label">{{ msg.agent_role === 'analysis' ? $t('ui.analysisAssistant') : $t('ui.xiaoluo') }}</span>
             <span class="message-time">{{ formatMessageTime(msg.created_at) }}</span>
           </div>
         </div>
@@ -205,7 +205,7 @@
             <svg class="thinking-spinner" viewBox="0 0 24 24" width="14" height="14">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
             </svg>
-            <span>思考中...</span>
+            <span>{{ $t('ui.thinking') }}</span>
           </div>
         </div>
       </div>
@@ -216,6 +216,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Message } from '../../../types'
+import { t } from '../../../i18n'
 
 type RenderedSegment = { type: string; html: string }
 
@@ -251,7 +252,7 @@ interface Props {
   formatMessageTime: (value: string) => string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'messages-scroll': []
@@ -287,6 +288,13 @@ defineExpose({
 function handleEditingInput(event: Event) {
   emit('update:editingContent', (event.target as HTMLTextAreaElement).value)
   emit('auto-resize-edit-textarea')
+}
+
+function regenerateTooltip(index: number, msg: Message): string {
+  if (props.isPreCompactMessage(index)) return t('ui.compactedMessagesCannotBeRegenerated')
+  if (props.parseMessageContent(msg).hasError) return t('ui.regenerateLastAttemptFailed')
+  if (props.isLastAssistantMessage(index)) return t('ui.regenerate')
+  return t('ui.onlyTheLastMessageCanBeRegenerated')
 }
 </script>
 
@@ -886,7 +894,7 @@ function handleEditingInput(event: Event) {
 }
 
 .assistant-content :deep(.inline-citation.disabled::after) {
-  content: '抱歉，暂时无法定位该引用来源';
+  content: attr(data-disabled-title);
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;

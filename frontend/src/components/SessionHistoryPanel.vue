@@ -3,7 +3,7 @@
     <div v-if="visible" class="session-history-overlay" @click.self="$emit('close')">
       <div class="session-history-panel">
         <div class="panel-header">
-          <h3>历史对话</h3>
+          <h3>{{ $t('ui.chatHistory') }}</h3>
           <button class="close-btn" @click="$emit('close')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -14,16 +14,16 @@
         <div class="panel-content">
           <div v-if="loading" class="loading-state">
             <span class="loading-spinner"></span>
-            <span>加载中...</span>
+            <span>{{ $t('ui.loading') }}</span>
           </div>
 
           <div v-else-if="sessions.length === 0" class="empty-state">
-            <span>暂无历史对话</span>
+            <span>{{ $t('ui.noChatHistory') }}</span>
           </div>
 
           <div v-else class="sessions-list">
             <div v-if="groupedSessions.today.length > 0" class="session-group">
-              <div class="group-label">今天</div>
+              <div class="group-label">{{ $t('ui.today') }}</div>
               <div
                 v-for="session in groupedSessions.today"
                 :key="session.id"
@@ -31,12 +31,12 @@
                 :class="{ active: session.id === currentSessionId }"
                 @click="$emit('select', session.id)"
               >
-                <span class="session-title">{{ session.title || '新对话' }}</span>
+                <span class="session-title">{{ session.title || $t('ui.newChat') }}</span>
                 <span class="session-time">{{ formatRelativeTime(session.updated_at) }}</span>
                 <button
                   class="delete-btn"
                   @click.stop="$emit('delete', session.id, session.title)"
-                  title="删除"
+                  :title="$t('ui.delete')"
                 >
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -46,7 +46,7 @@
             </div>
 
             <div v-if="groupedSessions.pastWeek.length > 0" class="session-group">
-              <div class="group-label">最近7天</div>
+              <div class="group-label">{{ $t('ui.last7Days2') }}</div>
               <div
                 v-for="session in groupedSessions.pastWeek"
                 :key="session.id"
@@ -54,12 +54,12 @@
                 :class="{ active: session.id === currentSessionId }"
                 @click="$emit('select', session.id)"
               >
-                <span class="session-title">{{ session.title || '新对话' }}</span>
+                <span class="session-title">{{ session.title || $t('ui.newChat') }}</span>
                 <span class="session-time">{{ formatRelativeTime(session.updated_at) }}</span>
                 <button
                   class="delete-btn"
                   @click.stop="$emit('delete', session.id, session.title)"
-                  title="删除"
+                  :title="$t('ui.delete')"
                 >
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -69,7 +69,7 @@
             </div>
 
             <div v-if="groupedSessions.pastMonth.length > 0" class="session-group">
-              <div class="group-label">最近30天</div>
+              <div class="group-label">{{ $t('ui.last30Days') }}</div>
               <div
                 v-for="session in groupedSessions.pastMonth"
                 :key="session.id"
@@ -77,12 +77,12 @@
                 :class="{ active: session.id === currentSessionId }"
                 @click="$emit('select', session.id)"
               >
-                <span class="session-title">{{ session.title || '新对话' }}</span>
+                <span class="session-title">{{ session.title || $t('ui.newChat') }}</span>
                 <span class="session-time">{{ formatRelativeTime(session.updated_at) }}</span>
                 <button
                   class="delete-btn"
                   @click.stop="$emit('delete', session.id, session.title)"
-                  title="删除"
+                  :title="$t('ui.delete')"
                 >
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -92,7 +92,7 @@
             </div>
 
             <div v-if="groupedSessions.older.length > 0" class="session-group">
-              <div class="group-label">更早</div>
+              <div class="group-label">{{ $t('ui.older') }}</div>
               <div
                 v-for="session in groupedSessions.older"
                 :key="session.id"
@@ -100,12 +100,12 @@
                 :class="{ active: session.id === currentSessionId }"
                 @click="$emit('select', session.id)"
               >
-                <span class="session-title">{{ session.title || '新对话' }}</span>
+                <span class="session-title">{{ session.title || $t('ui.newChat') }}</span>
                 <span class="session-time">{{ formatRelativeTime(session.updated_at) }}</span>
                 <button
                   class="delete-btn"
                   @click.stop="$emit('delete', session.id, session.title)"
-                  title="删除"
+                  :title="$t('ui.delete')"
                 >
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>

@@ -15,15 +15,15 @@
           
           <div v-if="mode !== 'text_to_video'" class="form-section">
             <label class="form-label">
-              选择图片
+              {{ $t('ui.selectImages') }}
               <span class="label-hint">{{ imageHint }}</span>
             </label>
             <div v-if="imageFiles.length === 0" class="no-images">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
                 <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
               </svg>
-              <p>暂无可用的图片文件</p>
-              <p class="hint">请先上传 jpg、png 格式的图片</p>
+              <p>{{ $t('ui.noImageFilesAvailable') }}</p>
+              <p class="hint">{{ $t('ui.uploadJpgOrPngImagesFirst') }}</p>
             </div>
             <div v-else class="image-selector">
               <div
@@ -46,14 +46,14 @@
                 </span>
               </div>
             </div>
-            <p class="selected-count">已选择 {{ selectedFileIds.length }}/{{ maxImages }} 张</p>
+            <p class="selected-count">{{ $t('ui.selectedImagesOfCount', { selected: selectedFileIds.length, total: maxImages }) }}</p>
           </div>
 
           
           <div class="form-section">
             <label class="form-label">
               {{ promptLabel }}
-              <span v-if="!promptRequired" class="label-hint">（可选）</span>
+              <span v-if="!promptRequired" class="label-hint">{{ $t('ui.optional') }}</span>
             </label>
             <textarea
               v-model="prompt"
@@ -67,7 +67,7 @@
 
           
           <div class="form-section">
-            <label class="form-label">视频时长</label>
+            <label class="form-label">{{ $t('ui.duration') }}</label>
             <div class="duration-selector">
               <button
                 v-for="d in durationOptions"
@@ -76,14 +76,14 @@
                 :class="{ active: duration === d }"
                 @click="duration = d"
               >
-                {{ d }}秒
+                {{ d }}{{ $t('ui.secondsUnit') }}
               </button>
             </div>
           </div>
 
           
           <div v-if="showAspectRatio" class="form-section">
-            <label class="form-label">画面比例</label>
+            <label class="form-label">{{ $t('ui.aspectRatio') }}</label>
             <div class="aspect-ratio-selector">
               <button
                 v-for="ratio in ASPECT_RATIOS"
@@ -100,7 +100,7 @@
 
           
           <div class="form-section">
-            <label class="form-label">分辨率</label>
+            <label class="form-label">{{ $t('ui.resolution') }}</label>
             <div class="resolution-selector">
               <button
                 v-for="res in RESOLUTIONS"
@@ -118,7 +118,7 @@
           <div class="form-section bgm-section">
             <label class="form-label checkbox-label">
               <input type="checkbox" v-model="bgm" />
-              <span>添加背景音乐</span>
+              <span>{{ $t('ui.addBackgroundMusic') }}</span>
             </label>
           </div>
 
@@ -127,18 +127,18 @@
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
             </svg>
-            <span>视频生成通常需要 1-5 分钟，请耐心等待</span>
+            <span>{{ $t('ui.videoGenerationUsuallyTakes15Minutes') }}</span>
           </div>
         </div>
 
         <div class="video-gen-footer">
-          <button class="btn-cancel" @click="handleClose">取消</button>
+          <button class="btn-cancel" @click="handleClose">{{ $t('ui.cancel') }}</button>
           <button
             class="btn-confirm"
             :disabled="!canSubmit"
             @click="handleConfirm"
           >
-            开始生成
+            {{ $t('ui.generate') }}
           </button>
         </div>
       </div>
@@ -148,6 +148,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { t } from '../../i18n'
 import { getImagePreviewUrl } from '../../services/api'
 
 export interface VideoFile {
@@ -205,20 +206,20 @@ const selectedFileIds = ref<string[]>([])
 
 const modalTitle = computed(() => {
   switch (props.mode) {
-    case 'text_to_video': return '文生视频'
-    case 'image_to_video': return '图生视频'
-    case 'start_end_to_video': return '首尾帧视频'
-    case 'reference_to_video': return '参考生视频'
-    default: return '视频生成'
+    case 'text_to_video': return t('ui.textToVideo')
+    case 'image_to_video': return t('ui.imageToVideo')
+    case 'start_end_to_video': return t('ui.startEndFrameVideo')
+    case 'reference_to_video': return t('ui.referenceToVideo')
+    default: return t('ui.videoGeneration')
   }
 })
 
 
 const imageHint = computed(() => {
   switch (props.mode) {
-    case 'image_to_video': return '（1张，作为首帧）'
-    case 'start_end_to_video': return '（2张，首帧和尾帧）'
-    case 'reference_to_video': return '（1-7张，用 @1 @2 引用）'
+    case 'image_to_video': return t('ui.oneImageAsFirstFrame')
+    case 'start_end_to_video': return t('ui.twoImagesAsStartAndEndFrames')
+    case 'reference_to_video': return t('ui.oneToSevenImagesWithReferences')
     default: return ''
   }
 })
@@ -236,9 +237,9 @@ const maxImages = computed(() => {
 
 const promptLabel = computed(() => {
   switch (props.mode) {
-    case 'text_to_video': return '视频描述'
-    case 'reference_to_video': return '视频描述（用 @1 @2 引用主体）'
-    default: return '动作描述'
+    case 'text_to_video': return t('ui.videoPrompt')
+    case 'reference_to_video': return t('ui.videoPromptWithReferences')
+    default: return t('ui.motionPrompt')
   }
 })
 
@@ -251,13 +252,13 @@ const promptRequired = computed(() => {
 const promptPlaceholder = computed(() => {
   switch (props.mode) {
     case 'text_to_video':
-      return '描述您想要生成的视频，例如：\n一只橘猫在阳光下伸懒腰，然后打了个哈欠'
+      return t('ui.textToVideoPlaceholder')
     case 'image_to_video':
-      return '描述图片中的动作变化，例如：\n图中的人物开始走动，微风吹动头发'
+      return t('ui.imageToVideoPlaceholder')
     case 'start_end_to_video':
-      return '描述过渡效果，例如：\n镜头从日出缓慢过渡到日落'
+      return t('ui.startEndVideoPlaceholder')
     case 'reference_to_video':
-      return '用 @1 @2 引用选中的图片，例如：\n@1 和 @2 在公园里散步'
+      return t('ui.referenceVideoPlaceholder')
     default:
       return ''
   }

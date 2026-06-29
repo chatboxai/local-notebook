@@ -11,6 +11,7 @@ import {
   type FoundBlock,
 } from '@/services/api'
 import type { FileContent, FileInfo } from '@/types'
+import { t } from '@/i18n'
 import { isAudioFile, isImageFile } from './fileHelpers'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -232,10 +233,10 @@ export function useSourcePreview({
 
     try {
       await copyTextToClipboard(selectedPdfBlock.value.content)
-      showToast('复制成功')
+      showToast(t('ui.copied'))
     } catch (error) {
       console.error('Failed to copy text:', error)
-      showToast('复制失败', 'error')
+      showToast(t('ui.copyFailed'), 'error')
     }
   }
 
@@ -417,8 +418,8 @@ export function useSourcePreview({
 
   function getAudioSpeakerLabel(block: FileContent['blocks'][number]): string {
     const speaker = Number(block.extra?.speaker)
-    if (!Number.isFinite(speaker)) return '说话人'
-    return `说话人 ${speaker + 1}`
+    if (!Number.isFinite(speaker)) return t('ui.speaker')
+    return t('ui.speakerNumber', { number: speaker + 1 })
   }
 
   function getAudioStartMs(block: FileContent['blocks'][number]): number | null {

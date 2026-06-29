@@ -2,18 +2,18 @@
   <div class="selection-action-bar">
     <div class="selection-info">
       <button class="select-all-btn" @click="emit('toggle-all')">
-        {{ allSelected ? '取消全选' : '全选' }}
+        {{ allSelected ? $t('ui.deselectAll') : $t('ui.selectAll') }}
       </button>
-      <span class="selected-count">已选中 {{ selectedCount }} 项</span>
+      <span class="selected-count">{{ $t('ui.selectedItemsCount', { count: selectedCount }) }}</span>
     </div>
     <div class="selection-actions">
-      <button class="selection-cancel-btn" @click="emit('cancel')">取消</button>
+      <button class="selection-cancel-btn" @click="emit('cancel')">{{ $t('ui.cancel') }}</button>
       <button
         class="selection-export-btn"
         :disabled="exportDisabled"
         @click="emit('export')"
       >
-        {{ isExporting ? '导出中...' : '导出为 Word' }}
+        {{ isExporting ? $t('ui.exporting') : $t('ui.exportAsWord') }}
       </button>
     </div>
   </div>

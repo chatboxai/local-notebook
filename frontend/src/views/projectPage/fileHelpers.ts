@@ -1,4 +1,5 @@
 import type { FileInfo } from '../../types'
+import { t } from '../../i18n'
 
 export const IMAGE_TYPES = ['jpg', 'jpeg', 'png']
 export const AUDIO_TYPES = ['wav', 'mp3', 'm4a']
@@ -48,7 +49,7 @@ export function checkFileSize(file: File): { valid: boolean; error?: string } {
   if (file.size > limit) {
     return {
       valid: false,
-      error: `"${file.name}" 超过大小限制（最大 ${formatFileSize(limit)}）`
+      error: t('ui.fileSizeExceeded', { name: file.name, limit: formatFileSize(limit) })
     }
   }
   return { valid: true }
@@ -56,11 +57,11 @@ export function checkFileSize(file: File): { valid: boolean; error?: string } {
 
 export function getStatusText(status: string): string {
   const statusMap: Record<string, string> = {
-    pending: '等待处理',
-    processing: '处理中',
-    ready: '就绪',
-    error: '错误',
-    failed: '解析失败'
+    pending: t('ui.pending'),
+    processing: t('ui.processing'),
+    ready: t('ui.ready'),
+    error: t('ui.error'),
+    failed: t('ui.parsingFailed')
   }
   return statusMap[status] || status
 }

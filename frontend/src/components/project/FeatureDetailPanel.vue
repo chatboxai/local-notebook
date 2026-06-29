@@ -16,8 +16,8 @@
           v-else
           class="panel-title editable"
           @click="startEditTitle"
-          title="点击重命名"
-        >{{ feature.title || '工具箱' }}</span>
+          :title="$t('ui.clickToRename')"
+        >{{ feature.title || $t('ui.toolbox') }}</span>
       </div>
       <span class="feature-status-badge" :class="getFeatureStatusClass(feature.status)">
         {{ getFeatureStatusText(feature.status) }}
@@ -29,7 +29,7 @@
         :class="{ loading: isDownloading }"
         :disabled="isDownloading"
         @click="handleDownloadWord"
-        title="下载 Word 文档"
+        :title="$t('ui.downloadWordDocument')"
       >
         <svg v-if="!isDownloading" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -39,7 +39,7 @@
         </svg>
       </button>
 
-      <button class="panel-toggle-btn" @click="$emit('close')" title="关闭">
+      <button class="panel-toggle-btn" @click="$emit('close')" :title="$t('ui.close')">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
         </svg>
@@ -92,7 +92,7 @@
             <figure v-else-if="processed.block.block_type === 'image'" class="feature-image">
               <div class="image-wrapper">
                 <img v-if="processed.block.asset" :src="getAssetUrl(processed.block.asset.url)" :alt="processed.block.caption || ''" />
-                <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" title="下载图片">
+                <button v-if="processed.block.asset" class="image-download-btn" @click="downloadImage(getAssetUrl(processed.block.asset.url))" :title="$t('ui.downloadImage')">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                   </svg>
@@ -105,7 +105,7 @@
               <figure v-for="(asset, ai) in processed.block.assets" :key="ai" class="feature-image">
                 <div class="image-wrapper">
                   <img :src="getAssetUrl(asset.url)" :alt="processed.block.caption || ''" />
-                  <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" title="下载图片">
+                  <button class="image-download-btn" @click="downloadImage(getAssetUrl(asset.url))" :title="$t('ui.downloadImage')">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                       <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                     </svg>
@@ -140,7 +140,7 @@
         </template>
       </div>
       <div v-else-if="feature.status === 'failed'" class="report-error">
-        <p>生成失败: {{ feature.error_message || '未知错误' }}</p>
+        <p>{{ $t('ui.generationFailedWithReason', { reason: feature.error_message || $t('ui.unknownError') }) }}</p>
       </div>
     </div>
   </div>
@@ -151,6 +151,7 @@ import { ref, nextTick } from 'vue'
 import type { Feature, FeatureBlock, FeatureCitationRefPart } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
 import { getAssetUrl, exportFeatureToWord } from '../../services/api'
+import { t } from '../../i18n'
 
 
 const isEditingTitle = ref(false)
@@ -273,7 +274,7 @@ async function downloadImage(url: string) {
 
 
 function startEditTitle() {
-  editingTitleValue.value = props.feature.title || '工具箱'
+  editingTitleValue.value = props.feature.title || t('ui.toolbox')
   isEditingTitle.value = true
   nextTick(() => {
     titleInputRef.value?.focus()
@@ -298,10 +299,10 @@ function cancelEditTitle() {
 
 function getFeatureStatusText(status: string): string {
   const map: Record<string, string> = {
-    pending: '等待中',
-    processing: '生成中',
-    completed: '已完成',
-    failed: '失败'
+    pending: t('ui.waiting'),
+    processing: t('ui.generating2'),
+    completed: t('ui.completed'),
+    failed: t('ui.failed')
   }
   return map[status] || status
 }

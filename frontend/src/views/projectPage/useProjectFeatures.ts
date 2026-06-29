@@ -16,6 +16,7 @@ import {
   VIDEO_GENERATION_FILE_TYPES,
 } from './fileHelpers'
 import { IMAGE_GENERATION_TYPES, TOOL_TYPES, VIDEO_GENERATION_TYPES } from './toolTypes'
+import { t } from '@/i18n'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 type ToolConfig = typeof TOOL_TYPES[0]
@@ -171,7 +172,7 @@ export function useProjectFeatures({
     }
 
     toolConfigModal.toolType = tool.type
-    toolConfigModal.toolTitle = tool.title
+    toolConfigModal.toolTitle = t(tool.titleKey)
     toolConfigModal.prompt = ''
     toolConfigModal.hidePrompt = false
     toolConfigModal.visible = true
@@ -208,7 +209,7 @@ export function useProjectFeatures({
       features.value.unshift({
         id: feature_id,
         feature_type: toolType,
-        display_name: toolConfig?.title || toolType,
+        display_name: toolConfig ? t(toolConfig.titleKey) : toolType,
         title: null,
         prompt: config.prompt || null,
         status: 'pending',
@@ -246,7 +247,7 @@ export function useProjectFeatures({
       features.value.unshift({
         id: feature_id,
         feature_type: mode,
-        display_name: toolConfig?.title || mode,
+        display_name: toolConfig ? t(toolConfig.titleKey) : mode,
         title: null,
         prompt: config.prompt || null,
         status: 'pending',
@@ -278,7 +279,7 @@ export function useProjectFeatures({
       features.value.unshift({
         id: feature_id,
         feature_type: toolType,
-        display_name: toolConfig?.title || toolType,
+        display_name: toolConfig ? t(toolConfig.titleKey) : toolType,
         title: null,
         prompt: customPrompt || null,
         status: 'pending',
@@ -349,10 +350,10 @@ export function useProjectFeatures({
       const id = activeFeature.value.id
       await renameFeatureTitle(id, newTitle)
 
-      showToast('重命名成功', 'success')
+      showToast(t('ui.renameSuccess'), 'success')
     } catch (error) {
       console.error('Failed to rename feature:', error)
-      showToast('重命名失败', 'error')
+      showToast(t('ui.renameFailed'), 'error')
     }
   }
 

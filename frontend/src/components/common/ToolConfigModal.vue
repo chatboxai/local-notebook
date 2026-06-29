@@ -14,7 +14,7 @@
           
           <div class="tool-config-files">
             <div class="files-header" @click="toggleSelectAll">
-              <span class="files-title">选择文件</span>
+              <span class="files-title">{{ $t('ui.selectFiles') }}</span>
               <div class="files-header-right">
                 <span class="files-count">{{ localSelectedIds.length }}/{{ selectableFiles.length }}</span>
                 <div class="select-all-checkbox" :class="{ checked: isAllSelected, indeterminate: isPartialSelected }">
@@ -53,7 +53,7 @@
                 </div>
               </div>
               <div v-if="selectableFiles.length === 0" class="files-empty">
-                暂无可选文件
+                {{ $t('ui.noSelectableFiles') }}
               </div>
             </div>
           </div>
@@ -61,30 +61,30 @@
           
           <div class="tool-config-body">
             <template v-if="!hidePrompt">
-              <label class="tool-config-label">自定义金句提取要求（可选）</label>
+              <label class="tool-config-label">{{ $t('ui.customQuoteExtractionOptional') }}</label>
               <textarea
                 v-model="promptText"
                 class="tool-config-textarea"
-                placeholder="输入您的特殊要求，例如：&#10;• 重点关注某个方面&#10;• 包含或排除某些内容"
+                :placeholder="$t('ui.customRequirementPlaceholder')"
               ></textarea>
               <p class="tool-config-hint">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                 </svg>
-                留空将使用默认配置生成
+                {{ $t('ui.leaveBlankToUseDefaultConfig') }}
               </p>
             </template>
             <p v-else class="tool-config-hint developing">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
               </svg>
-              自定义要求功能开发中，点击下方按钮使用默认配置生成
+              {{ $t('ui.customRequirementsComingSoonUseDefault') }}
             </p>
           </div>
         </div>
         <div class="tool-config-footer">
-          <button class="tool-config-btn cancel" @click="handleClose">取消</button>
-          <button class="tool-config-btn confirm" :disabled="localSelectedIds.length === 0" @click="handleConfirm">开始生成</button>
+          <button class="tool-config-btn cancel" @click="handleClose">{{ $t('ui.cancel') }}</button>
+          <button class="tool-config-btn confirm" :disabled="localSelectedIds.length === 0" @click="handleConfirm">{{ $t('ui.generate') }}</button>
         </div>
       </div>
     </div>

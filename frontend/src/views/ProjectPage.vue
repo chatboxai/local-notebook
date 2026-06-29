@@ -3,7 +3,7 @@
 
     <header class="project-header">
       <div class="header-left">
-        <button class="back-btn" @click="goBack" title="返回首页">
+        <button class="back-btn" @click="goBack" :title="$t('ui.backToHome')">
           <img src="/logo/logo.png" alt="Local Notebook" class="back-logo" />
         </button>
         <div class="project-title-wrapper">
@@ -24,18 +24,18 @@
             v-else
             class="project-title"
             @click="startTitleEdit"
-            title="点击编辑项目名称"
+            :title="$t('ui.clickToEditProjectName')"
           >{{ project?.name || 'Untitled' }}</h1>
         </div>
       </div>
       <div class="header-right">
         <LanguageSwitcher />
-        <button v-if="canAdmin" class="btn-settings" @click="router.push('/admin')" title="用户管理">
+        <button v-if="canAdmin" class="btn-settings" @click="router.push('/admin')" :title="$t('ui.userManagement')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zM8 11c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
           </svg>
         </button>
-        <button v-if="canAdmin" class="btn-settings" @click="router.push('/settings')" title="设置">
+        <button v-if="canAdmin" class="btn-settings" @click="router.push('/settings')" :title="$t('ui.settings')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/>
           </svg>
@@ -46,7 +46,7 @@
           </svg>
           <span>{{ displayUsername }}</span>
         </span>
-        <button class="btn-settings" @click="logout" title="退出登录">
+        <button class="btn-settings" @click="logout" :title="$t('ui.logOut')">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3h-8v2h8v14h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
           </svg>
@@ -137,7 +137,7 @@
 
       <ChatPanel
         ref="chatPanelRef"
-        :title="currentSession?.title || '新对话'"
+        :title="currentSession?.title || t('ui.newChat')"
         :is-editing-title="isEditingSessionTitle"
         :editing-title-value="editingSessionTitleValue"
         :is-streaming="isStreaming"
@@ -252,7 +252,7 @@
 
 
       <footer class="project-footer">
-        小洛提供的内容未必准确，因此请仔细核查回答内容。
+        {{ $t('ui.xiaoluoMayMakeMistakesSoPleaseVerifyImportant') }}
       </footer>
     </div>
 
@@ -307,11 +307,11 @@
 
     <WorkflowConfigModal
       :visible="workflowConfigModal.visible"
-      :modal-title="activeWorkflowPreset.title"
-      :description="activeWorkflowPreset.description"
-      :hint="activeWorkflowPreset.hint"
+      :modal-title="t(activeWorkflowPreset.titleKey)"
+      :description="t(activeWorkflowPreset.descriptionKey)"
+      :hint="t(activeWorkflowPreset.hintKey)"
       :builtin-prompt="activeWorkflowPresetPrompt"
-      :prompt-placeholder="activeWorkflowPreset.promptPlaceholder"
+      :prompt-placeholder="t(activeWorkflowPreset.promptPlaceholderKey)"
       :files="files"
       :selected-file-ids="selectedFileIds"
       @close="closeWorkflowConfig"
@@ -339,8 +339,8 @@
 
     <RenameModal
       v-model:visible="renameModal.visible"
-      :title="renameModal.type === 'file' ? '重命名文件' : '重命名'"
-      :placeholder="renameModal.type === 'file' ? '输入新的文件名' : '输入新的标题'"
+      :title="renameModal.type === 'file' ? t('ui.renameFile') : t('ui.rename')"
+      :placeholder="renameModal.type === 'file' ? t('ui.enterANewFileName') : t('ui.editTitlePlaceholder')"
       :initial-value="renameModal.name"
       :saving="renameModal.saving"
       @confirm="handleRenameConfirm"
@@ -350,10 +350,10 @@
     <ConfirmDialog
       v-model:visible="finalizeConfirmVisible"
       type="warning"
-      :title="uiText('确认定稿')"
-      :message="uiText('确认将此工作流标记为“定稿”吗？\n\n定稿后内容将不可修改，且会作为后续生成的重要参考。')"
-      :confirm-text="uiText('确认定稿')"
-      :cancel-text="uiText('取消')"
+      :title="t('ui.confirmFinalization')"
+      :message="t('ui.markThisWorkflowAsFinalAfterFinalizationThe')"
+      :confirm-text="t('ui.confirmFinalization')"
+      :cancel-text="t('ui.cancel')"
       @confirm="executeFinalizeWorkflow"
     />
 
@@ -437,22 +437,17 @@ import type { Project, Session, Message, ContentPart, ToolExecuting, ToolStatusP
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
-import { locale, translateText } from '../i18n'
+import { t } from '../i18n'
 import { formatMessageTimestamp, formatRelativeTime } from '../utils/format'
 import { useProjectFeatures } from './projectPage/useProjectFeatures'
 import { useProjectSourceFiles } from './projectPage/useProjectSourceFiles'
 import { useProjectWorkflows } from './projectPage/useProjectWorkflows'
 import { useSourcePreview } from './projectPage/useSourcePreview'
 
-
-function uiText(text: string): string {
-  return translateText(text)
-}
-
 const route = useRoute()
 const router = useRouter()
 const projectId = route.params.id as string
-const displayUsername = computed(() => getDisplayUsername() || '用户')
+const displayUsername = computed(() => getDisplayUsername() || t('ui.defaultUser'))
 const canAdmin = computed(() => isAdmin())
 
 const project = ref<Project | null>(null)
@@ -597,15 +592,15 @@ const editingSessionTitleValue = ref('')
 const showSessionHistory = ref(false)
 
 
-const GREETINGS = [
-  { zh: '小洛在此，您请讲', en: 'Xiaoluo is here. Go ahead.' },
-  { zh: '今天想聊点什么呀？', en: 'What would you like to talk about today?' },
-  { zh: '嗨，你来啦', en: 'Hi, you are here.' },
+const GREETING_KEYS = [
+  'ui.xiaoluoIsHereGoAhead',
+  'ui.whatWouldYouLikeToTalkAboutToday',
+  'ui.hiYouAreHere',
 ] as const
-const randomGreeting = ref<(typeof GREETINGS)[number]>(
-  GREETINGS[Math.floor(Math.random() * GREETINGS.length)] ?? GREETINGS[0],
+const randomGreetingKey = ref<(typeof GREETING_KEYS)[number]>(
+  GREETING_KEYS[Math.floor(Math.random() * GREETING_KEYS.length)] ?? GREETING_KEYS[0],
 )
-const localizedGreeting = computed(() => randomGreeting.value[locale.value])
+const localizedGreeting = computed(() => t(randomGreetingKey.value))
 
 
 const inputMessage = ref('')
@@ -959,8 +954,8 @@ const confirmDialog = reactive({
   title: '',
   message: '',
   type: 'warning' as 'info' | 'warning' | 'danger',
-  confirmText: '确定',
-  cancelText: '取消',
+  confirmText: t('ui.ok'),
+  cancelText: t('ui.cancel'),
   onConfirm: () => {},
   onCancel: () => {}
 })
@@ -976,8 +971,8 @@ function showConfirm(options: {
     confirmDialog.title = options.title
     confirmDialog.message = options.message
     confirmDialog.type = options.type || 'warning'
-    confirmDialog.confirmText = options.confirmText || uiText('确定')
-    confirmDialog.cancelText = options.cancelText || uiText('取消')
+    confirmDialog.confirmText = options.confirmText || t('ui.ok')
+    confirmDialog.cancelText = options.cancelText || t('ui.cancel')
     confirmDialog.onConfirm = () => resolve(true)
     confirmDialog.onCancel = () => resolve(false)
     confirmDialog.visible = true
@@ -1283,7 +1278,7 @@ function handleKeywordClick(keyword: string) {
   if (!currentSession.value || isStreaming.value) return
 
 
-  inputMessage.value = `请你根据已有的文档内容，研究「${keyword}」`
+  inputMessage.value = t('ui.researchKeywordPrompt', { keyword })
   nextTick(() => {
     sendMessage()
   })
@@ -1302,7 +1297,7 @@ function applySessionMessageToTemp(tempId: string, serverMessage: Message) {
     ...messages.value[idx],
     ...serverMessage,
     id: serverMessage.id || tempId,
-    pending_id_sync: false,  // server message 不含此字段,spread 不会覆盖,必须显式清除
+    pending_id_sync: false,
   }
 }
 
@@ -1600,22 +1595,22 @@ async function sendMessage() {
       onCompacting: () => {
         streamingParts.value.push({
           type: 'tool_status',
-          display: '正在压缩对话历史...'
+          display: t('ui.compactingChatHistory')
         })
       },
       onCompactDone: () => {
 
         streamingParts.value = streamingParts.value.filter(
-          p => !(p.type === 'tool_status' && p.display === '正在压缩对话历史...')
+          p => !(p.type === 'tool_status' && p.display === t('ui.compactingChatHistory'))
         )
         streamingParts.value.push({
           type: 'text',
-          content: '\n\n── 对话历史已压缩 ──\n\n'
+          content: `\n\n${t('ui.compactDivider')}\n\n`
         })
       },
       onCompactFailed: (message: string) => {
         streamingParts.value = streamingParts.value.filter(
-          p => !(p.type === 'tool_status' && p.display === '正在压缩对话历史...')
+          p => !(p.type === 'tool_status' && p.display === t('ui.compactingChatHistory'))
         )
         console.warn('Compact failed:', message)
       },
@@ -1763,10 +1758,10 @@ async function copyMessageAsText(msg: Message) {
 
   try {
     await copyTextToClipboard(plainText)
-    showCopyToast('已复制为纯文本')
+    showCopyToast(t('ui.copiedAsPlainText'))
   } catch (err) {
     console.error('复制失败:', err)
-    showCopyToast('复制失败')
+    showCopyToast(t('ui.copyFailed'))
   }
 }
 
@@ -1775,20 +1770,20 @@ async function copyMessageAsMarkdown(msg: Message) {
 
   try {
     await copyTextToClipboard(markdown)
-    showCopyToast('已复制为 Markdown')
+    showCopyToast(t('ui.copiedAsMarkdown'))
   } catch (err) {
     console.error('复制失败:', err)
-    showCopyToast('复制失败')
+    showCopyToast(t('ui.copyFailed'))
   }
 }
 
 async function copyUserMessage(msg: Message) {
   try {
     await copyTextToClipboard(msg.content || '')
-    showCopyToast('已复制')
+    showCopyToast(t('ui.copied2'))
   } catch (err) {
     console.error('复制失败:', err)
-    showCopyToast('复制失败')
+    showCopyToast(t('ui.copyFailed'))
   }
 }
 
@@ -1796,7 +1791,7 @@ function startEditMessage(msg: Message) {
   if (isStreaming.value) return
 
   if (isTempMessageId(msg.id) || msg.pending_id_sync) {
-    showToast('网络同步中，请稍后再试', 'warning')
+    showToast(t('ui.networkSyncingTryLater'), 'warning')
     return
   }
 
@@ -1876,7 +1871,7 @@ async function submitEditMessage(msg: Message) {
   scrollToBottom()
 
   if (isTempMessageId(targetMessage.id) || targetMessage.pending_id_sync) {
-    showToast('消息同步中，请刷新页面后重试', 'error')
+    showToast(t('ui.messageSyncingRefreshAndRetry'), 'error')
     isStreaming.value = false
     isThinking.value = false
     editingMessageId.value = msg.id
@@ -2039,7 +2034,7 @@ async function submitEditMessage(msg: Message) {
       onMessageIds: (userMessageId: string, assistantMessageId: string) => {
         if (targetMessage) {
           targetMessage.id = userMessageId
-          targetMessage.pending_id_sync = false  // 清除可能残留的同步标记,否则下次再编辑该消息会被 startEditMessage 拦截
+          targetMessage.pending_id_sync = false
           console.log(`✅ [submitEditMessage] 更新被编辑的 user message ID: ${targetMessage.id} -> ${userMessageId}`)
         }
 
@@ -2112,7 +2107,7 @@ async function regenerateMessage(assistantIndex: number) {
   }
 
   if (isTempMessageId(userMessage.id) || userMessage.pending_id_sync) {
-    showToast('消息同步中，请刷新页面后重试', 'error')
+    showToast(t('ui.messageSyncingRefreshAndRetry'), 'error')
     return
   }
 
@@ -2279,7 +2274,7 @@ async function regenerateMessage(assistantIndex: number) {
       onMessageIds: (userMessageId: string, assistantMessageId: string) => {
         if (userMessage) {
           userMessage.id = userMessageId
-          userMessage.pending_id_sync = false  // 清除可能残留的同步标记,否则下次再编辑该消息会被 startEditMessage 拦截
+          userMessage.pending_id_sync = false
           console.log(`✅ [regenerateMessage] 更新 user message ID: ${userMessageId}`)
         }
 
@@ -2453,13 +2448,13 @@ async function handleSwitchSession(sessionId: string) {
 }
 
 async function handleDeleteSession(sessionId: string, title: string) {
-  const displayTitle = title || '新对话'
+  const displayTitle = title || t('ui.newChat')
   const confirmed = await showConfirm({
-    title: '删除对话',
-    message: `确定要删除"${displayTitle}"吗？此操作无法撤销。`,
+    title: t('ui.deleteChat'),
+    message: t('ui.deleteChatMessage', { title: displayTitle }),
     type: 'danger',
-    confirmText: '删除',
-    cancelText: '取消'
+    confirmText: t('ui.delete'),
+    cancelText: t('ui.cancel')
   })
   if (!confirmed) return
 

@@ -4,7 +4,7 @@
       <div class="workflow-config-modal">
         <div class="workflow-config-header">
           <h3>{{ modalHeading }}</h3>
-          <button class="workflow-config-close" @click="handleClose" :aria-label="uiText('关闭')">
+          <button class="workflow-config-close" @click="handleClose" :aria-label="t('ui.close')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
             </svg>
@@ -14,7 +14,7 @@
           
           <div class="workflow-config-files">
             <div class="files-header" @click="toggleSelectAll">
-              <span class="files-title">{{ uiText('选择文件') }}</span>
+              <span class="files-title">{{ t('ui.selectFiles') }}</span>
               <div class="files-header-right">
                 <span class="files-count">{{ localSelectedIds.length }}/{{ selectableFiles.length }}</span>
                 <div class="select-all-checkbox" :class="{ checked: isAllSelected, indeterminate: isPartialSelected }">
@@ -53,7 +53,7 @@
                 </div>
               </div>
               <div v-if="selectableFiles.length === 0" class="files-empty">
-                {{ uiText('暂无可选文件') }}
+                {{ t('ui.noSelectableFiles') }}
               </div>
             </div>
           </div>
@@ -72,16 +72,16 @@
               </div>
             </div>
             <div class="workflow-title-input">
-              <p class="steps-title">{{ uiText('工作流名称（可选）') }}</p>
+              <p class="steps-title">{{ t('ui.workflowNameOptional') }}</p>
               <input
                 v-model="localTitle"
                 class="title-input"
-                :placeholder="uiText('不填写则由 AI 根据要求命名')"
+                :placeholder="t('ui.leaveBlankAndAiWillNameItFrom')"
                 maxlength="100"
               />
             </div>
             <div v-if="hasBuiltinPrompt" class="workflow-preset-prompt">
-              <p class="steps-title">{{ uiText('内置 prompt') }}</p>
+              <p class="steps-title">{{ t('ui.builtInPrompt') }}</p>
               <textarea
                 class="prompt-input preset-prompt-input"
                 :value="builtinPrompt"
@@ -104,8 +104,8 @@
           </div>
         </div>
         <div class="workflow-config-footer">
-          <button class="workflow-config-btn cancel" @click="handleClose">{{ uiText('取消') }}</button>
-          <button class="workflow-config-btn confirm" :disabled="!canConfirm" @click="handleConfirm">{{ uiText('开始生成') }}</button>
+          <button class="workflow-config-btn cancel" @click="handleClose">{{ t('ui.cancel') }}</button>
+          <button class="workflow-config-btn confirm" :disabled="!canConfirm" @click="handleConfirm">{{ t('ui.generate') }}</button>
         </div>
       </div>
     </div>
@@ -114,7 +114,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { translateText } from '../../i18n'
+import { t } from '../../i18n'
 
 interface FileItem {
   id: string
@@ -139,23 +139,19 @@ const emit = defineEmits<{
   (e: 'confirm', title: string, prompt: string, fileIds: string[]): void
 }>()
 
-function uiText(text: string): string {
-  return translateText(text)
-}
-
 const localSelectedIds = ref<string[]>([])
 const localPrompt = ref('')
 const localTitle = ref('')
 
 const builtinPrompt = computed(() => (props.builtinPrompt || '').trim())
 const hasBuiltinPrompt = computed(() => builtinPrompt.value.length > 0)
-const modalHeading = computed(() => props.modalTitle ? uiText(props.modalTitle) : uiText('自定义工作流'))
-const promptLabel = computed(() => hasBuiltinPrompt.value ? uiText('补充要求（可选）') : uiText('工作流要求'))
+const modalHeading = computed(() => props.modalTitle || t('ui.customWorkflow'))
+const promptLabel = computed(() => hasBuiltinPrompt.value ? t('ui.additionalRequirementsOptional') : t('ui.workflowInstructions'))
 const promptPlaceholderText = computed(() => {
-  if (props.promptPlaceholder) return uiText(props.promptPlaceholder)
+  if (props.promptPlaceholder) return props.promptPlaceholder
   return hasBuiltinPrompt.value
-    ? uiText('可补充输出风格、关注重点、长度要求等')
-    : uiText('例如：请基于这些资料生成一份面向投资人的尽调报告，重点分析商业模式、增长证据、竞争格局和风险。')
+    ? t('ui.optionallyAddOutputStyleFocusAreasLengthRequirements')
+    : t('ui.exampleBasedOnTheseMaterialsGenerateAnInvestor')
 })
 
 
@@ -188,12 +184,12 @@ const IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp']
 
 
 const workflowDescription = computed(() => {
-  return props.description ? uiText(props.description) : uiText('完全按你的要求规划和生成')
+  return props.description || t('ui.planAndGenerateFullyFromYourInstructions')
 })
 
 
 const workflowHint = computed(() => {
-  return props.hint ? uiText(props.hint) : uiText('AI 会把你的要求拆成多个环节，每个环节作为 workflow 中的一个 feature 生成。')
+  return props.hint || t('ui.aiWillSplitYourInstructionsIntoMultipleStages')
 })
 
 

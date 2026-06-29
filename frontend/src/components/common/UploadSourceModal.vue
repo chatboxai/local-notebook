@@ -5,7 +5,7 @@
 
         <template v-if="!isPasteMode">
           <div class="modal-header">
-            <h2>根据以下内容生成笔记</h2>
+            <h2>{{ $t('ui.generateNotesFromContent') }}</h2>
             <button class="close-btn" @click="handleClose">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -19,7 +19,7 @@
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
               </svg>
-              <span>已达到文件数量上限（{{ maxFileCount }} 个）</span>
+              <span>{{ $t('ui.fileLimitReachedWithCount', { count: maxFileCount }) }}</span>
             </div>
 
 
@@ -39,8 +39,8 @@
                   <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
                 </svg>
               </div>
-              <p class="dropzone-text">{{ props.isUploading ? '正在上传...' : (isAtLimit ? '文件数量已达上限' : '点击上传或将文件拖至此处') }}</p>
-              <p class="dropzone-hint">支持 pdf、docx、doc、epub、jpg、jpeg、png、wav、mp3、m4a</p>
+              <p class="dropzone-text">{{ props.isUploading ? $t('ui.uploading') : (isAtLimit ? $t('ui.fileLimitReached') : $t('ui.clickToUploadOrDragFilesHere')) }}</p>
+              <p class="dropzone-hint">{{ $t('ui.supportsPdfDocxDocEpubJpgJpegPng') }}</p>
               <input
                 ref="fileInputRef"
                 type="file"
@@ -56,7 +56,7 @@
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
               </svg>
-              <span>粘贴文字</span>
+              <span>{{ $t('ui.pasteText') }}</span>
             </button>
           </div>
 
@@ -79,7 +79,7 @@
                 <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
               </svg>
             </button>
-            <h2>粘贴复制的文字</h2>
+            <h2>{{ $t('ui.pasteCopiedText') }}</h2>
             <button class="close-btn" @click="handleClose">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -88,12 +88,12 @@
           </div>
 
           <div class="modal-body paste-body">
-            <p class="paste-hint">在下方粘贴复制的文字，即可将其作为来源上传。</p>
+            <p class="paste-hint">{{ $t('ui.pasteCopiedTextAsSource') }}</p>
             <textarea
               ref="pasteTextareaRef"
               v-model="pasteContent"
               class="paste-textarea"
-              placeholder="在此粘贴文字内容..."
+              :placeholder="$t('ui.pasteTextContentHere')"
             ></textarea>
           </div>
 
@@ -109,7 +109,7 @@
               :disabled="!pasteContent.trim()"
               @click="handleInsertText"
             >
-              插入
+              {{ $t('ui.insert') }}
             </button>
           </div>
         </template>

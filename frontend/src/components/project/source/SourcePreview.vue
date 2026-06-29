@@ -1,7 +1,7 @@
 <template>
   <div class="panel-header">
-    <span class="panel-title">来源</span>
-    <button class="panel-toggle-btn" @click="emit('close-preview')" title="返回列表">
+    <span class="panel-title">{{ $t('ui.sources2') }}</span>
+    <button class="panel-toggle-btn" @click="emit('close-preview')" :title="$t('ui.backToList')">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
         <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
       </svg>
@@ -24,30 +24,30 @@
         class="view-toggle-btn"
         :class="{ active: viewMode === 'raw' }"
         @click="emit('switch-view-mode', 'raw')"
-        title="原文视图"
+        :title="$t('ui.originalView')"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
         </svg>
-        原文
+        {{ $t('ui.original') }}
       </button>
       <button
         class="view-toggle-btn"
         :class="{ active: viewMode === 'parsed' }"
         @click="emit('switch-view-mode', 'parsed')"
-        title="解析视图"
+        :title="$t('ui.parsedView')"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
         </svg>
-        解析
+        {{ $t('ui.parsed') }}
       </button>
     </div>
   </div>
 
   <template v-if="isPreviewingImage">
     <div class="preview-content image-preview-content" ref="previewContentRef">
-      <div v-if="isLoadingContent" class="preview-loading">加载中...</div>
+      <div v-if="isLoadingContent" class="preview-loading">{{ $t('ui.loading') }}</div>
       <div v-else class="image-preview-wrapper">
         <img
           v-if="previewingFile"
@@ -66,7 +66,7 @@
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
           </svg>
-          <span>来源指南</span>
+          <span>{{ $t('ui.sourceGuide') }}</span>
         </div>
         <button class="source-guide-toggle" @click="summaryExpandedModel = !summaryExpandedModel">
           <svg :class="{ rotated: !summaryExpanded }" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -88,7 +88,7 @@
 
     <div class="preview-content-wrapper">
       <div class="preview-content" ref="previewContentRef" @scroll="emit('preview-scroll')">
-        <div v-if="isLoadingContent" class="preview-loading">加载中...</div>
+        <div v-if="isLoadingContent" class="preview-loading">{{ $t('ui.loading') }}</div>
 
         <PdfViewer
           v-if="isRawViewMode && pdfPageInfo && previewingFile"
@@ -110,7 +110,7 @@
           >
             <div class="page-divider">
               <span class="page-divider-line"></span>
-              <span class="page-divider-text">第 {{ pageNum }} 页</span>
+              <span class="page-divider-text">{{ $t('ui.pageNumber', { page: pageNum }) }}</span>
               <span class="page-divider-line"></span>
             </div>
 
@@ -181,17 +181,17 @@
       </div>
 
       <div v-if="isPdfFile && currentTotalPages > 0" class="page-nav-float">
-        <span class="page-indicator">第 {{ currentPageNum }} / {{ currentTotalPages }} 页</span>
+        <span class="page-indicator">{{ $t('ui.pageIndicator', { current: currentPageNum, total: currentTotalPages }) }}</span>
         <div class="page-jump">
           <input
             type="number"
             v-model="jumpInput"
             :min="1"
             :max="currentTotalPages"
-            placeholder="页码"
+            :placeholder="$t('ui.page')"
             @keyup.enter="emit('jump-to-page')"
           />
-          <button class="jump-btn" @click="emit('jump-to-page')">跳转</button>
+          <button class="jump-btn" @click="emit('jump-to-page')">{{ $t('ui.go') }}</button>
         </div>
       </div>
     </div>

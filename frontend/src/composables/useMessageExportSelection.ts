@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { exportChatMessagesToWord } from '../services/api'
 import type { Message, Session } from '../types'
+import { t } from '../i18n'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 type ShowToast = (message: string, type?: ToastType, duration?: number) => void
@@ -115,12 +116,12 @@ export function useMessageExportSelection({
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      showToast('导出成功', 'success')
+      showToast(t('ui.exportedSuccessfully'), 'success')
       isExportSelectionMode.value = false
       selectedUserMessageIds.value = []
     } catch (error: any) {
       console.error('Failed to export messages:', error)
-      showToast(error.response?.data?.error || '导出失败', 'error')
+      showToast(error.response?.data?.error || t('ui.exportFailedTryAgainLater'), 'error')
     } finally {
       isExportingMessages.value = false
     }
