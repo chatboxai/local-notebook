@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
 
     from database import AsyncSessionLocal
     import config
+    from services.feature_agent_trace_service import cleanup_expired_feature_agent_traces
+
+    await cleanup_expired_feature_agent_traces()
+
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
         from dependencies.auth import hash_password

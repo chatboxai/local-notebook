@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 WORKFLOW_STEP_CONCURRENCY = int(os.getenv("WORKFLOW_STEP_CONCURRENCY", "3"))
+WORKFLOW_FEATURE_TIMEOUT = int(os.getenv("WORKFLOW_FEATURE_TIMEOUT", "900"))
 WORKFLOW_CANCEL_REQUESTED_STATUSES = {"cancelling", "cancelled"}
 WORKFLOW_CANCELLED_MESSAGE = "用户已停止生成"
 WORKFLOW_CANCELLED_STEP_MESSAGE = "__workflow_cancelled__"
@@ -24,6 +25,13 @@ WORKFLOW_CANCELLED_STEP_MESSAGE = "__workflow_cancelled__"
 
 class WorkflowCancelled(RuntimeError):
     """Raised when a workflow has been cancelled by the user."""
+
+
+def _exception_message(exc: BaseException) -> str:
+    message = str(exc).strip()
+    if message:
+        return message
+    return exc.__class__.__name__
 
 
 async def _commit_file_progress(
@@ -159,6 +167,8 @@ async def on_startup(ctx: dict) -> None:
     ctx["session_factory"] = AsyncSessionLocal
 
     await _recover_stuck_files(AsyncSessionLocal)
+    from services.feature_agent_trace_service import cleanup_expired_feature_agent_traces
+    await cleanup_expired_feature_agent_traces()
 
     logger.info("ARQ worker started")
 
@@ -822,6 +832,69 @@ def _build_workflow_dependency_ancestors(feature_items: list[dict]) -> dict[str,
     }
 
 
+def _build_workflow_dependency_graph(
+    feature_items: list[dict],
+) -> tuple[dict[str, dict], dict[str, set[str]], dict[str, list[str]]]:
+    """Validate a workflow DAG and return step lookup, remaining deps, and dependents."""
+    by_step_id: dict[str, dict] = {}
+    errors: list[str] = []
+
+    for item in feature_items:
+        step_id = item.get("step_id")
+        if not step_id:
+            errors.append(f"feature {item.get('id')} is missing step_id")
+            continue
+        if step_id in by_step_id:
+            errors.append(f"duplicate step_id: {step_id}")
+            continue
+        by_step_id[step_id] = item
+
+    remaining_deps: dict[str, set[str]] = {
+        step_id: set()
+        for step_id in by_step_id
+    }
+    dependents: dict[str, list[str]] = {
+        step_id: []
+        for step_id in by_step_id
+    }
+
+    for item in feature_items:
+        step_id = item.get("step_id")
+        if not step_id or step_id not in by_step_id:
+            continue
+        for dep_id in item.get("depends_on") or []:
+            if dep_id not in by_step_id:
+                errors.append(f"step {step_id!r} depends on unknown step_id {dep_id!r}")
+                continue
+            remaining_deps[step_id].add(dep_id)
+            dependents[dep_id].append(step_id)
+
+    if errors:
+        raise RuntimeError("; ".join(errors))
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(step_id: str) -> None:
+        if step_id in visited:
+            return
+        if step_id in visiting:
+            raise RuntimeError(f"dependency cycle detected at step_id {step_id!r}")
+        visiting.add(step_id)
+        for dep_id in remaining_deps[step_id]:
+            visit(dep_id)
+        visiting.remove(step_id)
+        visited.add(step_id)
+
+    for step_id in by_step_id:
+        visit(step_id)
+
+    for step_id, child_ids in dependents.items():
+        child_ids.sort(key=lambda child_id: by_step_id[child_id]["order_index"])
+
+    return by_step_id, remaining_deps, dependents
+
+
 async def generate_workflow_task(
     ctx: dict,
     workflow_id: str,
@@ -1010,7 +1083,7 @@ async def generate_workflow_task(
                 await db.commit()
         raise
 
-    # 4) 按 planner 依赖图分层并发生成；每个栏目使用独立 CitationState。
+    # 4) 按 planner 依赖图动态调度生成；每个栏目使用独立 CitationState。
     from sqlalchemy import select
 
     if await _is_workflow_cancel_requested(session_factory, workflow_id):
@@ -1038,17 +1111,24 @@ async def generate_workflow_task(
                 "step_name": feature.step_name,
                 "feature_type": feature.feature_type,
             })
-        execution_layers = _build_workflow_execution_layers(feature_items)
         dependency_ancestors = _build_workflow_dependency_ancestors(feature_items)
+        by_step_id, remaining_deps, dependents = _build_workflow_dependency_graph(feature_items)
         report_title = wf.title or plan_title
     total_steps = len(feature_items)
+    initial_ready = [
+        step_id
+        for step_id, deps in remaining_deps.items()
+        if not deps
+    ]
+    initial_ready.sort(key=lambda step_id: by_step_id[step_id]["order_index"])
+    concurrency_limit = max(1, WORKFLOW_STEP_CONCURRENCY)
     logger.info(
-        "[workflow] generation begin workflow_id=%s report_title=%r total_steps=%d layers=%d concurrency=%d",
+        "[workflow] generation begin workflow_id=%s report_title=%r total_steps=%d initial_ready=%s concurrency=%d",
         workflow_id,
         report_title,
         total_steps,
-        len(execution_layers),
-        WORKFLOW_STEP_CONCURRENCY,
+        initial_ready,
+        concurrency_limit,
     )
 
     agent = FeatureAgent()
@@ -1124,7 +1204,7 @@ async def generate_workflow_task(
             citation_state.current_feature_id = feat_id
             citation_state.depends_on = list(accessible_dependencies or [])
 
-            blocks, local_citations, _ = await agent.generate(
+            feature_generation = agent.generate(
                 report_title=report_title,
                 step_name=step_name,
                 instruction=instruction,
@@ -1138,6 +1218,13 @@ async def generate_workflow_task(
                     workflow_id,
                 ),
             )
+            if WORKFLOW_FEATURE_TIMEOUT > 0:
+                blocks, local_citations, _ = await asyncio.wait_for(
+                    feature_generation,
+                    timeout=WORKFLOW_FEATURE_TIMEOUT,
+                )
+            else:
+                blocks, local_citations, _ = await feature_generation
             await _raise_if_workflow_cancelled(session_factory, workflow_id)
             workflow_blocks, workflow_citations = convert_local_feature_to_workflow(
                 blocks,
@@ -1180,7 +1267,24 @@ async def generate_workflow_task(
             )
             await mark_feature_cancelled(item)
             return step_id, False, WORKFLOW_CANCELLED_STEP_MESSAGE
+        except asyncio.TimeoutError as exc:
+            message = f"栏目生成超时（{WORKFLOW_FEATURE_TIMEOUT} 秒）"
+            logger.exception(
+                "[workflow] step timeout workflow_id=%s step=%d/%d step_id=%s feature_id=%s name=%r "
+                "elapsed=%.2fs timeout=%ds",
+                workflow_id,
+                step_index + 1,
+                total_steps,
+                step_id,
+                feat_id,
+                step_name,
+                time.perf_counter() - step_started_at,
+                WORKFLOW_FEATURE_TIMEOUT,
+            )
+            await mark_feature_failed(item, message)
+            return step_id, False, message
         except Exception as exc:
+            message = _exception_message(exc)
             logger.exception(
                 "[workflow] step failed workflow_id=%s step=%d/%d step_id=%s feature_id=%s name=%r "
                 "elapsed=%.2fs error=%s",
@@ -1191,97 +1295,195 @@ async def generate_workflow_task(
                 feat_id,
                 step_name,
                 time.perf_counter() - step_started_at,
-                exc,
+                message,
             )
-            await mark_feature_failed(item, str(exc))
-            return step_id, False, str(exc)
+            await mark_feature_failed(item, message)
+            return step_id, False, message
 
-    for layer_index, layer in enumerate(execution_layers, start=1):
-        if await _is_workflow_cancel_requested(session_factory, workflow_id):
-            logger.info(
-                "[workflow] cancelled before layer workflow_id=%s layer=%d/%d",
-                workflow_id,
-                layer_index,
-                len(execution_layers),
-            )
-            await _mark_workflow_cancelled(session_factory, workflow_id)
-            return {"status": "cancelled", "workflow_id": workflow_id}
+    ready_queue = list(initial_ready)
+    ready_set = set(ready_queue)
+    pending_step_ids = set(by_step_id.keys())
+    completed_step_ids: set[str] = set()
+    running_tasks: dict[asyncio.Task, dict] = {}
 
-        logger.info(
-            "[workflow] layer start workflow_id=%s layer=%d/%d steps=%s",
-            workflow_id,
-            layer_index,
-            len(execution_layers),
-            [item["step_id"] for item in layer],
-        )
-        skipped = []
-        runnable = []
-        for item in layer:
-            failed_deps = [
-                dep_id for dep_id in (item.get("depends_on") or [])
-                if dep_id in failed_step_ids
-            ]
-            if failed_deps:
-                message = f"dependency failed: {', '.join(failed_deps)}"
-                await mark_feature_failed(item, message)
-                failed_step_ids[item["step_id"]] = message
-                skipped.append(item["step_id"])
-                failed += 1
-            else:
-                runnable.append(item)
+    def enqueue_if_ready(step_id: str) -> None:
+        if step_id not in pending_step_ids:
+            return
+        if step_id in ready_set or step_id in failed_step_ids:
+            return
+        if remaining_deps.get(step_id):
+            return
+        ready_queue.append(step_id)
+        ready_set.add(step_id)
+        ready_queue.sort(key=lambda queued_id: by_step_id[queued_id]["order_index"])
 
-        semaphore = asyncio.Semaphore(WORKFLOW_STEP_CONCURRENCY)
+    def remove_from_ready(step_id: str) -> None:
+        nonlocal ready_queue
+        if step_id not in ready_set:
+            return
+        ready_set.discard(step_id)
+        ready_queue = [queued_id for queued_id in ready_queue if queued_id != step_id]
 
-        async def run_with_limit(item: dict) -> tuple[str, bool, str]:
-            async with semaphore:
-                await _raise_if_workflow_cancelled(session_factory, workflow_id)
-                return await run_feature(item)
-
-        results = await asyncio.gather(
-            *(run_with_limit(item) for item in runnable),
-            return_exceptions=True,
-        )
-        for item, result in zip(runnable, results):
-            if isinstance(result, WorkflowCancelled):
-                await mark_feature_cancelled(item)
-                await _mark_workflow_cancelled(session_factory, workflow_id)
-                logger.info("[workflow] cancelled during layer workflow_id=%s", workflow_id)
-                return {"status": "cancelled", "workflow_id": workflow_id}
-            if isinstance(result, Exception):
-                message = str(result)
-                await mark_feature_failed(item, message)
-                failed_step_ids[item["step_id"]] = message
-                failed += 1
+    def launch_ready_tasks() -> None:
+        while ready_queue and len(running_tasks) < concurrency_limit:
+            step_id = ready_queue.pop(0)
+            ready_set.discard(step_id)
+            if step_id not in pending_step_ids or step_id in failed_step_ids:
                 continue
-            step_id, ok, message = result
-            if ok:
-                completed += 1
-            else:
+            item = by_step_id[step_id]
+            pending_step_ids.remove(step_id)
+            task = asyncio.create_task(run_feature(item))
+            running_tasks[task] = item
+            logger.info(
+                "[workflow] step scheduled workflow_id=%s step_id=%s running=%d queued=%d pending=%d",
+                workflow_id,
+                step_id,
+                len(running_tasks),
+                len(ready_queue),
+                len(pending_step_ids),
+            )
+
+    async def mark_blocked_descendants(root_step_id: str) -> list[str]:
+        nonlocal failed
+        skipped: list[str] = []
+        stack = list(dependents.get(root_step_id, []))
+        seen: set[str] = set()
+
+        while stack:
+            step_id = stack.pop(0)
+            if step_id in seen:
+                continue
+            seen.add(step_id)
+            stack.extend(dependents.get(step_id, []))
+
+            if step_id in completed_step_ids or step_id in failed_step_ids:
+                continue
+            if any(item["step_id"] == step_id for item in running_tasks.values()):
+                logger.warning(
+                    "[workflow] dependency failed while descendant is already running "
+                    "workflow_id=%s failed_step_id=%s descendant_step_id=%s",
+                    workflow_id,
+                    root_step_id,
+                    step_id,
+                )
+                continue
+
+            failed_deps = [
+                dep_id for dep_id in (by_step_id[step_id].get("depends_on") or [])
+                if dep_id in failed_step_ids or dep_id == root_step_id
+            ]
+            message = f"dependency failed: {', '.join(failed_deps or [root_step_id])}"
+            await mark_feature_failed(by_step_id[step_id], message)
+            failed_step_ids[step_id] = message
+            failed += 1
+            pending_step_ids.discard(step_id)
+            remove_from_ready(step_id)
+            skipped.append(step_id)
+
+        return skipped
+
+    try:
+        while pending_step_ids or running_tasks:
+            if await _is_workflow_cancel_requested(session_factory, workflow_id):
+                raise WorkflowCancelled(WORKFLOW_CANCELLED_MESSAGE)
+
+            launch_ready_tasks()
+
+            if not running_tasks:
+                if pending_step_ids:
+                    stalled = sorted(
+                        pending_step_ids,
+                        key=lambda step_id: by_step_id[step_id]["order_index"],
+                    )
+                    logger.error(
+                        "[workflow] scheduler stalled workflow_id=%s pending=%s",
+                        workflow_id,
+                        stalled,
+                    )
+                    for step_id in stalled:
+                        message = "dependency graph stalled"
+                        await mark_feature_failed(by_step_id[step_id], message)
+                        failed_step_ids[step_id] = message
+                        failed += 1
+                    pending_step_ids.clear()
+                break
+
+            done, _ = await asyncio.wait(
+                list(running_tasks.keys()),
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=2.0,
+            )
+            if not done:
+                continue
+
+            succeeded_step_ids: list[str] = []
+            for task in done:
+                item = running_tasks.pop(task)
+                step_id = item["step_id"]
+                try:
+                    result = task.result()
+                except WorkflowCancelled:
+                    await mark_feature_cancelled(item)
+                    raise
+                except Exception as exc:
+                    message = _exception_message(exc)
+                    await mark_feature_failed(item, message)
+                    result = (step_id, False, message)
+
+                result_step_id, ok, message = result
+                if ok:
+                    completed += 1
+                    completed_step_ids.add(result_step_id)
+                    succeeded_step_ids.append(result_step_id)
+                    continue
+
                 if message == WORKFLOW_CANCELLED_STEP_MESSAGE:
-                    await _mark_workflow_cancelled(session_factory, workflow_id)
-                    logger.info("[workflow] cancelled during feature workflow_id=%s", workflow_id)
-                    return {"status": "cancelled", "workflow_id": workflow_id}
-                failed_step_ids[step_id] = message
+                    raise WorkflowCancelled(WORKFLOW_CANCELLED_MESSAGE)
+
+                failed_step_ids[result_step_id] = message
                 failed += 1
+                skipped = await mark_blocked_descendants(result_step_id)
+                logger.info(
+                    "[workflow] step failed propagated workflow_id=%s step_id=%s skipped=%s completed=%d failed=%d",
+                    workflow_id,
+                    result_step_id,
+                    skipped,
+                    completed,
+                    failed,
+                )
 
-        if await _is_workflow_cancel_requested(session_factory, workflow_id):
-            logger.info("[workflow] cancelled after layer workflow_id=%s", workflow_id)
-            await _mark_workflow_cancelled(session_factory, workflow_id)
-            return {"status": "cancelled", "workflow_id": workflow_id}
+            if succeeded_step_ids:
+                if await _is_workflow_cancel_requested(session_factory, workflow_id):
+                    raise WorkflowCancelled(WORKFLOW_CANCELLED_MESSAGE)
 
-        async with session_factory() as db:
-            await finalize_workflow_citations(db, workflow_id)
-            await db.commit()
+                async with session_factory() as db:
+                    await finalize_workflow_citations(db, workflow_id)
+                    await db.commit()
 
-        logger.info(
-            "[workflow] layer done workflow_id=%s layer=%d/%d completed=%d failed=%d skipped=%s",
-            workflow_id,
-            layer_index,
-            len(execution_layers),
-            completed,
-            failed,
-            skipped,
-        )
+                for step_id in succeeded_step_ids:
+                    for child_id in dependents.get(step_id, []):
+                        if child_id in failed_step_ids:
+                            continue
+                        remaining_deps[child_id].discard(step_id)
+                        enqueue_if_ready(child_id)
+
+                logger.info(
+                    "[workflow] scheduler progress workflow_id=%s completed=%d failed=%d newly_ready=%s running=%d pending=%d",
+                    workflow_id,
+                    completed,
+                    failed,
+                    list(ready_queue),
+                    len(running_tasks),
+                    len(pending_step_ids),
+                )
+    except WorkflowCancelled:
+        logger.info("[workflow] cancelled during generation workflow_id=%s", workflow_id)
+        for task in running_tasks:
+            task.cancel()
+        if running_tasks:
+            await asyncio.gather(*running_tasks.keys(), return_exceptions=True)
+        await _mark_workflow_cancelled(session_factory, workflow_id)
+        return {"status": "cancelled", "workflow_id": workflow_id}
 
     # 5) 汇总 workflow 状态
     if await _is_workflow_cancel_requested(session_factory, workflow_id):
