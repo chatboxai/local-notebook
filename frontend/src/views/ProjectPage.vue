@@ -1020,6 +1020,35 @@ function isCompactingToolStatus(part: ContentPart): boolean {
   return displayKey === COMPACTING_CHAT_HISTORY_KEY || part.display === t(COMPACTING_CHAT_HISTORY_KEY)
 }
 
+function appendTextPart(content: string) {
+  const lastPart = streamingParts.value[streamingParts.value.length - 1]
+  if (lastPart && lastPart.type === 'text') {
+    lastPart.content += content
+  } else {
+    streamingParts.value.push({ type: 'text', content })
+  }
+}
+
+function appendReasoningPart(content: string) {
+  const lastPart = streamingParts.value[streamingParts.value.length - 1]
+  if (lastPart && lastPart.type === 'reasoning') {
+    lastPart.content += content
+  } else {
+    streamingParts.value.push({ type: 'reasoning', content })
+  }
+}
+
+function appendReasoningCitationMarker(citation: CitationRef) {
+  appendReasoningPart(`{{CITE:${citation.display_num}}}`)
+}
+
+function appendToolExecutingParts(tools: ToolExecuting[]) {
+  for (const tool of tools) {
+    streamingParts.value.push(toToolStatusPart(tool))
+    handleToolExecutingSideEffects(tool)
+  }
+}
+
 watch(() => toolboxMode.value, (newVal, oldVal) => {
   localStorage.setItem(toolboxModeStorageKey, newVal)
 
@@ -1591,13 +1620,7 @@ async function sendMessage() {
       onContent: (content: string) => {
 
         resetThinkingTimer()
-
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'text') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'text', content })
-        }
+        appendTextPart(content)
       },
       onCitationRef: (citation: CitationRef) => {
 
@@ -1648,31 +1671,13 @@ async function sendMessage() {
         }
       },
       onReasoning: (content: string) => {
-
-
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content })
-        }
+        appendReasoningPart(content)
       },
       onReasoningCitationRef: (citation) => {
-
-        const marker = `{{CITE:${citation.display_num}}}`
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += marker
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content: marker })
-        }
+        appendReasoningCitationMarker(citation)
       },
       onToolExecuting: (tools: ToolExecuting[]) => {
-
-        for (const tool of tools) {
-          streamingParts.value.push(toToolStatusPart(tool))
-          handleToolExecutingSideEffects(tool)
-        }
+        appendToolExecutingParts(tools)
       },
       onWorkflowStarted: handleWorkflowStarted,
       onFeatureStarted: handleFeatureStarted,
@@ -1976,12 +1981,7 @@ async function submitEditMessage(msg: Message) {
       onContent: (content: string) => {
         clearLocalThinkingTimer()
         startLocalThinkingTimer()
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'text') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'text', content })
-        }
+        appendTextPart(content)
       },
       onCitationRef: (citation) => {
         if (citation.type === 'web') {
@@ -2026,27 +2026,13 @@ async function submitEditMessage(msg: Message) {
         }
       },
       onReasoning: (content: string) => {
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content })
-        }
+        appendReasoningPart(content)
       },
       onReasoningCitationRef: (citation) => {
-        const marker = `{{CITE:${citation.display_num}}}`
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += marker
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content: marker })
-        }
+        appendReasoningCitationMarker(citation)
       },
       onToolExecuting: (tools) => {
-        for (const tool of tools) {
-          streamingParts.value.push(toToolStatusPart(tool))
-          handleToolExecutingSideEffects(tool)
-        }
+        appendToolExecutingParts(tools)
       },
       onWorkflowStarted: handleWorkflowStarted,
       onFeatureStarted: handleFeatureStarted,
@@ -2225,12 +2211,7 @@ async function regenerateMessage(assistantIndex: number) {
       onContent: (content: string) => {
         clearLocalThinkingTimer()
         startLocalThinkingTimer()
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'text') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'text', content })
-        }
+        appendTextPart(content)
       },
       onCitationRef: (citation) => {
         if (citation.type === 'web') {
@@ -2272,27 +2253,13 @@ async function regenerateMessage(assistantIndex: number) {
         }
       },
       onReasoning: (content: string) => {
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += content
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content })
-        }
+        appendReasoningPart(content)
       },
       onReasoningCitationRef: (citation) => {
-        const marker = `{{CITE:${citation.display_num}}}`
-        const lastPart = streamingParts.value[streamingParts.value.length - 1]
-        if (lastPart && lastPart.type === 'reasoning') {
-          lastPart.content += marker
-        } else {
-          streamingParts.value.push({ type: 'reasoning', content: marker })
-        }
+        appendReasoningCitationMarker(citation)
       },
       onToolExecuting: (tools) => {
-        for (const tool of tools) {
-          streamingParts.value.push(toToolStatusPart(tool))
-          handleToolExecutingSideEffects(tool)
-        }
+        appendToolExecutingParts(tools)
       },
       onWorkflowStarted: handleWorkflowStarted,
       onFeatureStarted: handleFeatureStarted,
