@@ -2,7 +2,7 @@ import json
 import logging
 from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,8 @@ async def _agent_sse(
     db: AsyncSession,
     enable_web_search: bool = False,
     user_msg_id: Optional[str] = None,
+    workflow_redis=None,
+    output_language: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     from datetime import datetime, timezone
     from agent.chat_agent import ChatAgent
@@ -48,6 +50,8 @@ async def _agent_sse(
             user_id=user_id,
             file_ids=file_ids or None,
             enable_web_search=enable_web_search,
+            workflow_redis=workflow_redis,
+            output_language=output_language,
         ):
             if event["type"] == "citations":
                 conversation_history = event.get("conversation_history") or []
@@ -143,6 +147,7 @@ async def _agent_sse(
 @router.post("/stream")
 async def chat_stream(
     body: ChatRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -160,7 +165,9 @@ async def chat_stream(
 
     return StreamingResponse(
         _agent_sse(session, current_user.id, body.message, body.file_ids, db, body.enable_web_search,
-                   user_msg_id=user_msg.id),
+                   user_msg_id=user_msg.id,
+                   workflow_redis=request.app.state.redis,
+                   output_language=body.output_language),
         media_type="text/event-stream",
         headers={
             "Cache-Control":     "no-cache",
@@ -174,6 +181,7 @@ async def edit_message_and_regenerate(
     session_id: str,
     message_id: str,
     body: EditMessageRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -221,6 +229,8 @@ async def edit_message_and_regenerate(
             session, current_user.id, body.content, body.file_ids or [], db,
             enable_web_search=body.enable_web_search,
             user_msg_id=new_user_msg.id,
+            workflow_redis=request.app.state.redis,
+            output_language=body.output_language,
         ),
         media_type="text/event-stream",
         headers={

@@ -80,6 +80,8 @@ export default {
   transcribingAudio: "Transcribing audio...",
   analyzingImages: "Analyzing images...",
   searchingWeb: "Searching web...",
+  startingWorkflowGeneration: "Starting report generation...",
+  checkingWorkflowGeneration: "Checking report generation...",
   running: "Running",
   runningTool: "Running {name}...",
   compactingChatHistory: "Compacting chat history...",

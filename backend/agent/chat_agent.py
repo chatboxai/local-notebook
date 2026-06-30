@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 from typing import AsyncGenerator
 
 import config
@@ -14,6 +13,10 @@ from agent.tools.query_knowledge_base import (
 )
 from agent.tools.read_segments import ReadSegmentsTool
 from agent.tools.file_tools import ListFilesTool, GetFileMetaTool, AskImageTool
+from agent.tools.workflow_tools import (
+    CreateWorkflowGenerationTool,
+    GetWorkflowGenerationTool,
+)
 
 import kosong
 from kosong.chat_provider import ChatProviderError, StreamedMessagePart
@@ -27,6 +30,7 @@ logger = logging.getLogger("chat_agent")
 
 MAX_HISTORY_MESSAGES = 40
 MAX_ITERATIONS = 20
+MAX_OUTPUT_TOKENS = 8192
 COMPACT_TOKEN_THRESHOLD = 90_000
 COMPACT_MIN_STEPS = 10
 COMPACT_MIN_ROUNDS = 3
@@ -56,6 +60,8 @@ class ChatAgent:
         user_id: str,
         file_ids: list[str] | None = None,
         enable_web_search: bool = False,
+        workflow_redis=None,
+        output_language: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         api_key, base_url, model, api_format = await config.resolve_llm_provider_config()
 
@@ -71,7 +77,7 @@ class ChatAgent:
             api_key=api_key,
             base_url=base_url,
             api_format=api_format,
-            max_tokens=4000,
+            max_tokens=MAX_OUTPUT_TOKENS,
         )
 
         self._citation_state.project_id = project_id
@@ -82,7 +88,23 @@ class ChatAgent:
         list_files_tool = ListFilesTool(citation_state=self._citation_state)
         file_meta_tool = GetFileMetaTool(citation_state=self._citation_state)
         ask_image_tool = AskImageTool(citation_state=self._citation_state)
-        tools = [kb_tool, read_tool, list_files_tool, file_meta_tool, ask_image_tool]
+        create_workflow_tool = CreateWorkflowGenerationTool(
+            citation_state=self._citation_state,
+            redis=workflow_redis,
+            output_language=output_language,
+        )
+        get_workflow_tool = GetWorkflowGenerationTool(
+            citation_state=self._citation_state,
+        )
+        tools = [
+            kb_tool,
+            read_tool,
+            list_files_tool,
+            file_meta_tool,
+            ask_image_tool,
+            create_workflow_tool,
+            get_workflow_tool,
+        ]
 
         if enable_web_search:
             from agent.tools.web_search import WebSearchTool
@@ -237,13 +259,20 @@ class ChatAgent:
                 return
 
             if step_result.tool_calls and not is_final:
-                tools_display = [
-                    {
+                tools_display = []
+                for tc in step_result.tool_calls:
+                    arguments = {}
+                    try:
+                        parsed = json.loads(tc.function.arguments or "{}")
+                        if isinstance(parsed, dict):
+                            arguments = parsed
+                    except json.JSONDecodeError:
+                        pass
+                    tools_display.append({
                         "name": tc.function.name,
+                        "arguments": arguments,
                         **get_tool_display_info(tc.function.name),
-                    }
-                    for tc in step_result.tool_calls
-                ]
+                    })
                 yield {"type": "tool_executing", "tools": tools_display}
 
                 tool_results = await step_result.tool_results()
@@ -251,14 +280,9 @@ class ChatAgent:
                 history.append(step_result.message)
 
                 tool_outputs: list[tuple[str, str, str]] = []
+                workflow_events: list[dict] = []
                 for tc, tr in zip(step_result.tool_calls, tool_results):
-                    output = tr.output if hasattr(tr, "output") else str(tr)
-                    if hasattr(output, "text") if hasattr(output, "__class__") else False:
-                        output_str = output.text
-                    elif isinstance(output, str):
-                        output_str = output
-                    else:
-                        output_str = str(output)
+                    output_str = self._tool_result_to_text(tr)
                     history.append(Message(
                         role="tool",
                         content=output_str,
@@ -266,9 +290,20 @@ class ChatAgent:
                     ))
                     tool_outputs.append((output_str, tc.id, tc.function.name))
 
+                    extras = getattr(getattr(tr, "return_value", None), "extras", None) or {}
+                    workflow_started = extras.get("workflow_started")
+                    if isinstance(workflow_started, dict):
+                        workflow_events.append({
+                            "type": "workflow_started",
+                            **workflow_started,
+                        })
+
                 for event in citation_parser.flush():
                     yield event
                 self._sync_display_nums(citation_parser)
+
+                for event in workflow_events:
+                    yield event
 
                 conversation_history.append({
                     "role": "assistant",
@@ -345,6 +380,30 @@ class ChatAgent:
                     yield {"type": "reasoning_citation_ref", **{k: v for k, v in event.items() if k != "type"}}
         elif isinstance(part, (ToolCall, ToolCallPart)):
             pass
+
+    @staticmethod
+    def _tool_result_to_text(result: ToolResult) -> str:
+        return_value = getattr(result, "return_value", None)
+        output = getattr(return_value, "output", None)
+
+        if isinstance(output, str) and output:
+            return output
+        if isinstance(output, list):
+            chunks = []
+            for item in output:
+                text = getattr(item, "text", None)
+                if isinstance(text, str):
+                    chunks.append(text)
+                else:
+                    chunks.append(str(item))
+            return "".join(chunks)
+        if output is not None and not isinstance(output, str):
+            return str(output)
+
+        message = getattr(return_value, "message", None)
+        if isinstance(message, str) and message:
+            return message
+        return str(result)
 
     async def _load_history(self, session_id: str) -> list[Message]:
         from database import AsyncSessionLocal
@@ -586,16 +645,18 @@ class ChatAgent:
         self._next_display_num = parser.display_num
 
     def _extract_citations(self, answer: str) -> dict:
-        citation_nums: set[int] = set()
-        for num in re.findall(r'\[citation_(\d+)\]', answer):
-            citation_nums.add(int(num))
-        for start, end in re.findall(r'\[citation_(\d+)-citation_(\d+)\]', answer):
-            for n in range(int(start), int(end) + 1):
-                citation_nums.add(n)
+        citation_ids: set[str] = set()
+        range_parser = CitationParser({})
+        for match in CitationParser.CITATION_PATTERN.finditer(answer):
+            start_token = match.group(1)
+            end_token = match.group(2)
+            if end_token:
+                citation_ids.update(range_parser._expand_range(start_token, end_token))
+            else:
+                citation_ids.add(f"citation_{start_token}")
 
         citations = []
-        for num in sorted(citation_nums):
-            cid = f"citation_{num}"
+        for cid in sorted(citation_ids):
             if cid in self._citation_state.citations_map:
                 citations.append({"id": cid, **self._citation_state.citations_map[cid]})
 
