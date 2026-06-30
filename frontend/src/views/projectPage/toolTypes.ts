@@ -1,7 +1,8 @@
 export const TOOL_TYPES = [
-  { type: 'objective_positioning', titleKey: 'ui.objectivePositioning', tooltipKey: 'ui.objectivePositioningTooltip', color: 'cyan', icon: 'positioning', enabled: false },
-  { type: 'audience_profile', titleKey: 'ui.audienceProfile', tooltipKey: 'ui.audienceProfileTooltip', color: 'amber', icon: 'audience', enabled: false },
-  { type: 'comparative_analysis', titleKey: 'ui.comparativeAnalysis', tooltipKey: 'ui.comparativeAnalysisTooltip', color: 'indigo', icon: 'market', enabled: false },
+  { type: 'objective_positioning', titleKey: 'ui.objectivePositioning', tooltipKey: 'ui.objectivePositioningTooltip', color: 'cyan', icon: 'positioning', enabled: true },
+  { type: 'audience_profile', titleKey: 'ui.audienceProfile', tooltipKey: 'ui.audienceProfileTooltip', color: 'amber', icon: 'audience', enabled: true },
+  { type: 'comparative_analysis', titleKey: 'ui.comparativeAnalysis', tooltipKey: 'ui.comparativeAnalysisTooltip', color: 'indigo', icon: 'market', enabled: true },
+  { type: 'custom_feature', titleKey: 'ui.customQuickTool', tooltipKey: 'ui.customQuickToolTooltip', color: 'custom', icon: 'custom', enabled: true },
   { type: 'content_summary', titleKey: 'ui.contentSummary', tooltipKey: 'ui.contentSummaryTooltip', color: 'green', icon: 'summary', enabled: false },
   { type: 'title_suggestion', titleKey: 'ui.titleSuggestion', tooltipKey: 'ui.titleSuggestionTooltip', color: 'purple', icon: 'title', enabled: false },
   { type: 'communication_copy', titleKey: 'ui.communicationCopy', tooltipKey: 'ui.communicationCopyTooltip', color: 'rose', icon: 'copy', enabled: false },

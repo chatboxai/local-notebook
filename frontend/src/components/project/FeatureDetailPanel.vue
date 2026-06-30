@@ -23,22 +23,6 @@
         {{ getFeatureStatusText(feature.status) }}
       </span>
 
-      <button
-        v-if="feature.status === 'completed'"
-        class="panel-export-btn"
-        :class="{ loading: isDownloading }"
-        :disabled="isDownloading"
-        @click="handleDownloadWord"
-        :title="$t('ui.downloadWordDocument')"
-      >
-        <svg v-if="!isDownloading" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-        </svg>
-        <svg v-else class="loading-spinner" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/>
-        </svg>
-      </button>
-
       <button class="panel-toggle-btn" @click="$emit('close')" :title="$t('ui.close')">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -66,6 +50,50 @@
                   :title="part.summary"
                   @click="$emit('citationClick', part)"
                 >{{ part.display_num }}</sup></template></component>
+
+            <div
+              v-else-if="processed.block.block_type === 'paragraph' && processed.block.extra?.is_table && parseMarkdownTable(getTableContent(processed.block))"
+              class="feature-table"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th v-for="(header, hi) in parseMarkdownTable(getTableContent(processed.block))!.headers" :key="hi">
+                      <template v-for="(part, pi) in header.parts" :key="pi">
+                        <span v-if="part.type === 'text'" v-html="parseInlineMarkdown(part.content || '')"></span>
+                        <sup
+                          v-else-if="part.type === 'citation_ref'"
+                          class="inline-citation"
+                          :class="{ active: activeCitationNum === part.display_num }"
+                          :data-segment-id="part.segment_id"
+                          :data-display-num="part.display_num"
+                          :title="part.summary"
+                          @click="$emit('citationClick', part)"
+                        >{{ part.display_num }}</sup>
+                      </template>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, ri) in parseMarkdownTable(getTableContent(processed.block))!.rows" :key="ri">
+                    <td v-for="(cell, ci) in row" :key="ci">
+                      <template v-for="(part, pi) in cell.parts" :key="pi">
+                        <span v-if="part.type === 'text'" v-html="parseInlineMarkdown(part.content || '')"></span>
+                        <sup
+                          v-else-if="part.type === 'citation_ref'"
+                          class="inline-citation"
+                          :class="{ active: activeCitationNum === part.display_num }"
+                          :data-segment-id="part.segment_id"
+                          :data-display-num="part.display_num"
+                          :title="part.summary"
+                          @click="$emit('citationClick', part)"
+                        >{{ part.display_num }}</sup>
+                      </template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             <p v-else-if="processed.block.block_type === 'paragraph'" class="feature-paragraph">
               <template v-for="(part, pi) in processed.block.content_parts" :key="pi"><span v-if="part.type === 'text'" class="feature-text" v-html="parseInlineMarkdown(part.content)"></span><sup
@@ -142,6 +170,13 @@
       <div v-else-if="feature.status === 'failed'" class="report-error">
         <p>{{ $t('ui.generationFailedWithReason', { reason: feature.error_message || $t('ui.unknownError') }) }}</p>
       </div>
+      <div v-else-if="feature.status === 'pending' || feature.status === 'processing'" class="report-waiting">
+        <div class="report-waiting-spinner"></div>
+        <p>{{ feature.status === 'pending' ? $t('ui.quickToolQueuedMessage') : $t('ui.quickToolGeneratingMessage') }}</p>
+      </div>
+      <div v-else class="report-empty">
+        <p>{{ $t('ui.quickToolNoContentYet') }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -150,43 +185,13 @@
 import { ref, nextTick } from 'vue'
 import type { Feature, FeatureBlock, FeatureCitationRefPart } from '../../types'
 import { parseInlineMarkdown } from '../../utils'
-import { getAssetUrl, exportFeatureToWord } from '../../services/api'
+import { getAssetUrl } from '../../services/api'
 import { t } from '../../i18n'
 
 
 const isEditingTitle = ref(false)
 const editingTitleValue = ref('')
 const titleInputRef = ref<HTMLInputElement | null>(null)
-
-
-const isDownloading = ref(false)
-
-async function handleDownloadWord() {
-  if (isDownloading.value) return
-  
-  try {
-    isDownloading.value = true
-    const blob = await exportFeatureToWord(props.feature.id)
-    
-    
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    
-    const fileName = props.feature.title ? `${props.feature.title}.docx` : `feature_export_${props.feature.id}.docx`
-    link.setAttribute('download', fileName)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-  } catch (error) {
-    console.error('导出失败:', error)
-    
-  } finally {
-    isDownloading.value = false
-  }
-}
-
 
 const props = defineProps<{
   feature: Feature
@@ -217,6 +222,26 @@ interface ProcessedBlock {
   blocks?: any[]
   originalIndex?: number
   originalIndices?: number[]
+}
+
+interface TableTextPart {
+  type: 'text'
+  content?: string
+}
+
+interface TableCitationPart {
+  type: 'citation_ref'
+  citation_id: string
+  display_num: number
+  segment_id?: string
+  summary?: string
+}
+
+type TableCellPart = TableTextPart | TableCitationPart
+
+interface ParsedTable {
+  headers: Array<{ parts: TableCellPart[] }>
+  rows: Array<Array<{ parts: TableCellPart[] }>>
 }
 
 function processFeatureBlocks(blocks: FeatureBlock[]): ProcessedBlock[] {
@@ -253,6 +278,103 @@ function processFeatureBlocks(blocks: FeatureBlock[]): ProcessedBlock[] {
   }
 
   return result
+}
+
+function getTableContent(block: any): string {
+  if (block.content && typeof block.content === 'string') {
+    return block.content
+  }
+
+  if (block.content_parts && Array.isArray(block.content_parts)) {
+    return block.content_parts
+      .map((part: any) => {
+        if (part.type === 'text') return part.content || ''
+        if (part.type === 'citation_ref') return `[${part.citation_id}]`
+        return ''
+      })
+      .join('')
+  }
+
+  return ''
+}
+
+function parseTableCellContent(cellText: string): TableCellPart[] {
+  const parts: TableCellPart[] = []
+  const regex = /\[(citation_[a-zA-Z0-9_]+)\]/g
+  let lastIndex = 0
+  let match
+
+  while ((match = regex.exec(cellText)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        type: 'text',
+        content: cellText.slice(lastIndex, match.index)
+      })
+    }
+
+    const citationId = match[1] as string
+    const citation = props.feature.citations?.[citationId]
+    parts.push({
+      type: 'citation_ref',
+      citation_id: citationId,
+      display_num: citation?.display_num || 0,
+      segment_id: citation?.segment_id,
+      summary: citation?.summary
+    })
+
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < cellText.length) {
+    parts.push({
+      type: 'text',
+      content: cellText.slice(lastIndex)
+    })
+  }
+
+  if (parts.length === 0) {
+    parts.push({ type: 'text', content: '' })
+  }
+
+  return parts
+}
+
+function parseMarkdownTable(content: string): ParsedTable | null {
+  if (!content) return null
+
+  const lines = content.trim().split('\n').filter(line => line.trim())
+  if (lines.length < 2) return null
+
+  const headerLine = lines[0]
+  if (!headerLine?.startsWith('|') || !headerLine?.endsWith('|')) return null
+
+  const separatorLine = lines[1]
+  if (!separatorLine?.includes('---')) return null
+
+  const headerCells = headerLine
+    .slice(1, -1)
+    .split('|')
+    .map(cell => cell.trim())
+
+  const rows: Array<Array<{ parts: TableCellPart[] }>> = []
+  for (const line of lines.slice(2)) {
+    if (!line.startsWith('|') || !line.endsWith('|')) continue
+    rows.push(
+      line
+        .slice(1, -1)
+        .split('|')
+        .map(cell => ({
+          parts: parseTableCellContent(cell.trim())
+        }))
+    )
+  }
+
+  return {
+    headers: headerCells.map(cell => ({
+      parts: parseTableCellContent(cell)
+    })),
+    rows
+  }
 }
 
 
@@ -376,48 +498,6 @@ function getFeatureStatusClass(status: string): string {
 }
 
 
-.panel-export-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.2s;
-}
-
-.panel-export-btn:hover:not(:disabled) {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.panel-export-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.panel-export-btn.loading {
-  color: #16a34a;
-}
-
-.panel-export-btn .loading-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-
 .panel-toggle-btn {
   display: flex;
   align-items: center;
@@ -506,6 +586,47 @@ h6.feature-heading {
 
 .feature-list li {
   margin-bottom: 8px;
+}
+
+.feature-table {
+  margin: 0 0 16px 0;
+  overflow-x: auto;
+}
+
+.feature-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.feature-table th,
+.feature-table td {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+.feature-table th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.feature-table tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.feature-table tbody tr:hover {
+  background: #f3f4f6;
+}
+
+.feature-table :deep(strong) {
+  font-weight: 600;
+}
+
+.feature-table :deep(em) {
+  font-style: italic;
 }
 
 .feature-image {
@@ -634,6 +755,35 @@ h6.feature-heading {
   margin: 0;
 }
 
+.report-waiting,
+.report-empty {
+  display: flex;
+  min-height: 240px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.report-waiting p,
+.report-empty p {
+  margin: 0;
+}
+
+.report-waiting-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(farthest-side, #2563eb 94%, transparent) top / 4px 4px no-repeat,
+    conic-gradient(#2563eb 20%, #dbeafe 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
+  animation: featureSpinnerRotate 0.8s linear infinite;
+}
+
 .feature-text :deep(strong) {
   font-weight: 600;
 }
@@ -648,6 +798,12 @@ h6.feature-heading {
   border-radius: 4px;
   font-family: monospace;
   font-size: 0.9em;
+}
+
+@keyframes featureSpinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
 
@@ -705,4 +861,5 @@ h6.feature-heading {
   66% { clip-path: inset(0 33% 0 0); }
   100% { clip-path: inset(0 0 0 0); }
 }
+
 </style>

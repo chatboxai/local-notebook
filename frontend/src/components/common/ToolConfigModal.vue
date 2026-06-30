@@ -61,7 +61,7 @@
           
           <div class="tool-config-body">
             <template v-if="!hidePrompt">
-              <label class="tool-config-label">{{ $t('ui.customQuoteExtractionOptional') }}</label>
+              <label class="tool-config-label">{{ $t('ui.customRequirementsOptional') }}</label>
               <textarea
                 v-model="promptText"
                 class="tool-config-textarea"

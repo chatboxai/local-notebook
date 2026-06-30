@@ -98,6 +98,18 @@ export function useProjectFeatures({
   )
 
   async function loadFeatures() {
+    try {
+      const { features: featureList } = await getProjectFeatures(projectId)
+      features.value = featureList
+      featureList
+        .filter(f => f.status === 'pending' || f.status === 'processing')
+        .forEach(f => pollingFeatureIds.value.add(f.id))
+      if (pollingFeatureIds.value.size > 0) {
+        startFeaturePolling()
+      }
+    } catch (error) {
+      console.error('Failed to load features:', error)
+    }
   }
 
   function startFeaturePolling() {
@@ -129,6 +141,15 @@ export function useProjectFeatures({
             }
           }
 
+          if (activeFeature.value?.id === featureId) {
+            activeFeature.value = {
+              ...activeFeature.value,
+              status: statusInfo.status as Feature['status'],
+              error_message: statusInfo.error_message,
+              title: statusInfo.title ?? activeFeature.value.title
+            }
+          }
+
           if (statusInfo.status === 'completed' || statusInfo.status === 'failed') {
             pollingFeatureIds.value.delete(featureId)
             hasCompleted = true
@@ -138,6 +159,13 @@ export function useProjectFeatures({
         if (hasCompleted) {
           const { features: featureList } = await getProjectFeatures(projectId)
           features.value = featureList
+          if (activeFeature.value && featureList.some(f => f.id === activeFeature.value?.id)) {
+            try {
+              activeFeature.value = await getFeature(activeFeature.value.id)
+            } catch (error) {
+              console.error('Failed to refresh active feature:', error)
+            }
+          }
         }
 
         if (pollingFeatureIds.value.size === 0) {
@@ -297,14 +325,6 @@ export function useProjectFeatures({
   }
 
   async function handleFeatureClick(featureItem: FeatureListItem) {
-    if (featureItem.status === 'pending' || featureItem.status === 'processing') {
-      return
-    }
-
-    if (featureItem.status === 'failed') {
-      return
-    }
-
     try {
       const feature = await getFeature(featureItem.id)
       activeFeature.value = feature

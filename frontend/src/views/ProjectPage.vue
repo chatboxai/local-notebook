@@ -230,7 +230,10 @@
         :active-feature-citation-num="activeFeatureCitationNum"
         :transition-name="transitionName"
         :has-ready-files="hasReadyFiles"
+        :features="features"
         :workflows="workflows"
+        :highlighted-feature-id="highlightedFeatureId"
+        :highlighted-workflow-id="highlightedWorkflowId"
         :format-time="formatTime"
         :format-workflow-elapsed="formatWorkflowElapsed"
         @close-workflow-detail="closeWorkflowDetail"
@@ -245,6 +248,9 @@
         @feature-citation-click="handleFeatureCitationClick"
         @clear-feature-citation="clearFeatureCitation"
         @feature-rename="handleFeatureDetailRename"
+        @open-tool-config="openToolConfig"
+        @view-feature-detail="handleFeatureClick"
+        @delete-feature="handleDeleteFeature"
         @open-workflow-config="openWorkflowConfig"
         @view-workflow-detail="viewWorkflowDetail"
       />
@@ -431,6 +437,7 @@ import {
   editMessageAndRegenerate,
   type AgentRole,
   type CitationRef,
+  type FeatureStartedData,
   type WorkflowStartedData,
   updateProject,
   type WorkflowContentFeature,
@@ -449,6 +456,8 @@ import { useSourcePreview } from './projectPage/useSourcePreview'
 const route = useRoute()
 const router = useRouter()
 const projectId = route.params.id as string
+type ToolboxMode = 'tools' | 'oneclick'
+const toolboxModeStorageKey = `project:${projectId}:toolboxMode`
 const displayUsername = computed(() => getDisplayUsername() || t('ui.defaultUser'))
 const canAdmin = computed(() => isAdmin())
 
@@ -689,15 +698,19 @@ const rightPanelWidthBeforeReport = ref<number | null>(null)
 
 
 const {
+  features,
   activeFeature,
   showFeatureDetail,
+  pollingFeatureIds,
   toolConfigModal,
   imageGenerationModal,
   imageFilesForGeneration,
   videoGenerationModal,
   videoFilesForGeneration,
   loadFeatures,
+  startFeaturePolling,
   stopFeaturePolling,
+  openToolConfig,
   closeToolConfig,
   handleToolConfigConfirm,
   closeImageGenerationModal,
@@ -707,6 +720,8 @@ const {
   closeFeatureDetail,
   renameFeatureTitle,
   handleFeatureDetailRename,
+  handleFeatureClick,
+  handleDeleteFeature,
 } = useProjectFeatures({
   projectId,
   files,
@@ -911,7 +926,15 @@ const clickedCitationElement = ref<HTMLElement | null>(null)
 const clickedCitationTop = ref<number>(0)
 
 
-const toolboxMode = ref<'tools' | 'oneclick'>('oneclick')
+function getInitialToolboxMode(): ToolboxMode {
+  const cached = localStorage.getItem(toolboxModeStorageKey)
+  return cached === 'tools' || cached === 'oneclick' ? cached : 'oneclick'
+}
+
+const toolboxMode = ref<ToolboxMode>(getInitialToolboxMode())
+const highlightedFeatureId = ref<string | null>(null)
+const highlightedWorkflowId = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
 
 
 const transitionName = ref('slide-left')
@@ -926,12 +949,64 @@ function toToolStatusPart(tool: ToolExecuting): ToolStatusPart {
   }
 }
 
+function highlightGeneratedTask(type: 'feature' | 'workflow', id: string) {
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+    highlightTimer = null
+  }
+  highlightedFeatureId.value = type === 'feature' ? id : null
+  highlightedWorkflowId.value = type === 'workflow' ? id : null
+  highlightTimer = setTimeout(() => {
+    highlightedFeatureId.value = null
+    highlightedWorkflowId.value = null
+    highlightTimer = null
+  }, 8000)
+}
+
+async function handleFeatureStarted(data: FeatureStartedData) {
+  toolboxMode.value = 'tools'
+  rightPanelCollapsed.value = false
+  await loadFeatures()
+  if (data.feature_id) {
+    pollingFeatureIds.value.add(data.feature_id)
+    startFeaturePolling()
+    highlightGeneratedTask('feature', data.feature_id)
+  }
+}
+
 async function handleWorkflowStarted(data: WorkflowStartedData) {
   toolboxMode.value = 'oneclick'
   rightPanelCollapsed.value = false
   await loadWorkflows()
   if (data.workflow_id) {
     startWorkflowPolling(data.workflow_id)
+    highlightGeneratedTask('workflow', data.workflow_id)
+  }
+}
+
+function handleToolExecutingSideEffects(tool: ToolExecuting) {
+  if (tool.name === 'create_feature_generation') {
+    toolboxMode.value = 'tools'
+    rightPanelCollapsed.value = false
+    loadFeatures()
+    return
+  }
+
+  if (tool.name === 'create_workflow_generation') {
+    toolboxMode.value = 'oneclick'
+    rightPanelCollapsed.value = false
+    loadWorkflows()
+    return
+  }
+
+  if (tool.name === 'regenerate_generation_step') {
+    setTimeout(() => {
+      loadWorkflows()
+      if (currentWorkflow.value) {
+        const workflowId = currentWorkflow.value.id
+        refreshWorkflowDetail(workflowId)
+      }
+    }, 500)
   }
 }
 
@@ -942,10 +1017,12 @@ function isCompactingToolStatus(part: ContentPart): boolean {
 }
 
 watch(() => toolboxMode.value, (newVal, oldVal) => {
+  localStorage.setItem(toolboxModeStorageKey, newVal)
+
   if (newVal === 'tools' && oldVal === 'oneclick') {
-    transitionName.value = 'slide-left'
-  } else if (newVal === 'oneclick' && oldVal === 'tools') {
     transitionName.value = 'slide-right'
+  } else if (newVal === 'oneclick' && oldVal === 'tools') {
+    transitionName.value = 'slide-left'
   }
 })
 
@@ -1041,6 +1118,10 @@ onUnmounted(() => {
   stopFeaturePolling()
   stopWorkflowPolling()
   stopWorkflowElapsedTimer()
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+    highlightTimer = null
+  }
 })
 
 async function handleCitationClickEvent(event: MouseEvent) {
@@ -1586,35 +1667,11 @@ async function sendMessage() {
 
         for (const tool of tools) {
           streamingParts.value.push(toToolStatusPart(tool))
-
-
-          if (tool.name === 'create_generation_task') {
-            const category = tool.arguments?.category
-
-            loadWorkflows()
-            if (category === 'feature') {
-              toolboxMode.value = 'tools'
-            } else {
-              toolboxMode.value = 'oneclick'
-            }
-          }
-
-
-          if (tool.name === 'regenerate_generation_step') {
-
-            setTimeout(() => {
-              loadWorkflows()
-              if (currentWorkflow.value) {
-
-                const workflowId = currentWorkflow.value.id
-                refreshWorkflowDetail(workflowId)
-
-              }
-            }, 500)
-          }
+          handleToolExecutingSideEffects(tool)
         }
       },
       onWorkflowStarted: handleWorkflowStarted,
+      onFeatureStarted: handleFeatureStarted,
       onCitations: () => {
 
       },
@@ -1984,19 +2041,11 @@ async function submitEditMessage(msg: Message) {
       onToolExecuting: (tools) => {
         for (const tool of tools) {
           streamingParts.value.push(toToolStatusPart(tool))
-
-          if (tool.name === 'create_generation_task') {
-            const category = tool.arguments?.category
-            loadWorkflows()
-            if (category === 'feature') {
-              toolboxMode.value = 'tools'
-            } else {
-              toolboxMode.value = 'oneclick'
-            }
-          }
+          handleToolExecutingSideEffects(tool)
         }
       },
       onWorkflowStarted: handleWorkflowStarted,
+      onFeatureStarted: handleFeatureStarted,
       onDone: (doneData) => {
         clearLocalThinkingTimer()
         const tempId = Date.now().toString()
@@ -2238,19 +2287,11 @@ async function regenerateMessage(assistantIndex: number) {
       onToolExecuting: (tools) => {
         for (const tool of tools) {
           streamingParts.value.push(toToolStatusPart(tool))
-
-          if (tool.name === 'create_generation_task') {
-            const category = tool.arguments?.category
-            loadWorkflows()
-            if (category === 'feature') {
-              toolboxMode.value = 'tools'
-            } else {
-              toolboxMode.value = 'oneclick'
-            }
-          }
+          handleToolExecutingSideEffects(tool)
         }
       },
       onWorkflowStarted: handleWorkflowStarted,
+      onFeatureStarted: handleFeatureStarted,
       onDone: (doneData) => {
         clearLocalThinkingTimer()
         messages.value.push({

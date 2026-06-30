@@ -1515,9 +1515,137 @@ async def generate_workflow_task(
     return {"status": final_status, "workflow_id": workflow_id, "completed": completed, "failed": failed}
 
 
+FEATURE_INSTRUCTION_TEMPLATES = {
+    "objective_positioning": (
+        "Analyze the selected source materials and produce a focused positioning analysis. "
+        "Identify the core objective, audience-facing value, differentiation points, and practical recommendations."
+    ),
+    "audience_profile": (
+        "Analyze the selected source materials and produce an audience profile. "
+        "Identify core audience groups, their needs, motivations, concerns, and messaging implications."
+    ),
+    "comparative_analysis": (
+        "Analyze the selected source materials and produce a comparable analysis. "
+        "Compare relevant entities, claims, options, or approaches from the sources and explain the key differences."
+    ),
+    "content_summary": (
+        "Summarize the selected source materials with a clear structure. "
+        "Highlight the core ideas, important facts, and useful takeaways."
+    ),
+    "title_suggestion": (
+        "Generate title suggestions based on the selected source materials. "
+        "Explain why each title fits the source content and intended positioning."
+    ),
+    "communication_copy": (
+        "Generate communication copy from the selected source materials. "
+        "Focus on clear messaging, audience value, and concise reusable copy."
+    ),
+}
+
+
+def _standalone_feature_instruction(
+    feature_type: str,
+    custom_prompt: str,
+    output_language: str,
+) -> str:
+    base = FEATURE_INSTRUCTION_TEMPLATES.get(
+        feature_type,
+        "Use the selected source materials to generate one focused, reusable right-panel result.",
+    )
+    if custom_prompt:
+        base = f"{base}\n\nAdditional user requirements: {custom_prompt}"
+    return f"{base}\n\nImportant: The final answer must be written in {output_language}."
+
+
+async def generate_feature_task(
+    ctx: dict,
+    feature_id: str,
+    output_language: str | None = None,
+) -> dict:
+    """Generate a standalone quick-tool feature in the right panel."""
+    from agent.capabilities import DEFAULT_FEATURE_TYPE
+    from agent.feature_agent import FeatureAgent
+    from agent.tools.query_knowledge_base import CitationState
+    from models.feature import Feature
+    from models.project import Project
+
+    session_factory = ctx["session_factory"]
+    started = datetime.now(timezone.utc)
+    output_language = (output_language or "Chinese").strip()
+
+    async with session_factory() as db:
+        feature = await db.get(Feature, feature_id)
+        if not feature:
+            logger.error("generate_feature_task: feature %s not found", feature_id)
+            return {"status": "error", "reason": "feature not found"}
+
+        project = await db.get(Project, feature.project_id)
+        user_id = project.owner_user_id if project else None
+        cfg = feature.get_custom_config()
+        file_ids = cfg.get("file_ids") or []
+        custom_prompt = (cfg.get("prompt") or "").strip()
+        feature_type = feature.feature_type or DEFAULT_FEATURE_TYPE
+        report_title = feature.title or feature.step_name or "Quick tool"
+        feature.status = "processing"
+        feature.error_message = None
+        feature.started_at = started
+        await db.commit()
+
+    try:
+        citation_state = CitationState()
+        citation_state.project_id = feature.project_id
+        citation_state.file_ids = file_ids or None
+        citation_state.current_feature_id = feature_id
+
+        instruction = _standalone_feature_instruction(
+            feature_type,
+            custom_prompt,
+            output_language,
+        )
+        blocks, citations, _ = await FeatureAgent().generate(
+            report_title=report_title,
+            step_name=report_title,
+            instruction=instruction,
+            feature_type=feature_type,
+            custom_prompt=custom_prompt,
+            citation_state=citation_state,
+            start_display_num=1,
+            user_id=user_id,
+            trace_phase="standalone",
+        )
+
+        async with session_factory() as db:
+            feature = await db.get(Feature, feature_id)
+            if feature:
+                feature.set_blocks(blocks)
+                feature.set_citations(citations)
+                feature.status = "completed"
+                feature.finished_at = datetime.now(timezone.utc)
+                await db.commit()
+        logger.info(
+            "[feature] done feature_id=%s type=%s blocks=%d citations=%d",
+            feature_id,
+            feature_type,
+            len(blocks),
+            len(citations or {}),
+        )
+        return {"status": "completed", "feature_id": feature_id}
+    except Exception as exc:
+        logger.exception("feature %s generation failed: %s", feature_id, exc)
+        async with session_factory() as db:
+            feature = await db.get(Feature, feature_id)
+            if feature:
+                feature.status = "failed"
+                feature.error_message = _exception_message(exc)
+                feature.finished_at = datetime.now(timezone.utc)
+                await db.commit()
+        raise
+
+
 class WorkerSettings:
     functions = [
         parse_file_task,
+        func(generate_feature_task, max_tries=1),
         # Workflow generation is not idempotent yet; avoid ARQ replay appending duplicate steps.
         func(generate_workflow_task, max_tries=1),
     ]

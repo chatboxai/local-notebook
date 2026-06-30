@@ -473,11 +473,18 @@ export interface WorkflowStartedData {
   display_name?: string
 }
 
+export interface FeatureStartedData {
+  feature_id: string
+  status: string
+  display_name?: string
+}
+
 export interface ChatStreamCallbacks {
   onContent: (content: string) => void
   onCitationRef?: (citation: CitationRef) => void
   onToolExecuting?: (tools: ToolExecuting[]) => void
   onWorkflowStarted?: (data: WorkflowStartedData) => void
+  onFeatureStarted?: (data: FeatureStartedData) => void
   onCitations?: (citations: any[]) => void
   onReasoning?: (content: string) => void
   onReasoningCitationRef?: (citation: CitationRef) => void
@@ -601,6 +608,9 @@ export function chatStream(
                   break
                 case 'workflow_started':
                   callbacks.onWorkflowStarted?.(data)
+                  break
+                case 'feature_started':
+                  callbacks.onFeatureStarted?.(data)
                   break
                 case 'reasoning':
                   callbacks.onReasoning?.(data.content)
@@ -821,6 +831,9 @@ export function editMessageAndRegenerate(
                 case 'workflow_started':
                   callbacks.onWorkflowStarted?.(data)
                   break
+                case 'feature_started':
+                  callbacks.onFeatureStarted?.(data)
+                  break
                 case 'reasoning':
                   callbacks.onReasoning?.(data.content)
                   break
@@ -911,8 +924,9 @@ export interface FeatureListItem {
 }
 
 
-export async function getProjectFeatures(_projectId: string): Promise<{ features: FeatureListItem[] }> {
-  return { features: [] }
+export async function getProjectFeatures(projectId: string): Promise<{ features: FeatureListItem[] }> {
+  const response = await api.get(`/api/features/project/${projectId}`)
+  return response.data
 }
 
 
@@ -941,6 +955,7 @@ export async function getFeatureContentBatch(featureIds: string[]): Promise<{
 export interface FeatureCustomConfig {
   prompt?: string
   file_ids: string[]
+  output_language?: string
   aspect_ratio?: string
 
   duration?: number
@@ -952,11 +967,13 @@ export async function generateFeature(
   projectId: string,
   featureType: string,
   customConfig: FeatureCustomConfig
-): Promise<{ feature_id: string; status: string }> {
+): Promise<{ feature_id: string; status: string; display_name?: string }> {
   const response = await api.post('/api/features/generate', {
     project_id: projectId,
     feature_type: featureType,
     custom_config: customConfig
+      ? { ...customConfig, output_language: customConfig.output_language || getModelOutputLanguage() }
+      : customConfig
   }, { timeout: 60000 })
   return response.data
 }
@@ -987,15 +1004,6 @@ export async function updateFeature(featureId: string, data: { title: string }):
   const response = await api.put(`/api/features/${featureId}`, data)
   return response.data
 }
-
-export async function exportFeatureToWord(featureId: string): Promise<Blob> {
-  const response = await api.post(`/api/features/${featureId}/export`, {}, {
-    responseType: 'blob',
-    timeout: 120000
-  })
-  return response.data
-}
-
 
 export interface ImageInfo {
   file_id: string
