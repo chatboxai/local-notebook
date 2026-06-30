@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { Project, FileInfo, Session, ToolExecuting, FileContent, Feature, FeatureBlock, ImageFileInfo } from '../types'
 import { getToken, clearTokens } from './auth'
-import { t } from '../i18n'
+import { getModelOutputLanguage, t } from '../i18n'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
@@ -467,10 +467,17 @@ export interface ChatStreamDoneData {
   }
 }
 
+export interface WorkflowStartedData {
+  workflow_id: string
+  status: string
+  display_name?: string
+}
+
 export interface ChatStreamCallbacks {
   onContent: (content: string) => void
   onCitationRef?: (citation: CitationRef) => void
   onToolExecuting?: (tools: ToolExecuting[]) => void
+  onWorkflowStarted?: (data: WorkflowStartedData) => void
   onCitations?: (citations: any[]) => void
   onReasoning?: (content: string) => void
   onReasoningCitationRef?: (citation: CitationRef) => void
@@ -504,7 +511,8 @@ export function chatStream(
       message,
       file_ids: fileIds,
       enable_web_search: enableWebSearch,
-      agent_role: agentRole
+      agent_role: agentRole,
+      output_language: getModelOutputLanguage()
     }),
     signal: controller.signal
   })
@@ -590,6 +598,9 @@ export function chatStream(
                   break
                 case 'tool_executing':
                   callbacks.onToolExecuting?.(data.tools || [])
+                  break
+                case 'workflow_started':
+                  callbacks.onWorkflowStarted?.(data)
                   break
                 case 'reasoning':
                   callbacks.onReasoning?.(data.content)
@@ -708,7 +719,8 @@ export function editMessageAndRegenerate(
       content,
       file_ids: fileIds,
       enable_web_search: enableWebSearch,
-      agent_role: agentRole
+      agent_role: agentRole,
+      output_language: getModelOutputLanguage()
     }),
     signal: controller.signal
   })
@@ -805,6 +817,9 @@ export function editMessageAndRegenerate(
                   break
                 case 'tool_executing':
                   callbacks.onToolExecuting?.(data.tools || [])
+                  break
+                case 'workflow_started':
+                  callbacks.onWorkflowStarted?.(data)
                   break
                 case 'reasoning':
                   callbacks.onReasoning?.(data.content)

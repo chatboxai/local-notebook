@@ -312,6 +312,7 @@
       :hint="t(activeWorkflowPreset.hintKey)"
       :builtin-prompt="activeWorkflowPresetPrompt"
       :prompt-placeholder="t(activeWorkflowPreset.promptPlaceholderKey)"
+      :preset-key="workflowConfigModal.presetKey"
       :files="files"
       :selected-file-ids="selectedFileIds"
       @close="closeWorkflowConfig"
@@ -430,6 +431,7 @@ import {
   editMessageAndRegenerate,
   type AgentRole,
   type CitationRef,
+  type WorkflowStartedData,
   updateProject,
   type WorkflowContentFeature,
 } from '../services/api'
@@ -734,6 +736,7 @@ const {
   closeWorkflowConfig,
   handleWorkflowConfigConfirm,
   stopWorkflowPolling,
+  startWorkflowPolling,
   startWorkflowElapsedTimer,
   stopWorkflowElapsedTimer,
   loadWorkflows,
@@ -920,6 +923,15 @@ function toToolStatusPart(tool: ToolExecuting): ToolStatusPart {
     display: tool.display,
     display_key: tool.display_key || tool.displayKey,
     display_params: tool.display_params || tool.displayParams,
+  }
+}
+
+async function handleWorkflowStarted(data: WorkflowStartedData) {
+  toolboxMode.value = 'oneclick'
+  rightPanelCollapsed.value = false
+  await loadWorkflows()
+  if (data.workflow_id) {
+    startWorkflowPolling(data.workflow_id)
   }
 }
 
@@ -1602,6 +1614,7 @@ async function sendMessage() {
           }
         }
       },
+      onWorkflowStarted: handleWorkflowStarted,
       onCitations: () => {
 
       },
@@ -1983,6 +1996,7 @@ async function submitEditMessage(msg: Message) {
           }
         }
       },
+      onWorkflowStarted: handleWorkflowStarted,
       onDone: (doneData) => {
         clearLocalThinkingTimer()
         const tempId = Date.now().toString()
@@ -2236,6 +2250,7 @@ async function regenerateMessage(assistantIndex: number) {
           }
         }
       },
+      onWorkflowStarted: handleWorkflowStarted,
       onDone: (doneData) => {
         clearLocalThinkingTimer()
         messages.value.push({

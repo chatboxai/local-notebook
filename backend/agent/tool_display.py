@@ -16,6 +16,8 @@ _TOOL_DISPLAY_BY_NAME: dict[str, tuple[str, str]] = {
     "get_file_meta": ("ui.gettingFileDetails", "Getting file details..."),
     "ask_image": ("ui.analyzingImages", "Analyzing images..."),
     "web_search": ("ui.searchingWeb", "Searching web..."),
+    "create_workflow_generation": ("ui.startingWorkflowGeneration", "Starting report generation..."),
+    "get_workflow_generation": ("ui.checkingWorkflowGeneration", "Checking report generation..."),
 }
 
 

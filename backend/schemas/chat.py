@@ -10,6 +10,7 @@ class ChatRequest(BaseModel):
     message: str
     file_ids: list[str] = []
     enable_web_search: bool = False
+    output_language: Optional[str] = None
 
 
 class EditMessageRequest(BaseModel):
@@ -17,6 +18,7 @@ class EditMessageRequest(BaseModel):
     file_ids: Optional[list[str]] = None
     enable_web_search: bool = False
     agent_role: str = "default"
+    output_language: Optional[str] = None
 
 
 class CitationItem(BaseModel):

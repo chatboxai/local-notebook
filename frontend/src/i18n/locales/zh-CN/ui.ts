@@ -80,6 +80,8 @@ export default {
   transcribingAudio: "正在转写音频...",
   analyzingImages: "正在分析图片...",
   searchingWeb: "正在联网搜索...",
+  startingWorkflowGeneration: "正在启动报告生成...",
+  checkingWorkflowGeneration: "正在查看报告生成进度...",
   running: "正在执行",
   runningTool: "正在执行 {name}...",
   compactingChatHistory: "正在压缩对话历史...",

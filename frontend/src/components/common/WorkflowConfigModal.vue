@@ -61,9 +61,23 @@
           
           <div class="workflow-config-body">
             <div class="workflow-info">
-              <div class="workflow-icon">
-                <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+              <div class="workflow-icon" :class="workflowIconClass">
+                <svg v-if="presetKey === 'quick_read'" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                  <path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/>
+                </svg>
+                <svg v-else-if="presetKey === 'deep_dive'" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
                   <path d="M9 3h6l1 2h4a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4l1-2zm1.24 2-.5 1H5v13h14V7h-4.74l-.5-1h-3.52zM7 10h10v2H7v-2zm0 4h7v2H7v-2z"/>
+                </svg>
+                <svg v-else viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 21v-7"/>
+                  <path d="M4 10V3"/>
+                  <path d="M12 21v-9"/>
+                  <path d="M12 8V3"/>
+                  <path d="M20 21v-5"/>
+                  <path d="M20 12V3"/>
+                  <path d="M2 14h4"/>
+                  <path d="M10 8h4"/>
+                  <path d="M18 16h4"/>
                 </svg>
               </div>
               <div class="workflow-desc">
@@ -130,6 +144,7 @@ const props = defineProps<{
   hint?: string
   builtinPrompt?: string
   promptPlaceholder?: string
+  presetKey?: 'quick_read' | 'deep_dive' | 'custom'
   files?: FileItem[]
   selectedFileIds?: string[]
 }>()
@@ -145,6 +160,8 @@ const localTitle = ref('')
 
 const builtinPrompt = computed(() => (props.builtinPrompt || '').trim())
 const hasBuiltinPrompt = computed(() => builtinPrompt.value.length > 0)
+const presetKey = computed(() => props.presetKey || 'custom')
+const workflowIconClass = computed(() => `source-${presetKey.value.replace('_', '-')}`)
 const modalHeading = computed(() => props.modalTitle || t('ui.customWorkflow'))
 const promptLabel = computed(() => hasBuiltinPrompt.value ? t('ui.additionalRequirementsOptional') : t('ui.workflowInstructions'))
 const promptPlaceholderText = computed(() => {
@@ -492,8 +509,24 @@ function toggleSelectAll() {
   justify-content: center;
   border-radius: 12px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, rgba(192, 132, 252, 0.24) 0%, rgba(59, 130, 246, 0.22) 100%);
-  color: #4f46e5;
+}
+
+.workflow-icon.source-quick-read {
+  background: linear-gradient(135deg, rgba(147, 197, 253, 0.5) 0%, rgba(96, 165, 250, 0.5) 100%);
+  color: #1d4ed8;
+}
+
+.workflow-icon.source-deep-dive {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.5) 0%, rgba(165, 180, 252, 0.5) 100%);
+  color: #4338ca;
+}
+
+.workflow-icon.source-custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  color: #0f766e;
 }
 
 .workflow-desc {
