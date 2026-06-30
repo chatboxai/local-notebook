@@ -10,8 +10,9 @@ from models.image import Image
 from models.workflow import Workflow
 from models.feature import Feature
 from models.usage import UserModelUsageDaily
+from models.feature_agent_trace import FeatureAgentTrace
 
 __all__ = [
     "User", "Project", "File", "Session", "Message", "Setting", "Segment", "Block",
-    "Image", "Workflow", "Feature", "UserModelUsageDaily",
+    "Image", "Workflow", "Feature", "UserModelUsageDaily", "FeatureAgentTrace",
 ]

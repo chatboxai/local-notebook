@@ -52,7 +52,7 @@ The first non-whitespace character of your final response must be `{`; the last 
 Inside JSON string values, do not use raw ASCII double quotes; use Chinese quotation marks or escape them as `\"`."""
 
 _STRUCTURE_OUTPUT_REQUIREMENTS = """Planner structure output requirements:
-1. Plan 4 to 9 sections in the final report display order. Cover the user's requirements and the core source material without duplication.
+1. Plan no more than 8 sections in the final report display order. Use only as many sections as the task requires: simple or narrow requests should use fewer, shorter sections; complex, deep, or multi-source requests may use more sections. Cover the user's requirements and the core source material without duplication.
 2. For each section, provide `step_id`, `step_name`, and `instruction`.
 3. `step_id` must be stable English snake_case matching `^[a-z][a-z0-9_]{0,63}$`. Do not use spaces, hyphens, Chinese characters, punctuation, or duplicate step_ids.
 4. Each `instruction` must be concise: 1 to 3 sentences describing what the downstream section agent should investigate and write.

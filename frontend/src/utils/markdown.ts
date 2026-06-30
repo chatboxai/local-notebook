@@ -10,48 +10,69 @@ marked.setOptions({
   gfm: true
 })
 
+type ProtectedItem = {
+  placeholder: string
+  content: string
+}
+
+function protectItem(
+  protectedItems: ProtectedItem[],
+  content: string,
+  prefix = 'HTML'
+): string {
+  const placeholder = `%%${prefix}_${protectedItems.length}%%`
+  protectedItems.push({ placeholder, content })
+  return placeholder
+}
+
+function renderLatex(latex: string, displayMode: boolean, fallback: string): string {
+  try {
+    return katex.renderToString(latex.trim(), { displayMode, throwOnError: false })
+  } catch {
+    return escapeHtml(fallback)
+  }
+}
+
+function protectLatex(text: string, protectedItems: ProtectedItem[]): string {
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, latex) => {
+    return protectItem(
+      protectedItems,
+      renderLatex(latex, true, `$$${latex}$$`),
+      'LATEX_BLOCK'
+    )
+  })
+
+  return text.replace(/(^|[^\\$])\$([^\s\d$\n](?:[^$\n]*?[^\s$])?)\$(?!\$)/g, (_, prefix, latex) => {
+    return prefix + protectItem(
+      protectedItems,
+      renderLatex(latex, false, `$${latex}$`),
+      'LATEX_INLINE'
+    )
+  })
+}
+
+function restoreProtectedItems(html: string, protectedItems: ProtectedItem[]): string {
+  for (const { placeholder, content } of protectedItems) {
+    html = html.split(placeholder).join(content)
+  }
+  return html
+}
+
 
 export function renderMarkdownWithLatex(text: string): string {
 
-  const protectedItems: { placeholder: string; content: string }[] = []
-  let placeholderIndex = 0
+  const protectedItems: ProtectedItem[] = []
 
 
   text = text.replace(/<span\s+class="inline-citation[^"]*"[^>]*>[\s\S]*?<\/span>/g, (match) => {
-    const placeholder = `%%CITATION_${placeholderIndex++}%%`
-    protectedItems.push({ placeholder, content: match })
-    return placeholder
+    return protectItem(protectedItems, match, 'CITATION')
   })
 
-  text = text.replace(/\$\$([^$]+)\$\$/g, (_, latex) => {
-    const placeholder = `%%LATEX_BLOCK_${placeholderIndex++}%%`
-    try {
-      const rendered = katex.renderToString(latex.trim(), { displayMode: true, throwOnError: false })
-      protectedItems.push({ placeholder, content: rendered })
-    } catch {
-      protectedItems.push({ placeholder, content: `$$${latex}$$` })
-    }
-    return placeholder
-  })
-
-  text = text.replace(/\$([^$\n]+)\$/g, (_, latex) => {
-    const placeholder = `%%LATEX_INLINE_${placeholderIndex++}%%`
-    try {
-      const rendered = katex.renderToString(latex.trim(), { displayMode: false, throwOnError: false })
-      protectedItems.push({ placeholder, content: rendered })
-    } catch {
-      protectedItems.push({ placeholder, content: `$${latex}$` })
-    }
-    return placeholder
-  })
+  text = protectLatex(text, protectedItems)
 
   let html = marked(text) as string
 
-  for (const { placeholder, content } of protectedItems) {
-    html = html.replace(placeholder, content)
-  }
-
-  return html
+  return restoreProtectedItems(html, protectedItems)
 }
 
 export function renderLatexOnly(text: string): string {
@@ -86,8 +107,12 @@ export function renderSummary(summary: string): string {
 export function parseInlineMarkdown(text: string): string {
   if (!text) return ''
 
+  const protectedItems: ProtectedItem[] = []
+
   let processedText = text
     .replace(/\\n/g, '\n')
+
+  processedText = protectLatex(processedText, protectedItems)
 
   processedText = processedText.replace(
     /\[citation_(\d+)\]/g,
@@ -108,5 +133,5 @@ export function parseInlineMarkdown(text: string): string {
 
   html = html.replace(/\n/g, '<br>')
 
-  return html
+  return restoreProtectedItems(html, protectedItems)
 }
