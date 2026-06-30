@@ -120,30 +120,77 @@
           <div v-if="toolboxMode === 'tools'" class="studio-content" key="tools">
             <div class="studio-tools-fixed">
               <div class="tool-grid oneclick">
-                <div class="tool-card tool-card--cyan disabled" :title="$t('ui.featureUnderDevelopment')">
+                <div
+                  v-for="tool in enabledQuickTools"
+                  :key="tool.type"
+                  class="tool-card"
+                  :class="[`tool-card--${tool.color}`, { disabled: !hasReadyFiles }]"
+                  :title="hasReadyFiles ? t(tool.tooltipKey) : t('ui.uploadAndProcessFilesFirst')"
+                  @click="hasReadyFiles && emit('open-tool-config', tool)"
+                >
                   <div class="tool-card-icon">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                    <svg v-if="tool.icon === 'audience'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                    <svg v-else-if="tool.icon === 'market'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                    <svg v-else-if="tool.icon === 'custom'" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 21v-7"/>
+                      <path d="M4 10V3"/>
+                      <path d="M12 21v-9"/>
+                      <path d="M12 8V3"/>
+                      <path d="M20 21v-5"/>
+                      <path d="M20 12V3"/>
+                      <path d="M2 14h4"/>
+                      <path d="M10 8h4"/>
+                      <path d="M18 16h4"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3zm0 2.18 6 2.25V11c0 4.28-2.72 8.24-6 9.75C8.72 19.24 6 15.28 6 11V6.43l6-2.25zM9 11h6v2H9v-2zm0-3h6v2H9V8z"/></svg>
                   </div>
-                  <span class="tool-card-title">{{ $t('ui.smartExtraction') }}</span>
-                </div>
-                <div class="tool-card tool-card--amber disabled" :title="$t('ui.featureUnderDevelopment')">
-                  <div class="tool-card-icon">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-                  </div>
-                  <span class="tool-card-title">{{ $t('ui.contentAnalysis') }}</span>
-                </div>
-                <div class="tool-card tool-card--indigo disabled" :title="$t('ui.featureUnderDevelopment')">
-                  <div class="tool-card-icon">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
-                  </div>
-                  <span class="tool-card-title">{{ $t('ui.dataInsights') }}</span>
+                  <span class="tool-card-title">{{ t(tool.titleKey) }}</span>
                 </div>
               </div>
             </div>
 
             <div class="studio-results-scroll">
-              <div class="queue-empty">
-                <p>{{ $t('ui.featureUnderDevelopment') }}</p>
+              <div class="oneclick-queue">
+                <div class="queue-header">
+                  <span class="queue-title">{{ t('ui.generatedResult') }}</span>
+                </div>
+
+                <div v-if="features.length === 0" class="queue-empty">
+                  <p>{{ hasReadyFiles ? t('ui.useTheButtonsAboveToGenerateQuickTool') : t('ui.uploadSourcesToGenerateQuickTool') }}</p>
+                </div>
+
+                <div v-else class="workflow-list">
+                  <div
+                    v-for="feature in features"
+                    :key="feature.id"
+                    class="workflow-item feature-item"
+                    :class="{ highlighted: highlightedFeatureId === feature.id }"
+                    @click="emit('view-feature-detail', feature)"
+                  >
+                    <div class="workflow-item-icon icon-default" :class="getFeatureSourceClass(feature)">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M4 4h16v2H4V4zm0 4h16v2H4V8zm0 4h10v2H4v-2zm0 4h13v2H4v-2z"/>
+                      </svg>
+                    </div>
+                    <div class="workflow-item-info">
+                      <div class="workflow-item-title-row">
+                        <div class="workflow-item-name">{{ getFeatureDisplayName(feature) }}</div>
+                        <span class="workflow-source-chip" :class="getFeatureSourceClass(feature)">
+                          {{ getFeatureSourceLabel(feature) }}
+                        </span>
+                      </div>
+                      <div class="workflow-item-status">
+                        <span class="workflow-status-badge" :class="getFeatureStatusClass(feature.status)">
+                          {{ getFeatureStatusText(feature.status) }}
+                        </span>
+                        <span v-if="feature.created_at" class="workflow-item-time">{{ formatTime(feature.created_at) }}</span>
+                      </div>
+                    </div>
+                    <button class="workflow-delete-btn" @click.stop="emit('delete-feature', feature)" :title="t('ui.delete')">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -197,6 +244,7 @@
                     v-for="workflow in workflows"
                     :key="workflow.id"
                     class="workflow-item"
+                    :class="{ highlighted: highlightedWorkflowId === workflow.id }"
                     @click="emit('view-workflow-detail', workflow.id)"
                   >
                     <div class="workflow-item-icon icon-default" :class="getWorkflowSourceClass(workflow)">
@@ -263,11 +311,12 @@
 </template>
 
 <script setup lang="ts">
-import type { WorkflowDetail, WorkflowListItem, WorkflowContentFeature } from '../../services/api'
+import type { FeatureListItem, WorkflowDetail, WorkflowListItem, WorkflowContentFeature } from '../../services/api'
 import type { Feature, FeatureCitationRefPart } from '../../types'
 import { t } from '../../i18n'
 import FeatureDetailPanel from './FeatureDetailPanel.vue'
 import WorkflowDetailPanel from './WorkflowDetailPanel.vue'
+import { TOOL_TYPES } from '../../views/projectPage/toolTypes'
 import {
   formatWorkflowProgress,
   getWorkflowDisplayName,
@@ -284,6 +333,9 @@ import {
 type ToolboxMode = 'tools' | 'oneclick'
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 type DevelopmentToolKey = 'audioOverview' | 'videoOverview' | 'mindMap' | 'report' | 'flashcards' | 'quiz' | 'timeline' | 'summary' | 'keyPoints' | 'notes'
+type QuickTool = typeof TOOL_TYPES[number]
+
+const enabledQuickTools = TOOL_TYPES.filter(tool => tool.enabled && !tool.type.includes('image') && !tool.type.includes('video'))
 
 defineProps<{
   rightPanelCollapsed: boolean
@@ -299,7 +351,10 @@ defineProps<{
   toolboxMode: ToolboxMode
   transitionName: string
   hasReadyFiles: boolean
+  features: FeatureListItem[]
   workflows: WorkflowListItem[]
+  highlightedFeatureId: string | null
+  highlightedWorkflowId: string | null
   formatTime: (isoString: string) => string
   formatWorkflowElapsed: (isoString: string) => string
 }>()
@@ -319,6 +374,9 @@ const emit = defineEmits<{
   (e: 'feature-citation-click', part: FeatureCitationRefPart): void
   (e: 'clear-feature-citation'): void
   (e: 'feature-rename', newTitle: string): void
+  (e: 'open-tool-config', tool: QuickTool): void
+  (e: 'view-feature-detail', feature: FeatureListItem): void
+  (e: 'delete-feature', feature: FeatureListItem): void
   (e: 'open-workflow-config', presetKey: WorkflowPresetKey): void
   (e: 'view-workflow-detail', workflowId: string): void
 }>()
@@ -332,6 +390,39 @@ function developmentTitle(key: DevelopmentToolKey): string {
     name: t(`ui.${key}`),
     status: t('ui.underDevelopment'),
   })
+}
+
+function getFeatureTool(feature: FeatureListItem): QuickTool | undefined {
+  return TOOL_TYPES.find(tool => tool.type === feature.feature_type)
+}
+
+function getFeatureDisplayName(feature: FeatureListItem): string {
+  return feature.title || feature.display_name || getFeatureSourceLabel(feature)
+}
+
+function getFeatureSourceLabel(feature: FeatureListItem): string {
+  const tool = getFeatureTool(feature)
+  return tool ? t(tool.titleKey) : t('ui.quickTools')
+}
+
+function getFeatureSourceClass(feature: FeatureListItem): string {
+  const color = getFeatureTool(feature)?.color || 'cyan'
+  return `feature-source-${color}`
+}
+
+function getFeatureStatusText(status: FeatureListItem['status']): string {
+  if (status === 'pending') return t('ui.queued')
+  if (status === 'processing') return t('ui.generating2')
+  if (status === 'completed') return t('ui.completed')
+  if (status === 'failed') return t('ui.failed')
+  return status
+}
+
+function getFeatureStatusClass(status: FeatureListItem['status']): string {
+  if (status === 'pending' || status === 'processing') return 'status-processing'
+  if (status === 'completed') return 'status-completed'
+  if (status === 'failed') return 'status-failed'
+  return ''
 }
 </script>
 
@@ -627,6 +718,15 @@ function developmentTitle(key: DevelopmentToolKey): string {
   border: 1px solid rgba(13, 148, 136, 0.28);
 }
 
+.tool-grid.oneclick .tool-card--custom {
+  min-height: 54px;
+  padding: 9px 12px;
+}
+
+.tool-grid.oneclick .tool-card--custom .tool-card-icon {
+  margin-bottom: 4px;
+}
+
 .tool-card--custom .tool-card-icon {
   color: #0f766e;
 }
@@ -680,8 +780,19 @@ function developmentTitle(key: DevelopmentToolKey): string {
   transition: background 0.15s;
 }
 
+.workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .workflow-item:hover {
   background: var(--bg-hover);
+}
+
+.workflow-item.highlighted {
+  background: rgba(20, 184, 166, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.28);
 }
 
 .workflow-item-icon {
@@ -711,6 +822,29 @@ function developmentTitle(key: DevelopmentToolKey): string {
 }
 
 .workflow-item-icon.source-custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  color: #0f766e;
+}
+
+.workflow-item-icon.feature-source-cyan {
+  background: linear-gradient(135deg, rgba(165, 243, 252, 0.5) 0%, rgba(103, 232, 249, 0.5) 100%);
+  color: #0e7490;
+}
+
+.workflow-item-icon.feature-source-amber {
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.5) 0%, rgba(251, 191, 36, 0.5) 100%);
+  color: #b45309;
+}
+
+.workflow-item-icon.feature-source-indigo {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.5) 0%, rgba(165, 180, 252, 0.5) 100%);
+  color: #4338ca;
+}
+
+.workflow-item-icon.feature-source-custom {
   background:
     linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
     radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
@@ -777,6 +911,29 @@ function developmentTitle(key: DevelopmentToolKey): string {
   color: #0f766e;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   letter-spacing: 0;
+}
+
+.workflow-source-chip.feature-source-cyan {
+  background: linear-gradient(135deg, rgba(165, 243, 252, 0.44) 0%, rgba(103, 232, 249, 0.28) 100%);
+  color: #0e7490;
+}
+
+.workflow-source-chip.feature-source-amber {
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.5) 0%, rgba(251, 191, 36, 0.28) 100%);
+  color: #b45309;
+}
+
+.workflow-source-chip.feature-source-indigo {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.55) 0%, rgba(165, 180, 252, 0.38) 100%);
+  color: #4338ca;
+}
+
+.workflow-source-chip.feature-source-custom {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(250, 204, 21, 0.28) 100%),
+    radial-gradient(circle at 86% 12%, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 36%);
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  color: #0f766e;
 }
 
 .workflow-item-time {

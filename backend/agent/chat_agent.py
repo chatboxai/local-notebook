@@ -13,6 +13,7 @@ from agent.tools.query_knowledge_base import (
 )
 from agent.tools.read_segments import ReadSegmentsTool
 from agent.tools.file_tools import ListFilesTool, GetFileMetaTool, AskImageTool
+from agent.tools.feature_tools import CreateFeatureGenerationTool, GetFeatureGenerationTool
 from agent.tools.workflow_tools import (
     CreateWorkflowGenerationTool,
     GetWorkflowGenerationTool,
@@ -93,7 +94,15 @@ class ChatAgent:
             redis=workflow_redis,
             output_language=output_language,
         )
+        create_feature_tool = CreateFeatureGenerationTool(
+            citation_state=self._citation_state,
+            redis=workflow_redis,
+            output_language=output_language,
+        )
         get_workflow_tool = GetWorkflowGenerationTool(
+            citation_state=self._citation_state,
+        )
+        get_feature_tool = GetFeatureGenerationTool(
             citation_state=self._citation_state,
         )
         tools = [
@@ -102,6 +111,8 @@ class ChatAgent:
             list_files_tool,
             file_meta_tool,
             ask_image_tool,
+            create_feature_tool,
+            get_feature_tool,
             create_workflow_tool,
             get_workflow_tool,
         ]
@@ -280,7 +291,7 @@ class ChatAgent:
                 history.append(step_result.message)
 
                 tool_outputs: list[tuple[str, str, str]] = []
-                workflow_events: list[dict] = []
+                generation_events: list[dict] = []
                 for tc, tr in zip(step_result.tool_calls, tool_results):
                     output_str = self._tool_result_to_text(tr)
                     history.append(Message(
@@ -293,16 +304,22 @@ class ChatAgent:
                     extras = getattr(getattr(tr, "return_value", None), "extras", None) or {}
                     workflow_started = extras.get("workflow_started")
                     if isinstance(workflow_started, dict):
-                        workflow_events.append({
+                        generation_events.append({
                             "type": "workflow_started",
                             **workflow_started,
+                        })
+                    feature_started = extras.get("feature_started")
+                    if isinstance(feature_started, dict):
+                        generation_events.append({
+                            "type": "feature_started",
+                            **feature_started,
                         })
 
                 for event in citation_parser.flush():
                     yield event
                 self._sync_display_nums(citation_parser)
 
-                for event in workflow_events:
+                for event in generation_events:
                     yield event
 
                 conversation_history.append({
