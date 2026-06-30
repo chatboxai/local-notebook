@@ -9,6 +9,8 @@ from .base import BaseParser, Block, ParseResult
 
 class PDFParser(BaseParser):
 
+    IMAGE_ITEM_TYPES = {"image", "chart", "figure"}
+
     HEADING_PATTERNS = [
         (r'^#{1}\s+', 1),
         (r'^#{2}\s+', 2),
@@ -163,7 +165,7 @@ class PDFParser(BaseParser):
             if not isinstance(item, dict):
                 continue
 
-            item_type = item.get("type", "")
+            item_type = str(item.get("type") or "").strip().lower()
             current_image_index = None
             current_image_name = ""
 
@@ -173,8 +175,8 @@ class PDFParser(BaseParser):
             if item_type == "table":
                 text = item.get("table_body", "")
                 text = self._html_table_to_markdown(text)
-            elif item_type == "image":
-                img_path_key = item.get("img_path", "")
+            elif self._is_image_item(item_type, item):
+                img_path_key = self._get_image_path_key(item)
                 local_path = img_path_mapping.get(img_path_key, "")
                 page_idx = item.get("page_idx", 0)
                 page = page_idx + 1 if isinstance(page_idx, int) else 1
@@ -230,13 +232,28 @@ class PDFParser(BaseParser):
                 if table_footnote and isinstance(table_footnote, list) and len(table_footnote) > 0:
                     extra["table_footnote"] = table_footnote[0]
 
-            elif item_type == "image":
+            elif self._is_image_item(item_type, item):
                 block_type = "paragraph"
                 extra["is_image"] = True
                 if current_image_index is not None:
                     extra["image_index"] = current_image_index
                 if current_image_name:
                     extra["image_name"] = current_image_name
+                extra["image_source_type"] = item_type
+                caption = self._first_text(
+                    item.get("image_caption")
+                    or item.get("chart_caption")
+                    or item.get("caption")
+                )
+                footnote = self._first_text(
+                    item.get("image_footnote")
+                    or item.get("chart_footnote")
+                    or item.get("footnote")
+                )
+                if caption:
+                    extra["image_caption"] = caption
+                if footnote:
+                    extra["image_footnote"] = footnote
 
             elif item_type == "equation":
                 block_type = "paragraph"
@@ -289,6 +306,38 @@ class PDFParser(BaseParser):
             ))
 
         return blocks, extracted_images
+
+    @classmethod
+    def _is_image_item(cls, item_type: str, item: Dict) -> bool:
+        if item_type in cls.IMAGE_ITEM_TYPES:
+            return True
+
+        if not cls._get_image_path_key(item):
+            return False
+
+        if item_type in {"table", "equation", "code", "list", "text", "header", "page_number"}:
+            return False
+
+        return not any(item.get(key) for key in ("text", "table_body", "code_body", "list_items"))
+
+    @staticmethod
+    def _get_image_path_key(item: Dict) -> str:
+        for key in ("img_path", "image_path", "image_url", "img_url"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    @staticmethod
+    def _first_text(value) -> str:
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        return ""
 
     def _parse_markdown_to_blocks(self, markdown: str) -> List[Block]:
         blocks = []
