@@ -131,6 +131,17 @@
                   <div class="tool-card-icon">
                     <svg v-if="tool.icon === 'audience'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                     <svg v-else-if="tool.icon === 'market'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                    <svg v-else-if="tool.icon === 'custom'" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 21v-7"/>
+                      <path d="M4 10V3"/>
+                      <path d="M12 21v-9"/>
+                      <path d="M12 8V3"/>
+                      <path d="M20 21v-5"/>
+                      <path d="M20 12V3"/>
+                      <path d="M2 14h4"/>
+                      <path d="M10 8h4"/>
+                      <path d="M18 16h4"/>
+                    </svg>
                     <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3zm0 2.18 6 2.25V11c0 4.28-2.72 8.24-6 9.75C8.72 19.24 6 15.28 6 11V6.43l6-2.25zM9 11h6v2H9v-2zm0-3h6v2H9V8z"/></svg>
                   </div>
                   <span class="tool-card-title">{{ t(tool.titleKey) }}</span>
@@ -705,6 +716,15 @@ function getFeatureStatusClass(status: FeatureListItem['status']): string {
     linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
     radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
   border: 1px solid rgba(13, 148, 136, 0.28);
+}
+
+.tool-grid.oneclick .tool-card--custom {
+  min-height: 54px;
+  padding: 9px 12px;
+}
+
+.tool-grid.oneclick .tool-card--custom .tool-card-icon {
+  margin-bottom: 4px;
 }
 
 .tool-card--custom .tool-card-icon {

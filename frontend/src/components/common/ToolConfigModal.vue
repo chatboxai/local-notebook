@@ -3,8 +3,8 @@
     <div v-if="visible" class="tool-config-overlay" @click.self="handleClose">
       <div class="tool-config-modal">
         <div class="tool-config-header">
-          <h3>{{ toolTitle }}</h3>
-          <button class="tool-config-close" @click="handleClose">
+          <h3>{{ modalHeading }}</h3>
+          <button class="tool-config-close" @click="handleClose" :aria-label="t('ui.close')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
             </svg>
@@ -14,7 +14,7 @@
           
           <div class="tool-config-files">
             <div class="files-header" @click="toggleSelectAll">
-              <span class="files-title">{{ $t('ui.selectFiles') }}</span>
+              <span class="files-title">{{ t('ui.selectFiles') }}</span>
               <div class="files-header-right">
                 <span class="files-count">{{ localSelectedIds.length }}/{{ selectableFiles.length }}</span>
                 <div class="select-all-checkbox" :class="{ checked: isAllSelected, indeterminate: isPartialSelected }">
@@ -53,38 +53,81 @@
                 </div>
               </div>
               <div v-if="selectableFiles.length === 0" class="files-empty">
-                {{ $t('ui.noSelectableFiles') }}
+                {{ t('ui.noSelectableFiles') }}
               </div>
             </div>
           </div>
 
           
           <div class="tool-config-body">
-            <template v-if="!hidePrompt">
-              <label class="tool-config-label">{{ $t('ui.customRequirementsOptional') }}</label>
-              <textarea
-                v-model="promptText"
-                class="tool-config-textarea"
-                :placeholder="$t('ui.customRequirementPlaceholder')"
-              ></textarea>
-              <p class="tool-config-hint">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            <div class="tool-info" :class="{ compact: isCustomTool }">
+              <div class="tool-info-icon" :class="toolIconClass">
+                <svg v-if="isCustomTool" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 21v-7"/>
+                  <path d="M4 10V3"/>
+                  <path d="M12 21v-9"/>
+                  <path d="M12 8V3"/>
+                  <path d="M20 21v-5"/>
+                  <path d="M20 12V3"/>
+                  <path d="M2 14h4"/>
+                  <path d="M10 8h4"/>
+                  <path d="M18 16h4"/>
                 </svg>
-                {{ $t('ui.leaveBlankToUseDefaultConfig') }}
-              </p>
+                <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                  <path d="M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3zm0 2.18 6 2.25V11c0 4.28-2.72 8.24-6 9.75C8.72 19.24 6 15.28 6 11V6.43l6-2.25zM9 11h6v2H9v-2zm0-3h6v2H9V8z"/>
+                </svg>
+              </div>
+              <div class="tool-info-copy">
+                <p class="tool-info-title">{{ toolDescription }}</p>
+                <p class="tool-info-hint">{{ toolHint }}</p>
+              </div>
+            </div>
+
+            <div class="tool-title-input">
+              <label class="tool-config-label">{{ t('ui.quickToolNameOptional') }}</label>
+              <input
+                v-model="titleText"
+                class="tool-config-input"
+                :placeholder="t('ui.leaveBlankAndAiWillNameItFrom')"
+                maxlength="100"
+              />
+            </div>
+
+            <div v-if="hasBuiltinPrompt" class="tool-preset-prompt">
+              <label class="tool-config-label">{{ t('ui.builtInPrompt') }}</label>
+              <textarea
+                class="tool-config-textarea preset-prompt-input"
+                :value="builtinPrompt"
+                rows="5"
+                readonly
+              ></textarea>
+            </div>
+
+            <template v-if="!hidePrompt">
+              <div class="tool-prompt">
+                <label class="tool-config-label">
+                  {{ promptLabel }}
+                  <span v-if="!hasBuiltinPrompt" class="required">*</span>
+                </label>
+                <textarea
+                  v-model="promptText"
+                  class="tool-config-textarea prompt-input"
+                  rows="4"
+                  :placeholder="promptPlaceholderText"
+                ></textarea>
+              </div>
             </template>
             <p v-else class="tool-config-hint developing">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
               </svg>
-              {{ $t('ui.customRequirementsComingSoonUseDefault') }}
+              {{ t('ui.customRequirementsComingSoonUseDefault') }}
             </p>
           </div>
         </div>
         <div class="tool-config-footer">
-          <button class="tool-config-btn cancel" @click="handleClose">{{ $t('ui.cancel') }}</button>
-          <button class="tool-config-btn confirm" :disabled="localSelectedIds.length === 0" @click="handleConfirm">{{ $t('ui.generate') }}</button>
+          <button class="tool-config-btn cancel" @click="handleClose">{{ t('ui.cancel') }}</button>
+          <button class="tool-config-btn confirm" :disabled="!canConfirm" @click="handleConfirm">{{ t('ui.generate') }}</button>
         </div>
       </div>
     </div>
@@ -93,6 +136,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { t } from '../../i18n'
 
 interface FileItem {
   id: string
@@ -105,6 +149,10 @@ const props = defineProps<{
   visible: boolean
   toolType: string
   toolTitle: string
+  description?: string
+  hint?: string
+  builtinPrompt?: string
+  promptPlaceholder?: string
   hidePrompt?: boolean
   files?: FileItem[]
   selectedFileIds?: string[]
@@ -112,11 +160,35 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'confirm', toolType: string, prompt: string, fileIds: string[]): void
+  (e: 'confirm', toolType: string, title: string, prompt: string, fileIds: string[]): void
 }>()
 
 const promptText = ref('')
+const titleText = ref('')
 const localSelectedIds = ref<string[]>([])
+
+const isCustomTool = computed(() => props.toolType === 'custom_feature')
+const toolIconClass = computed(() => `tool-${(props.toolType || 'custom').replace(/_/g, '-')}`)
+const modalHeading = computed(() => props.toolTitle || t('ui.customQuickTool'))
+const builtinPrompt = computed(() => (props.builtinPrompt || '').trim())
+const hasBuiltinPrompt = computed(() => !props.hidePrompt && builtinPrompt.value.length > 0)
+const toolDescription = computed(() => props.description || props.toolTitle || t('ui.customQuickToolConfigHint'))
+const toolHint = computed(() => {
+  if (props.hint) return props.hint
+  return isCustomTool.value ? t('ui.customQuickToolPromptHint') : t('ui.quickToolConfigHint')
+})
+const promptLabel = computed(() => hasBuiltinPrompt.value ? t('ui.additionalRequirementsOptional') : t('ui.quickToolInstructions'))
+const promptPlaceholderText = computed(() => {
+  if (props.promptPlaceholder) return props.promptPlaceholder
+  return hasBuiltinPrompt.value
+    ? t('ui.optionallyAddOutputStyleFocusAreasLengthRequirements')
+    : t('ui.customQuickToolPromptPlaceholder')
+})
+const canConfirm = computed(() => {
+  if (localSelectedIds.value.length === 0) return false
+  if (props.hidePrompt) return true
+  return hasBuiltinPrompt.value || promptText.value.trim().length > 0
+})
 
 
 const AUDIO_TYPES = ['wav', 'mp3', 'm4a']
@@ -178,8 +250,11 @@ watch(() => props.visible, (newVal) => {
     
     const selectableIds = new Set(selectableFiles.value.map(f => f.id))
     localSelectedIds.value = (props.selectedFileIds || []).filter(id => selectableIds.has(id))
+    promptText.value = ''
+    titleText.value = ''
   } else {
     promptText.value = ''
+    titleText.value = ''
     localSelectedIds.value = []
   }
 })
@@ -189,7 +264,8 @@ function handleClose() {
 }
 
 function handleConfirm() {
-  emit('confirm', props.toolType, promptText.value.trim(), localSelectedIds.value)
+  if (!canConfirm.value) return
+  emit('confirm', props.toolType, titleText.value.trim(), promptText.value.trim(), localSelectedIds.value)
 }
 </script>
 
@@ -214,10 +290,10 @@ function handleConfirm() {
 }
 
 .tool-config-modal {
-  width: 680px;
-  max-width: 90vw;
-  height: 420px;
-  max-height: 80vh;
+  width: 920px;
+  max-width: 95vw;
+  height: 700px;
+  max-height: 95vh;
   background: var(--bg-white);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
@@ -281,7 +357,7 @@ function handleConfirm() {
 
 
 .tool-config-files {
-  width: 240px;
+  width: 280px;
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -419,36 +495,161 @@ function handleConfirm() {
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  gap: 12px;
+}
+
+.tool-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.tool-info-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.5) 0%, rgba(165, 180, 252, 0.5) 100%);
+  color: #4f46e5;
+  flex-shrink: 0;
+}
+
+.tool-info-icon.tool-objective-positioning {
+  background: linear-gradient(135deg, rgba(165, 243, 252, 0.55) 0%, rgba(103, 232, 249, 0.48) 100%);
+  color: #0e7490;
+}
+
+.tool-info-icon.tool-audience-profile {
+  background: linear-gradient(135deg, rgba(254, 240, 138, 0.55) 0%, rgba(253, 186, 116, 0.42) 100%);
+  color: #b45309;
+}
+
+.tool-info-icon.tool-comparative-analysis {
+  background: linear-gradient(135deg, rgba(199, 210, 254, 0.55) 0%, rgba(165, 180, 252, 0.48) 100%);
+  color: #4338ca;
+}
+
+.tool-info-icon.tool-custom-feature {
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.28) 0%, rgba(250, 204, 21, 0.34) 100%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 34%);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  color: #0f766e;
+}
+
+.tool-info-copy {
+  min-width: 0;
+}
+
+.tool-info-title {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tool-info-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.tool-info.compact {
+  gap: 12px;
+}
+
+.tool-info.compact .tool-info-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.tool-title-input {
+  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .tool-config-label {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 10px;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
   flex-shrink: 0;
 }
 
-.tool-config-textarea {
-  flex: 1;
+.required {
+  color: #ef4444;
+}
+
+.tool-config-input {
   width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border-color);
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   font-size: 14px;
+  height: 42px;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  outline: none;
+  transition: all 0.2s;
+}
+
+.tool-config-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.tool-config-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.tool-preset-prompt {
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+  flex-shrink: 0;
+}
+
+.tool-prompt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+}
+
+.tool-config-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-main);
+  background: var(--bg-white);
   resize: none;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: all 0.2s;
+}
+
+.prompt-input {
+  flex: 1;
 }
 
 .tool-config-textarea:focus {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.preset-prompt-input {
+  min-height: 150px;
+  color: var(--text-secondary);
+  background: var(--bg-main);
 }
 
 .tool-config-textarea::placeholder {

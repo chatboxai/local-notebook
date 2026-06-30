@@ -22,6 +22,7 @@ router = APIRouter(prefix="/features", tags=["features"])
 
 class FeatureCustomConfig(BaseModel):
     prompt: Optional[str] = None
+    title: Optional[str] = None
     file_ids: list[str] = Field(default_factory=list)
     output_language: Optional[str] = None
 
@@ -143,18 +144,20 @@ async def generate_feature(
 
     output_language = (cfg.output_language or "").strip() or "Chinese"
     display_name = feature_display_name(feature_type, output_language)
+    title = (cfg.title or "").strip() or display_name
 
     feature = Feature(
         project_id=body.project_id,
         workflow_id=None,
         feature_type=feature_type,
         step_index=0,
-        step_name=display_name,
-        title=display_name,
+        step_name=title,
+        title=title,
         status="pending",
     )
     feature.set_custom_config({
         "prompt": (cfg.prompt or "").strip(),
+        "title": (cfg.title or "").strip(),
         "file_ids": file_ids,
         "output_language": output_language,
     })

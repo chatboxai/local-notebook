@@ -55,7 +55,12 @@ export function useProjectFeatures({
     visible: false,
     toolType: '',
     toolTitle: '',
+    description: '',
+    hint: '',
+    builtinPrompt: '',
+    promptPlaceholder: '',
     prompt: '',
+    title: '',
     hidePrompt: false
   })
 
@@ -201,7 +206,12 @@ export function useProjectFeatures({
 
     toolConfigModal.toolType = tool.type
     toolConfigModal.toolTitle = t(tool.titleKey)
+    toolConfigModal.description = tool.descriptionKey ? t(tool.descriptionKey) : t(tool.tooltipKey)
+    toolConfigModal.hint = tool.hintKey ? t(tool.hintKey) : ''
+    toolConfigModal.builtinPrompt = tool.builtinPromptKey ? t(tool.builtinPromptKey) : ''
+    toolConfigModal.promptPlaceholder = tool.promptPlaceholderKey ? t(tool.promptPlaceholderKey) : ''
     toolConfigModal.prompt = ''
+    toolConfigModal.title = ''
     toolConfigModal.hidePrompt = false
     toolConfigModal.visible = true
   }
@@ -210,12 +220,17 @@ export function useProjectFeatures({
     toolConfigModal.visible = false
     toolConfigModal.toolType = ''
     toolConfigModal.toolTitle = ''
+    toolConfigModal.description = ''
+    toolConfigModal.hint = ''
+    toolConfigModal.builtinPrompt = ''
+    toolConfigModal.promptPlaceholder = ''
     toolConfigModal.prompt = ''
+    toolConfigModal.title = ''
   }
 
-  async function handleToolConfigConfirm(toolType: string, prompt: string, fileIds: string[]) {
+  async function handleToolConfigConfirm(toolType: string, title: string, prompt: string, fileIds: string[]) {
     closeToolConfig()
-    await handleToolClick(toolType, prompt, fileIds)
+    await handleToolClick(toolType, prompt, fileIds, title)
   }
 
   function closeImageGenerationModal() {
@@ -292,7 +307,7 @@ export function useProjectFeatures({
     }
   }
 
-  async function handleToolClick(toolType: string, customPrompt?: string, fileIds?: string[]) {
+  async function handleToolClick(toolType: string, customPrompt?: string, fileIds?: string[], title?: string) {
     if (!hasReadyFiles.value) return
 
     try {
@@ -300,15 +315,17 @@ export function useProjectFeatures({
 
       const { feature_id } = await generateFeature(projectId, toolType, {
         prompt: customPrompt || '',
+        title: title || undefined,
         file_ids: readyFileIds
       })
 
       const toolConfig = TOOL_TYPES.find(t => t.type === toolType)
+      const displayName = title || (toolConfig ? t(toolConfig.titleKey) : toolType)
       features.value.unshift({
         id: feature_id,
         feature_type: toolType,
-        display_name: toolConfig ? t(toolConfig.titleKey) : toolType,
-        title: null,
+        display_name: displayName,
+        title: title || null,
         prompt: customPrompt || null,
         status: 'pending',
         error_message: null,

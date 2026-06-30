@@ -954,6 +954,7 @@ export async function getFeatureContentBatch(featureIds: string[]): Promise<{
 
 export interface FeatureCustomConfig {
   prompt?: string
+  title?: string
   file_ids: string[]
   output_language?: string
   aspect_ratio?: string
