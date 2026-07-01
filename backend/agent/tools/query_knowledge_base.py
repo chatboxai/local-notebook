@@ -8,6 +8,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 from kosong.tooling import CallableTool2, ToolOk, ToolError, ToolReturnValue
+from agent.tools.image_location import get_pdf_image_location
 
 logger = logging.getLogger("tool.query_kb")
 
@@ -329,6 +330,11 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
 
             if image_id in state.image_to_citation:
                 existing_id = state.image_to_citation[image_id]
+                image_index = QueryKnowledgeBaseTool._int_or_none(hit.get("image_index"))
+                if image_index is not None and existing_id in state.citations_map:
+                    state.citations_map[existing_id].update(
+                        get_pdf_image_location(hit["file_id"], image_index)
+                    )
                 results.append({
                     "citation_id": f"[{existing_id}]",
                     "file_name": file_name,
@@ -339,6 +345,12 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 continue
 
             citation_id = f"citation_{state.citation_counter}"
+            image_index = QueryKnowledgeBaseTool._int_or_none(hit.get("image_index"))
+            image_location = (
+                get_pdf_image_location(hit["file_id"], image_index)
+                if image_index is not None
+                else {}
+            )
             state.citations_map[citation_id] = {
                 "type": "image",
                 "image_id": image_id,
@@ -347,6 +359,7 @@ class QueryKnowledgeBaseTool(CallableTool2[QueryKBParams]):
                 "image_index": hit["image_index"],
                 "description": description[:300] + "..." if len(description) > 300 else description,
                 "summary": summary,
+                **image_location,
             }
             state.image_to_citation[image_id] = citation_id
             state.citation_counter += 1

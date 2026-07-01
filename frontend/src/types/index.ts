@@ -117,7 +117,17 @@ export interface ReasoningPart {
   content: string
 }
 
-export type ContentPart = TextPart | CitationRefPart | ToolStatusPart | ReasoningPart
+export type ToolSummaryActivityPart = ToolStatusPart | ReasoningPart
+
+export interface ToolSummaryPart {
+  type: 'tool_summary'
+  elapsed_ms: number
+  activities: ToolSummaryActivityPart[]
+  tools?: ToolStatusPart[]
+  is_running?: boolean
+}
+
+export type ContentPart = TextPart | CitationRefPart | ToolStatusPart | ToolSummaryPart | ReasoningPart
 
 
 export interface ToolExecuting {

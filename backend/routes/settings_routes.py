@@ -117,10 +117,13 @@ async def preflight_check(
     if not embedding_ready:
         missing.append("Embedding 向量模型")
 
+    web_search_ready, _, _ = await config.resolve_web_search_config()
+
     return {
         "ready": llm_ready and embedding_ready,
         "llm_ready": llm_ready,
         "embedding_ready": embedding_ready,
+        "web_search_ready": web_search_ready,
         "missing": missing,
     }
 

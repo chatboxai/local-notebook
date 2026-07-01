@@ -1981,6 +1981,7 @@ export interface PreflightResult {
   ready: boolean
   llm_ready: boolean
   embedding_ready: boolean
+  web_search_ready?: boolean
   missing: string[]
 }
 
