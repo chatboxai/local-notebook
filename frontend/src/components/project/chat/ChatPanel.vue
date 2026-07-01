@@ -5,6 +5,7 @@
       :is-editing="isEditingTitle"
       :editing-value="editingTitleValue"
       :is-streaming="isStreaming"
+      :is-title-locked="isTitleLocked"
       @update:editing-value="emit('update:editingTitleValue', $event)"
       @start-title-edit="emit('start-title-edit')"
       @save-title-edit="emit('save-title-edit')"
@@ -128,6 +129,7 @@ interface Props {
   isEditingTitle: boolean
   editingTitleValue: string
   isStreaming: boolean
+  isTitleLocked?: boolean
   messages: Message[]
   hasReadyFiles: boolean
   localizedGreeting: string

@@ -16,8 +16,9 @@
       <span
         v-else
         class="chat-title"
-        :title="$t('ui.clickToEditChatTitle')"
-        @click="emit('start-title-edit')"
+        :class="{ locked: isTitleLocked }"
+        :title="isTitleLocked ? $t('ui.youCanRenameItAfterTheTitleIs') : $t('ui.clickToEditChatTitle')"
+        @click="handleTitleClick"
       >{{ title || $t('ui.newChat') }}</span>
     </div>
 
@@ -53,6 +54,7 @@ interface Props {
   isEditing: boolean
   editingValue: string
   isStreaming: boolean
+  isTitleLocked?: boolean
 }
 
 const props = defineProps<Props>()
@@ -93,6 +95,11 @@ function requestSaveTitle() {
     emit('save-title-edit')
   }
 }
+
+function handleTitleClick() {
+  if (props.isTitleLocked) return
+  emit('start-title-edit')
+}
 </script>
 
 <style scoped>
@@ -125,6 +132,15 @@ function requestSaveTitle() {
 
 .chat-title:hover {
   background: var(--bg-hover);
+}
+
+.chat-title.locked {
+  cursor: default;
+  color: var(--text-secondary);
+}
+
+.chat-title.locked:hover {
+  background: transparent;
 }
 
 .session-title-input {

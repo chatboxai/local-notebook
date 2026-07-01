@@ -300,6 +300,8 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 <style scoped>
 .chat-messages {
+  --chat-message-max-width: 800px;
+  --chat-question-width-offset: 150px;
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
@@ -375,8 +377,10 @@ function regenerateTooltip(index: number, msg: Message): string {
 }
 
 .message {
-  margin-bottom: 14px;
+  width: min(100%, var(--chat-message-max-width));
+  margin: 0 auto 14px;
   position: relative;
+  box-sizing: border-box;
   transition: all 0.2s;
 }
 
@@ -468,13 +472,11 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .user-message {
   position: relative;
-  max-width: 80%;
+  max-width: min(100%, max(280px, calc(100% - var(--chat-question-width-offset))));
   padding: 14px 20px;
   background: var(--bg-main);
   border-radius: 20px 20px 4px 20px;
   color: var(--text-primary);
-  float: right;
-  clear: both;
   line-height: 1.6;
   letter-spacing: 0.02em;
   text-align: left;
@@ -645,17 +647,17 @@ function regenerateTooltip(index: number, msg: Message): string {
 }
 
 .message.user {
+  display: flex;
+  justify-content: flex-end;
   text-align: right;
 }
 
 .message.user::after {
-  content: '';
-  display: table;
-  clear: both;
+  content: none;
 }
 
 .assistant-message {
-  max-width: 80%;
+  width: 100%;
 }
 
 .message-actions {
@@ -962,13 +964,13 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .markdown-body {
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.7;
   letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 
 .markdown-body :deep(p) {
-  margin: 0.8em 0;
+  margin: 0.6em 0;
 }
 
 .markdown-body :deep(p:first-child) {
@@ -990,7 +992,7 @@ function regenerateTooltip(index: number, msg: Message): string {
 .markdown-body :deep(h2),
 .markdown-body :deep(h3),
 .markdown-body :deep(h4) {
-  margin: 1.2em 0 0.6em;
+  margin: 0.8em 0 0.4em;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1002,12 +1004,12 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
-  margin: 0.8em 0;
+  margin: 0.4em 0;
   padding-left: 1.8em;
 }
 
 .markdown-body :deep(li) {
-  margin: 0.4em 0;
+  margin: 0.3em 0;
 }
 
 .markdown-body :deep(code) {
@@ -1046,20 +1048,22 @@ function regenerateTooltip(index: number, msg: Message): string {
   border: none;
   height: 1px;
   background: var(--border-color);
-  margin: 1.5em 0;
+  margin: 1em 0;
 }
 
 .markdown-body :deep(table) {
   width: 100%;
   border-collapse: collapse;
-  margin: 1em 0;
+  margin: 0.75em 0;
 }
 
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  padding: 8px 12px;
+  padding: 7px 10px;
   border: 1px solid var(--border-color);
+  line-height: 1.45;
   text-align: left;
+  vertical-align: middle;
 }
 
 .markdown-body :deep(th) {
