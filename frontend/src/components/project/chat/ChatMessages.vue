@@ -7,6 +7,7 @@
     @mouseout="emit('web-citation-leave', $event)"
     @click="emit('chat-area-click', $event)"
   >
+    <!-- TODO: Add a lightweight message navigator for long conversations when this becomes a priority. -->
     <div v-if="messages.length === 0" class="chat-empty">
       <template v-if="hasReadyFiles">
         <div class="greeting-message">{{ localizedGreeting }}</div>
@@ -300,6 +301,8 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 <style scoped>
 .chat-messages {
+  --chat-message-max-width: 800px;
+  --chat-question-width-offset: 150px;
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
@@ -375,8 +378,10 @@ function regenerateTooltip(index: number, msg: Message): string {
 }
 
 .message {
-  margin-bottom: 14px;
+  width: min(100%, var(--chat-message-max-width));
+  margin: 0 auto 14px;
   position: relative;
+  box-sizing: border-box;
   transition: all 0.2s;
 }
 
@@ -468,13 +473,11 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .user-message {
   position: relative;
-  max-width: 80%;
+  max-width: min(100%, max(280px, calc(100% - var(--chat-question-width-offset))));
   padding: 14px 20px;
   background: var(--bg-main);
   border-radius: 20px 20px 4px 20px;
   color: var(--text-primary);
-  float: right;
-  clear: both;
   line-height: 1.6;
   letter-spacing: 0.02em;
   text-align: left;
@@ -645,17 +648,17 @@ function regenerateTooltip(index: number, msg: Message): string {
 }
 
 .message.user {
+  display: flex;
+  justify-content: flex-end;
   text-align: right;
 }
 
 .message.user::after {
-  content: '';
-  display: table;
-  clear: both;
+  content: none;
 }
 
 .assistant-message {
-  max-width: 80%;
+  width: 100%;
 }
 
 .message-actions {
