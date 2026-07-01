@@ -405,6 +405,26 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
   return response.data
 }
 
+export interface GenerateSessionTitleResponse {
+  id: string
+  title: string | null
+  title_generation_status: Session['title_generation_status']
+  generated: boolean
+}
+
+export interface GenerateSessionTitleRequest {
+  question: string
+  file_names: string[]
+}
+
+export async function generateSessionTitle(
+  sessionId: string,
+  data: GenerateSessionTitleRequest
+): Promise<GenerateSessionTitleResponse> {
+  const response = await api.post(`/api/sessions/${sessionId}/title/generate`, data)
+  return response.data
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   await api.delete(`/api/sessions/${sessionId}`)
 }

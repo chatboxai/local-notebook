@@ -137,10 +137,11 @@
 
       <ChatPanel
         ref="chatPanelRef"
-        :title="currentSession?.title || t('ui.newChat')"
+        :title="displaySessionTitle"
         :is-editing-title="isEditingSessionTitle"
         :editing-title-value="editingSessionTitleValue"
         :is-streaming="isStreaming"
+        :is-title-locked="isCurrentSessionTitleGenerating"
         :messages="messages"
         :has-ready-files="hasReadyFiles"
         :localized-greeting="localizedGreeting"
@@ -436,6 +437,7 @@ import {
   getSession,
   deleteSession,
   updateSessionTitle,
+  generateSessionTitle,
   checkPreflight,
   chatStream,
   editMessageAndRegenerate,
@@ -602,6 +604,85 @@ const titleInputWidth = ref('120px')
 
 const isEditingSessionTitle = ref(false)
 const editingSessionTitleValue = ref('')
+const generatingSessionTitleId = ref<string | null>(null)
+const PLACEHOLDER_SESSION_TITLES = new Set(['', '新对话', 'New chat'])
+
+function isPlaceholderSessionTitle(title?: string | null): boolean {
+  return PLACEHOLDER_SESSION_TITLES.has((title || '').trim())
+}
+
+const isCurrentSessionTitleGenerating = computed(() => {
+  if (!currentSession.value) return false
+  return generatingSessionTitleId.value === currentSession.value.id ||
+    currentSession.value.title_generation_status === 'generating'
+})
+
+const displaySessionTitle = computed(() => {
+  if (isCurrentSessionTitleGenerating.value) return t('ui.generatingTitle2')
+  return currentSession.value?.title || t('ui.newChat')
+})
+
+function shouldGenerateTitleForCurrentTurn(): boolean {
+  if (!currentSession.value || isCurrentSessionTitleGenerating.value) return false
+  return totalMessages.value === 0 &&
+    messages.value.length === 0 &&
+    isPlaceholderSessionTitle(currentSession.value.title)
+}
+
+function getSelectedSessionTitleFileNames(): string[] {
+  if (selectedFileIds.value.length === 0) return []
+
+  const selectedIds = new Set(selectedFileIds.value)
+  return files.value
+    .filter(file => selectedIds.has(file.id))
+    .map(file => file.file_name)
+    .filter(Boolean)
+}
+
+function updateSessionTitleState(
+  sessionId: string,
+  title?: string | null,
+  status?: Session['title_generation_status']
+) {
+  if (currentSession.value?.id === sessionId) {
+    if (title) currentSession.value.title = title
+    if (status !== undefined) currentSession.value.title_generation_status = status
+  }
+
+  const idx = sessions.value.findIndex(s => s.id === sessionId)
+  if (idx !== -1 && sessions.value[idx]) {
+    if (title) sessions.value[idx]!.title = title
+    if (status !== undefined) sessions.value[idx]!.title_generation_status = status
+  }
+}
+
+async function generateTitleForSession(sessionId: string, question: string, fileNames: string[]) {
+  if (generatingSessionTitleId.value === sessionId) return
+
+  generatingSessionTitleId.value = sessionId
+  isEditingSessionTitle.value = false
+  editingSessionTitleValue.value = ''
+  updateSessionTitleState(sessionId, null, 'generating')
+
+  try {
+    const result = await generateSessionTitle(sessionId, {
+      question,
+      file_names: fileNames,
+    })
+    updateSessionTitleState(
+      sessionId,
+      result.title,
+      result.title_generation_status || (result.generated ? 'generated' : 'idle')
+    )
+  } catch (error) {
+    console.warn('Failed to generate session title:', error)
+    updateSessionTitleState(sessionId, null, 'failed')
+  } finally {
+    if (generatingSessionTitleId.value === sessionId) {
+      generatingSessionTitleId.value = null
+    }
+  }
+}
 
 
 const showSessionHistory = ref(false)
@@ -1633,6 +1714,8 @@ function stopStreaming() {
 async function sendMessage() {
   if (!inputMessage.value.trim() || !currentSession.value || isStreaming.value) return
 
+  const sessionIdForTurn = currentSession.value.id
+  const shouldGenerateTitleAfterSend = shouldGenerateTitleForCurrentTurn()
   const userMessage = inputMessage.value.trim()
   inputMessage.value = ''
   resetTextareaHeight()
@@ -1644,7 +1727,7 @@ async function sendMessage() {
 
   messages.value.push({
     id: Date.now().toString(),
-    session_id: currentSession.value.id,
+    session_id: sessionIdForTurn,
     role: 'user',
     content: userMessage,
     created_at: new Date().toISOString(),
@@ -1683,9 +1766,14 @@ async function sendMessage() {
   startThinkingTimer()
 
   const fileIds = selectedFileIds.value.length > 0 ? selectedFileIds.value : undefined
+  const titleFileNames = getSelectedSessionTitleFileNames()
+
+  if (shouldGenerateTitleAfterSend) {
+    void generateTitleForSession(sessionIdForTurn, userMessage, titleFileNames)
+  }
 
   currentStreamAbort = chatStream(
-    currentSession.value.id,
+    sessionIdForTurn,
     userMessage,
     fileIds,
     {
@@ -1801,16 +1889,10 @@ async function sendMessage() {
         clearStreamingTurn()
 
 
-        if (doneData.sessionUpdated?.title && currentSession.value) {
-          if (doneData.sessionUpdated.title !== currentSession.value.title) {
-            currentSession.value.title = doneData.sessionUpdated.title
-
-            const idx = sessions.value.findIndex(s => s.id === currentSession.value!.id)
-            if (idx !== -1 && sessions.value[idx]) {
-              sessions.value[idx]!.title = doneData.sessionUpdated.title
-            }
-          }
+        if (doneData.sessionUpdated?.title) {
+          updateSessionTitleState(sessionIdForTurn, doneData.sessionUpdated.title)
         }
+
       },
       onError: (error: string, hasPartial?: boolean) => {
 

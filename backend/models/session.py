@@ -18,6 +18,7 @@ class Session(Base):
         String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    title_generation_status: Mapped[str] = mapped_column(String(20), nullable=False, default="idle")
 
     citation_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

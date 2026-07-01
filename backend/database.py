@@ -47,6 +47,7 @@ RUNTIME_SCHEMA_COLUMNS = [
     ("projects", "summary", "TEXT"),
     ("projects", "color", "VARCHAR(20)"),
     ("sessions", "last_total_tokens", "INTEGER"),
+    ("sessions", "title_generation_status", "VARCHAR(20)"),
     ("sessions", "compact_summary", "TEXT"),
     ("sessions", "compact_citations_json", "TEXT"),
     ("sessions", "compact_message_id", "VARCHAR(36)"),

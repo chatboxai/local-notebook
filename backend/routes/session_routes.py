@@ -1,11 +1,11 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,16 @@ from models.message import Message
 from models.session import Session
 from models.user import User
 from schemas.session import SessionCreate, SessionResponse
+from services.session_title_service import (
+    SESSION_TITLE_STATUS_FAILED,
+    SESSION_TITLE_STATUS_GENERATED,
+    SESSION_TITLE_STATUS_GENERATING,
+    SESSION_TITLE_STATUS_IDLE,
+    generate_session_title,
+    is_placeholder_session_title,
+    is_title_generation_locked,
+    normalize_title_generation_status,
+)
 from utils.time import utc_isoformat
 
 logger = logging.getLogger("session_routes")
@@ -27,6 +37,18 @@ router = APIRouter(tags=["sessions"])
 
 class SessionTitleUpdate(BaseModel):
     title: Optional[str] = None
+
+
+class SessionTitleGenerateResponse(BaseModel):
+    id: str
+    title: Optional[str] = None
+    title_generation_status: str
+    generated: bool
+
+
+class SessionTitleGenerateRequest(BaseModel):
+    question: str
+    file_names: list[str] = Field(default_factory=list)
 
 
 def _safe_json(raw: Optional[str]):
@@ -140,6 +162,7 @@ async def create_session(
             "id": empty_session.id,
             "project_id": project_id,
             "title": empty_session.title,
+            "title_generation_status": normalize_title_generation_status(empty_session.title_generation_status),
             "created_at": utc_isoformat(empty_session.created_at),
             "updated_at": utc_isoformat(empty_session.updated_at),
             "reused": True
@@ -154,6 +177,7 @@ async def create_session(
         "id": session.id,
         "project_id": project_id,
         "title": session.title,
+        "title_generation_status": normalize_title_generation_status(session.title_generation_status),
         "created_at": utc_isoformat(session.created_at),
         "updated_at": utc_isoformat(session.updated_at),
         "reused": False
@@ -226,6 +250,7 @@ async def get_session(
         "id": session.id,
         "project_id": session.project_id,
         "title": session.title,
+        "title_generation_status": normalize_title_generation_status(session.title_generation_status),
         "created_at": utc_isoformat(session.created_at),
         "updated_at": utc_isoformat(session.updated_at),
         "messages": processed_messages,
@@ -481,6 +506,64 @@ async def _process_messages_citations(messages: list, db: AsyncSession) -> list:
     return processed_messages
 
 
+@router.post("/sessions/{session_id}/title/generate", response_model=SessionTitleGenerateResponse)
+async def generate_title_for_session(
+    session_id: str,
+    body: SessionTitleGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SessionTitleGenerateResponse:
+    session = await require_session(db, session_id, current_user)
+    current_status = normalize_title_generation_status(session.title_generation_status)
+    question = body.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+
+    if is_title_generation_locked(current_status, session.updated_at):
+        raise HTTPException(status_code=409, detail="Session title is already being generated")
+    if current_status == SESSION_TITLE_STATUS_GENERATING:
+        current_status = SESSION_TITLE_STATUS_FAILED
+        session.title_generation_status = current_status
+
+    if not is_placeholder_session_title(session.title):
+        return SessionTitleGenerateResponse(
+            id=session.id,
+            title=session.title,
+            title_generation_status=current_status,
+            generated=False,
+        )
+
+    session.title_generation_status = SESSION_TITLE_STATUS_GENERATING
+    session.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    try:
+        title = await generate_session_title(
+            question=question,
+            file_names=body.file_names,
+            user_id=current_user.id,
+        )
+    except Exception as exc:
+        logger.exception("Failed to generate session title")
+        session.title_generation_status = SESSION_TITLE_STATUS_FAILED
+        session.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    session.title = title
+    session.title_generation_status = SESSION_TITLE_STATUS_GENERATED
+    session.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(session)
+
+    return SessionTitleGenerateResponse(
+        id=session.id,
+        title=session.title,
+        title_generation_status=normalize_title_generation_status(session.title_generation_status),
+        generated=True,
+    )
+
+
 @router.put("/sessions/{session_id}", response_model=SessionResponse)
 @router.patch("/sessions/{session_id}", response_model=SessionResponse)
 async def update_session(
@@ -491,7 +574,10 @@ async def update_session(
 ) -> SessionResponse:
     session = await require_session(db, session_id, current_user)
     if body.title is not None:
+        if is_title_generation_locked(session.title_generation_status, session.updated_at):
+            raise HTTPException(status_code=409, detail="Session title is being generated")
         session.title = body.title
+        session.title_generation_status = SESSION_TITLE_STATUS_IDLE
     await db.commit()
     await db.refresh(session)
     return session

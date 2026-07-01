@@ -1031,13 +1031,13 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .markdown-body {
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.7;
   letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 
 .markdown-body :deep(p) {
-  margin: 0.8em 0;
+  margin: 0.6em 0;
 }
 
 .markdown-body :deep(p:first-child) {
@@ -1059,7 +1059,7 @@ function regenerateTooltip(index: number, msg: Message): string {
 .markdown-body :deep(h2),
 .markdown-body :deep(h3),
 .markdown-body :deep(h4) {
-  margin: 1.2em 0 0.6em;
+  margin: 0.8em 0 0.4em;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1071,12 +1071,12 @@ function regenerateTooltip(index: number, msg: Message): string {
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
-  margin: 0.8em 0;
+  margin: 0.4em 0;
   padding-left: 1.8em;
 }
 
 .markdown-body :deep(li) {
-  margin: 0.4em 0;
+  margin: 0.3em 0;
 }
 
 .markdown-body :deep(code) {
@@ -1115,20 +1115,22 @@ function regenerateTooltip(index: number, msg: Message): string {
   border: none;
   height: 1px;
   background: var(--border-color);
-  margin: 1.5em 0;
+  margin: 1em 0;
 }
 
 .markdown-body :deep(table) {
   width: 100%;
   border-collapse: collapse;
-  margin: 1em 0;
+  margin: 0.75em 0;
 }
 
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  padding: 8px 12px;
+  padding: 7px 10px;
   border: 1px solid var(--border-color);
+  line-height: 1.45;
   text-align: left;
+  vertical-align: middle;
 }
 
 .markdown-body :deep(th) {

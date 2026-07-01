@@ -38,6 +38,7 @@ export interface Session {
   id: string
   project_id: string
   title: string
+  title_generation_status?: 'idle' | 'generating' | 'generated' | 'failed' | null
   message_count: number
   citation_counter: number
   created_at: string

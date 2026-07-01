@@ -13,6 +13,7 @@ class SessionResponse(UTCDateTimeModel):
     id: str
     project_id: str
     title: Optional[str]
+    title_generation_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
