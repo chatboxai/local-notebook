@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from kosong.tooling import CallableTool2, ToolOk, ToolError, ToolReturnValue
 
+from agent.tools.image_location import get_pdf_image_location
 from agent.tools.query_knowledge_base import CitationState
 
 logger = logging.getLogger("tool.file_tools")
@@ -49,47 +50,16 @@ def _get_file_by_name(project_id: str, file_name: str, file_ids: Optional[list[s
     return row
 
 
-def _image_name_from_blocks(file_id: str, image_index: int) -> Optional[str]:
-    rows = _db_query(
-        "SELECT extra FROM blocks WHERE file_id = ? ORDER BY block_index",
-        (file_id,),
-    )
-
-    for row in rows:
-        try:
-            extra = json.loads(row["extra"]) if row.get("extra") else None
-        except (json.JSONDecodeError, TypeError):
-            extra = None
-
-        if not isinstance(extra, dict) or not extra.get("is_image"):
-            continue
-
-        current_index = extra.get("image_index")
-        if current_index is None:
-            continue
-
-        try:
-            current_index_int = int(current_index)
-        except (TypeError, ValueError):
-            continue
-
-        if current_index_int == image_index:
-            image_name = extra.get("image_name") or extra.get("img_name")
-            if image_name:
-                return os.path.basename(str(image_name))
-
-    return None
-
-
 def _get_pdf_image_path(file_path: str, image_index: int, file_id: Optional[str] = None) -> Optional[str]:
     if not file_id:
         return None
 
-    image_name = _image_name_from_blocks(file_id, image_index)
+    image_location = get_pdf_image_location(file_id, image_index)
+    image_name = image_location.get("image_name")
     if not image_name:
         return None
 
-    candidate = os.path.join(os.path.dirname(file_path), "images", file_id, image_name)
+    candidate = os.path.join(os.path.dirname(file_path), "images", file_id, os.path.basename(str(image_name)))
     if (
         os.path.isfile(candidate)
         and candidate.lower().rsplit(".", 1)[-1] in IMAGE_EXTENSIONS
@@ -367,6 +337,7 @@ class AskImageTool(CallableTool2[AskImageParams]):
             ))
 
         citation_id = f"citation_{state.citation_counter}"
+        image_location = get_pdf_image_location(file_id, image_index)
         state.citations_map[citation_id] = {
             "type": "image",
             "file_id": file_id,
@@ -375,6 +346,7 @@ class AskImageTool(CallableTool2[AskImageParams]):
             "image_index": image_index,
             "question": question,
             "answer": answer[:200] + "..." if len(answer) > 200 else answer,
+            **image_location,
         }
         state.citation_counter += 1
 

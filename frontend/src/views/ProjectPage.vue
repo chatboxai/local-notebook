@@ -158,7 +158,7 @@
         :show-scroll-to-bottom="showScrollToBottom"
         :scroll-btn-bottom="scrollBtnBottom"
         :input-message="inputMessage"
-        :enable-web-search="enableWebSearch"
+        :web-search-configured="webSearchConfigured"
         :source-count="readyFiles.length"
         :has-current-session="Boolean(currentSession)"
         :copy-toast-visible="copyToastVisible"
@@ -198,7 +198,6 @@
         @toggle-export-selection-mode="toggleExportSelectionMode"
         @export-selected-messages="handleExportSelectedMessages"
         @update:input-message="inputMessage = $event"
-        @update:enable-web-search="enableWebSearch = $event"
         @send-enter="handleSendEnter"
         @composition-start="isComposing = true"
         @composition-end="isComposing = false"
@@ -437,6 +436,7 @@ import {
   getSession,
   deleteSession,
   updateSessionTitle,
+  checkPreflight,
   chatStream,
   editMessageAndRegenerate,
   type AgentRole,
@@ -446,7 +446,7 @@ import {
   updateProject,
   type WorkflowContentFeature,
 } from '../services/api'
-import type { Project, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, FeatureCitationRefPart } from '../types'
+import type { Project, Session, Message, ContentPart, ToolExecuting, ToolStatusPart, ToolSummaryActivityPart, ToolSummaryPart, FeatureCitationRefPart } from '../types'
 import RenameModal from '../components/common/RenameModal.vue'
 import WebCitationTooltip from '../components/common/WebCitationTooltip.vue'
 import Toast from '../components/common/Toast.vue'
@@ -619,11 +619,14 @@ const localizedGreeting = computed(() => t(randomGreetingKey.value))
 
 
 const inputMessage = ref('')
-const enableWebSearch = ref(localStorage.getItem('enableWebSearch') === 'true')
+const webSearchConfigured = ref(false)
 const agentRole = ref<AgentRole>('default')
 const isThinking = ref(false)
 let thinkingTimer: ReturnType<typeof setTimeout> | null = null
 const streamingParts = ref<ContentPart[]>([])
+const streamingElapsedMs = ref(0)
+let streamStartedAtMs: number | null = null
+let streamElapsedTimer: ReturnType<typeof setInterval> | null = null
 let currentStreamAbort: (() => void) | null = null
 const pendingStopTempId = ref<string | null>(null)
 const pendingStopSessionId = ref<string | null>(null)
@@ -635,12 +638,6 @@ const editingMessageId = ref<string | null>(null)
 const editingContent = ref('')
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null)
 const editTextareaRef = computed<HTMLTextAreaElement[]>(() => chatPanelRef.value?.editTextareaElements ?? [])
-
-
-watch(enableWebSearch, (val) => {
-  localStorage.setItem('enableWebSearch', val ? 'true' : 'false')
-})
-
 
 const isComposing = ref(false)
 
@@ -679,6 +676,7 @@ const {
 } = useMessageRendering({
   messages,
   streamingParts,
+  streamingElapsedMs,
 })
 
 
@@ -1049,6 +1047,66 @@ function appendToolExecutingParts(tools: ToolExecuting[]) {
   }
 }
 
+function startStreamingTurn() {
+  streamStartedAtMs = Date.now()
+  streamingElapsedMs.value = 1
+  if (streamElapsedTimer) {
+    clearInterval(streamElapsedTimer)
+  }
+  streamElapsedTimer = setInterval(() => {
+    streamingElapsedMs.value = finishStreamingTurnElapsedMs()
+  }, 1000)
+}
+
+function finishStreamingTurnElapsedMs(): number {
+  if (!streamStartedAtMs) return 0
+  return Math.max(0, Date.now() - streamStartedAtMs)
+}
+
+function clearStreamingTurn() {
+  streamStartedAtMs = null
+  streamingElapsedMs.value = 0
+  if (streamElapsedTimer) {
+    clearInterval(streamElapsedTimer)
+    streamElapsedTimer = null
+  }
+}
+
+function summarizeCompletedToolActivity(parts: ContentPart[], elapsedMs: number): ContentPart[] {
+  const activityParts: ToolSummaryActivityPart[] = []
+  const summarizedParts: ContentPart[] = []
+  let summaryIndex = -1
+
+  for (const part of parts) {
+    if (part.type === 'tool_status' || part.type === 'reasoning') {
+      activityParts.push(part)
+      if (summaryIndex === -1) {
+        summaryIndex = summarizedParts.length
+        summarizedParts.push({
+          type: 'tool_summary',
+          elapsed_ms: elapsedMs,
+          activities: [],
+        } satisfies ToolSummaryPart)
+      }
+      continue
+    }
+
+    summarizedParts.push(part)
+  }
+
+  if (summaryIndex === -1 || activityParts.length === 0) {
+    return [...parts]
+  }
+
+  summarizedParts[summaryIndex] = {
+    type: 'tool_summary',
+    elapsed_ms: elapsedMs,
+    activities: activityParts,
+  }
+
+  return summarizedParts
+}
+
 watch(() => toolboxMode.value, (newVal, oldVal) => {
   localStorage.setItem(toolboxModeStorageKey, newVal)
 
@@ -1125,6 +1183,7 @@ function handleVisibilityChange() {
 
 onMounted(async () => {
   await loadProject()
+  await loadToolCapabilities()
   await loadFiles()
   await loadOrCreateSession()
 
@@ -1151,6 +1210,7 @@ onUnmounted(() => {
   stopFeaturePolling()
   stopWorkflowPolling()
   stopWorkflowElapsedTimer()
+  clearStreamingTurn()
   if (highlightTimer) {
     clearTimeout(highlightTimer)
     highlightTimer = null
@@ -1330,6 +1390,16 @@ async function loadProject() {
     project.value = data
   } catch (error) {
     console.error('Failed to load project:', error)
+  }
+}
+
+async function loadToolCapabilities() {
+  try {
+    const preflight = await checkPreflight()
+    webSearchConfigured.value = !!preflight.web_search_ready
+  } catch (error) {
+    console.error('Failed to load tool capabilities:', error)
+    webSearchConfigured.value = false
   }
 }
 
@@ -1534,6 +1604,7 @@ function stopStreaming() {
   }
 
   isThinking.value = false
+  clearStreamingTurn()
 
   if (streamingParts.value.length > 0 && currentSession.value) {
     const tempId = Date.now().toString()
@@ -1583,6 +1654,7 @@ async function sendMessage() {
   isStreaming.value = true
   isThinking.value = false
   streamingParts.value = []
+  startStreamingTurn()
 
 
   const startThinkingTimer = () => {
@@ -1710,11 +1782,15 @@ async function sendMessage() {
       onDone: (doneData) => {
 
         clearThinkingTimer()
+        const contentParts = summarizeCompletedToolActivity(
+          streamingParts.value,
+          finishStreamingTurnElapsedMs()
+        )
         messages.value.push({
           id: Date.now().toString(),
           session_id: currentSession.value!.id,
           role: 'assistant',
-          content_parts: [...streamingParts.value],
+          content_parts: contentParts,
           created_at: new Date().toISOString(),
           agent_role: doneData.agentRole || agentRole.value,
           pending_id_sync: true
@@ -1722,6 +1798,7 @@ async function sendMessage() {
         streamingParts.value = []
         isStreaming.value = false
         currentStreamAbort = null
+        clearStreamingTurn()
 
 
         if (doneData.sessionUpdated?.title && currentSession.value) {
@@ -1760,6 +1837,7 @@ async function sendMessage() {
         streamingParts.value = []
         isStreaming.value = false
         currentStreamAbort = null
+        clearStreamingTurn()
 
 
         syncAllPendingMessageIds()
@@ -1805,7 +1883,7 @@ async function sendMessage() {
         }
       }
     },
-    enableWebSearch.value,
+    webSearchConfigured.value,
     agentRole.value
   )
 }
@@ -1972,6 +2050,8 @@ async function submitEditMessage(msg: Message) {
     return
   }
 
+  startStreamingTurn()
+
   currentStreamAbort = editMessageAndRegenerate(
     currentSession.value.id,
     targetMessage.id,
@@ -2039,11 +2119,15 @@ async function submitEditMessage(msg: Message) {
       onDone: (doneData) => {
         clearLocalThinkingTimer()
         const tempId = Date.now().toString()
+        const contentParts = summarizeCompletedToolActivity(
+          streamingParts.value,
+          finishStreamingTurnElapsedMs()
+        )
         messages.value.push({
           id: tempId,
           session_id: currentSession.value!.id,
           role: 'assistant',
-          content_parts: [...streamingParts.value],
+          content_parts: contentParts,
           created_at: new Date().toISOString(),
           agent_role: doneData.agentRole || agentRole.value,
           pending_id_sync: true
@@ -2054,6 +2138,7 @@ async function submitEditMessage(msg: Message) {
         isStreaming.value = false
         isThinking.value = false
         currentStreamAbort = null
+        clearStreamingTurn()
 
         const lastUser = messages.value.slice().reverse().find(m => m.role === 'user')
         if (lastUser && isTempMessageId(lastUser.id)) {
@@ -2087,6 +2172,7 @@ async function submitEditMessage(msg: Message) {
 
         streamingParts.value = []
         currentStreamAbort = null
+        clearStreamingTurn()
 
         const lastUser = messages.value.slice().reverse().find(m => m.role === 'user')
         if (lastUser && isTempMessageId(lastUser.id)) {
@@ -2126,7 +2212,7 @@ async function submitEditMessage(msg: Message) {
         }
       }
     },
-    enableWebSearch.value,
+    webSearchConfigured.value,
     agentRole.value
   )
 }
@@ -2201,6 +2287,8 @@ async function regenerateMessage(assistantIndex: number) {
 
   scrollToBottom()
 
+  startStreamingTurn()
+
   console.log(`📤 [regenerateMessage] 调用 API，user ID: ${userMessage.id}, 是否临时ID: ${isTempMessageId(userMessage.id)}`)
   currentStreamAbort = editMessageAndRegenerate(
     currentSession.value.id,
@@ -2265,11 +2353,15 @@ async function regenerateMessage(assistantIndex: number) {
       onFeatureStarted: handleFeatureStarted,
       onDone: (doneData) => {
         clearLocalThinkingTimer()
+        const contentParts = summarizeCompletedToolActivity(
+          streamingParts.value,
+          finishStreamingTurnElapsedMs()
+        )
         messages.value.push({
           id: Date.now().toString(),
           session_id: currentSession.value!.id,
           role: 'assistant',
-          content_parts: [...streamingParts.value],
+          content_parts: contentParts,
           created_at: new Date().toISOString(),
           agent_role: doneData.agentRole || agentRole.value,
           pending_id_sync: true
@@ -2278,6 +2370,7 @@ async function regenerateMessage(assistantIndex: number) {
         isStreaming.value = false
         isThinking.value = false
         currentStreamAbort = null
+        clearStreamingTurn()
       },
       onError: (error: string, hasPartial?: boolean) => {
         clearLocalThinkingTimer()
@@ -2303,6 +2396,7 @@ async function regenerateMessage(assistantIndex: number) {
 
         streamingParts.value = []
         currentStreamAbort = null
+        clearStreamingTurn()
 
         syncAllPendingMessageIds()
       },
@@ -2326,7 +2420,7 @@ async function regenerateMessage(assistantIndex: number) {
         }
       }
     },
-    enableWebSearch.value,
+    webSearchConfigured.value,
     agentRole.value
   )
 }

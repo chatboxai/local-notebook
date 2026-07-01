@@ -2,7 +2,7 @@ import { computed, type Ref } from 'vue'
 import { escapeHtml, renderMarkdownWithLatex } from '../utils'
 import { ENABLE_THINK_PARSING, parseThinkingContent, renderThinkingBlock } from '../utils/think'
 import { t } from '../i18n'
-import type { ContentPart, Message } from '../types'
+import type { ContentPart, Message, ToolStatusPart, ToolSummaryPart } from '../types'
 
 type RenderedSegmentType = 'thinking' | 'tool' | 'body'
 export type RenderedSegment = { type: RenderedSegmentType; html: string }
@@ -22,11 +22,13 @@ export interface ParsedMessageContent {
 interface UseMessageRenderingOptions {
   messages: Ref<Message[]>
   streamingParts: Ref<ContentPart[]>
+  streamingElapsedMs?: Ref<number>
 }
 
 export function useMessageRendering({
   messages,
   streamingParts,
+  streamingElapsedMs,
 }: UseMessageRenderingOptions) {
   const userExpandedThinkingBlocks = new Set<string>()
 
@@ -34,9 +36,7 @@ export function useMessageRendering({
     return escapeHtml(t('ui.thoughtProcess'))
   }
 
-  function localizedToolStatus(part: ContentPart): string {
-    if (part.type !== 'tool_status') return ''
-
+  function localizedToolStatus(part: ToolStatusPart): string {
     const displayKey = part.display_key || part.displayKey
     const displayParams = part.display_params || part.displayParams
 
@@ -44,6 +44,101 @@ export function useMessageRendering({
 
     const localized = t(displayKey, displayParams)
     return localized === displayKey && part.display ? part.display : localized
+  }
+
+  function formatElapsedDurationMs(elapsedMs: number): string {
+    const elapsedSeconds = Math.max(1, Math.round(elapsedMs / 1000))
+    const hours = Math.floor(elapsedSeconds / 3600)
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60)
+    const seconds = elapsedSeconds % 60
+
+    if (hours > 0) return t('ui.elapsedHoursMinutes', { hours, minutes })
+    if (minutes > 0) return t('ui.elapsedMinutesSeconds', { minutes, seconds })
+    return t('ui.elapsedSeconds', { seconds })
+  }
+
+  function renderToolSummary(part: ToolSummaryPart, isStreamingMode: boolean, messageId: string, summaryIndex: number): string {
+    const elapsed = formatElapsedDurationMs(part.elapsed_ms)
+    const label = escapeHtml(t('ui.toolActivityCompleted', { elapsed }))
+    const activities = part.activities || part.tools || []
+    const items = activities
+      .map((activity, activityIndex) => {
+        if (activity.type === 'tool_status') {
+          return `<div class="tool-summary-item">${escapeHtml(localizedToolStatus(activity))}</div>`
+        }
+
+        const blockId = messageId
+          ? `${messageId}_summary_${summaryIndex}_reasoning_${activityIndex}`
+          : ''
+        return `<div class="tool-summary-reasoning">${renderThinkingBlock(
+          activity.content,
+          !!part.is_running,
+          isStreamingMode,
+          blockId,
+          localizedThinkingLabel()
+        )}</div>`
+      })
+      .join('')
+
+    const listHtml = items ? `<div class="tool-summary-list">${items}</div>` : ''
+    const openAttr = part.is_running ? ' open' : ''
+    const runningClass = part.is_running ? ' running' : ''
+
+    return `
+      <details class="tool-summary${runningClass}"${openAttr}>
+        <summary>
+          <span class="tool-summary-label">${label}</span>
+          <span class="tool-summary-chevron">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </span>
+        </summary>
+        ${listHtml}
+      </details>
+    `
+  }
+
+  function summarizeStreamingActivity(parts: ContentPart[], elapsedMs: number): ContentPart[] {
+    const activityParts: ToolSummaryPart['activities'] = []
+    const summarizedParts: ContentPart[] = []
+    let summaryIndex = -1
+
+    for (const part of parts) {
+      if (part.type === 'tool_status' || part.type === 'reasoning') {
+        activityParts.push(part)
+        if (summaryIndex === -1) {
+          summaryIndex = summarizedParts.length
+          summarizedParts.push({
+            type: 'tool_summary',
+            elapsed_ms: elapsedMs,
+            activities: [],
+            is_running: true,
+          })
+        }
+        continue
+      }
+
+      summarizedParts.push(part)
+    }
+
+    if (summaryIndex === -1) {
+      return [
+        {
+          type: 'tool_summary',
+          elapsed_ms: elapsedMs,
+          activities: [],
+          is_running: true,
+        },
+        ...parts,
+      ]
+    }
+
+    summarizedParts[summaryIndex] = {
+      type: 'tool_summary',
+      elapsed_ms: elapsedMs,
+      activities: activityParts,
+      is_running: true,
+    }
+    return summarizedParts
   }
 
   function renderThinkingToggleContent(isExpanded: boolean) {
@@ -159,6 +254,7 @@ export function useMessageRendering({
     const segments: RenderedSegment[] = []
     let currentText = ''
     let thinkingBlockIndex = 0
+    let toolSummaryIndex = 0
 
     const reasoningExpandStates = analyzeReasoningExpandStates(parts, isStreamingMode, messageId)
 
@@ -236,6 +332,13 @@ export function useMessageRendering({
         }
 
         segments.push({ type: 'tool', html: `<div class="tool-status-item">${escapeHtml(localizedToolStatus(part))}</div>` })
+      } else if (part.type === 'tool_summary') {
+        if (currentText) {
+          renderTextWithThinking(currentText, isStreamingMode)
+          currentText = ''
+        }
+
+        segments.push({ type: 'tool', html: renderToolSummary(part, isStreamingMode, messageId, toolSummaryIndex++) })
       }
     }
 
@@ -280,7 +383,7 @@ export function useMessageRendering({
       parts.push({ type: 'text', content: msg.content })
     }
 
-    const hasToolStatusInParts = parts.some(p => p.type === 'tool_status')
+    const hasToolStatusInParts = parts.some(p => p.type === 'tool_status' || p.type === 'tool_summary')
 
     if (!hasToolStatusInParts && msg.tool_executing && msg.tool_executing.length > 0) {
       for (const tool of msg.tool_executing) {
@@ -304,6 +407,13 @@ export function useMessageRendering({
     for (const part of parts) {
       if (part.type === 'tool_status') {
         if (localizedToolStatus(part).trim() !== '') {
+          hasToolStatus = true
+        }
+        continue
+      }
+      if (part.type === 'tool_summary') {
+        const activities = part.activities || part.tools || []
+        if (activities.length > 0) {
           hasToolStatus = true
         }
         continue
@@ -401,7 +511,11 @@ export function useMessageRendering({
   }
 
   const streamingRendered = computed(() => {
-    return renderContentParts(streamingParts.value, true, 'streaming')
+    const elapsedMs = streamingElapsedMs?.value ?? 0
+    const parts = streamingElapsedMs
+      ? summarizeStreamingActivity(streamingParts.value, elapsedMs)
+      : streamingParts.value
+    return renderContentParts(parts, true, 'streaming')
   })
 
   const renderedMessages = computed<Record<string, RenderedSegment[]>>(() => {

@@ -950,6 +950,72 @@ function regenerateTooltip(index: number, msg: Message): string {
   margin-top: 2px;
 }
 
+.assistant-content :deep(.tool-summary) {
+  width: 100%;
+  margin: 0 0 10px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.assistant-content :deep(.tool-summary summary) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.assistant-content :deep(.tool-summary summary::-webkit-details-marker) {
+  display: none;
+}
+
+.assistant-content :deep(.tool-summary summary:hover) {
+  color: var(--text-secondary);
+}
+
+.assistant-content :deep(.tool-summary-label) {
+  white-space: nowrap;
+}
+
+.assistant-content :deep(.tool-summary-chevron) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  transition: transform 0.15s;
+}
+
+.assistant-content :deep(.tool-summary[open] .tool-summary-chevron) {
+  transform: rotate(90deg);
+}
+
+.assistant-content :deep(.tool-summary-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-left: 14px;
+}
+
+.assistant-content :deep(.tool-summary-item) {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.assistant-content :deep(.tool-summary-reasoning) {
+  color: var(--text-tertiary);
+}
+
+.assistant-content :deep(.tool-summary-reasoning .thinking-block) {
+  margin-bottom: 0;
+}
+
 .assistant-content :deep(.assistant-segment) {
   margin: 0;
 }
