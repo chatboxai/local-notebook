@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Optional, List
+from datetime import datetime
+from typing import Any, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from agent.tool_display import get_tool_display_info
 from dependencies.auth import get_current_user
 from dependencies.database import get_db
 from dependencies.permissions import require_project, require_session
+from models.block import Block
 from models.message import Message
 from models.session import Session
 from models.user import User
@@ -33,6 +35,15 @@ def _safe_json(raw: Optional[str]):
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
+        return None
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
         return None
 
 
@@ -204,7 +215,7 @@ async def get_session(
 
             raw_messages.append(_full_message(m))
 
-        processed_messages = _process_messages_citations(raw_messages)
+        processed_messages = await _process_messages_citations(raw_messages, db)
         for i, pm in enumerate(processed_messages):
             if pm.get("role") == "compact_divider":
                 logger.info(f"[get_session] divider at processed[{i}]/{len(processed_messages)}")
@@ -225,13 +236,88 @@ async def get_session(
     }
 
 
-def _process_messages_citations(messages: list) -> list:
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _enrich_image_citations(citations_map: dict, db: AsyncSession) -> None:
+    targets: dict[tuple[str, int], list[dict]] = {}
+    for metadata in citations_map.values():
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("type") not in ("image", "pdf_image"):
+            continue
+
+        file_id = metadata.get("file_id")
+        image_index = _int_or_none(metadata.get("image_index"))
+        if not file_id or image_index is None:
+            continue
+
+        if metadata.get("page") and metadata.get("image_name"):
+            continue
+
+        targets.setdefault((file_id, image_index), []).append(metadata)
+
+    if not targets:
+        return
+
+    file_ids = [file_id for file_id, _ in targets]
+    result = await db.execute(
+        select(Block.file_id, Block.block_id, Block.page, Block.extra)
+        .where(Block.file_id.in_(file_ids))
+        .order_by(asc(Block.file_id), asc(Block.block_index))
+    )
+
+    locations: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in result.all():
+        try:
+            extra = json.loads(row.extra) if row.extra else None
+        except (json.JSONDecodeError, TypeError):
+            extra = None
+        if not isinstance(extra, dict) or not extra.get("is_image"):
+            continue
+
+        image_index = _int_or_none(extra.get("image_index"))
+        if image_index is None:
+            continue
+
+        key = (row.file_id, image_index)
+        if key not in targets or key in locations:
+            continue
+
+        location: dict[str, Any] = {
+            "block_id": row.block_id,
+            "page": row.page or 0,
+        }
+        image_name = extra.get("image_name") or extra.get("img_name")
+        if image_name:
+            location["image_name"] = str(image_name)
+        bbox = extra.get("bbox")
+        if isinstance(bbox, list):
+            location["bbox"] = bbox
+        locations[key] = location
+
+    for key, metadata_list in targets.items():
+        location = locations.get(key)
+        if not location:
+            continue
+        for metadata in metadata_list:
+            for field, value in location.items():
+                metadata.setdefault(field, value)
+
+
+async def _process_messages_citations(messages: list, db: AsyncSession) -> list:
     citations_map: dict = {}
     for m in messages:
         if m.get("role") == "tool" and m.get("citations"):
             citations = m["citations"]
             if isinstance(citations, dict):
                 citations_map.update(citations)
+
+    await _enrich_image_citations(citations_map, db)
 
     max_display_num = 0
     for metadata in citations_map.values():
@@ -246,11 +332,50 @@ def _process_messages_citations(messages: list) -> list:
     current_assistant_msg: dict | None = None
     current_parts: list = []
 
+    def _message_elapsed_ms(m: dict) -> int:
+        started_at = _parse_iso_datetime(m.get("started_at"))
+        finished_at = _parse_iso_datetime(m.get("finished_at"))
+        if not started_at or not finished_at:
+            return 0
+        return max(0, int((finished_at - started_at).total_seconds() * 1000))
+
+    def _summarize_activity_parts(parts: list, m: dict) -> list:
+        activity_parts: list = []
+        summarized_parts: list = []
+        summary_index = -1
+
+        for part in parts:
+            if part.get("type") in ("reasoning", "tool_status"):
+                activity_parts.append(part)
+                if summary_index == -1:
+                    summary_index = len(summarized_parts)
+                    summarized_parts.append({
+                        "type": "tool_summary",
+                        "elapsed_ms": _message_elapsed_ms(m),
+                        "activities": [],
+                    })
+                continue
+
+            summarized_parts.append(part)
+
+        if summary_index == -1 or not activity_parts:
+            return list(parts)
+
+        summarized_parts[summary_index] = {
+            "type": "tool_summary",
+            "elapsed_ms": _message_elapsed_ms(m),
+            "activities": activity_parts,
+        }
+        return summarized_parts
+
     def _flush_assistant():
         nonlocal current_assistant_msg, current_parts
         if current_assistant_msg is not None:
             if current_parts:
-                current_assistant_msg["content_parts"] = current_parts
+                current_assistant_msg["content_parts"] = _summarize_activity_parts(
+                    current_parts,
+                    current_assistant_msg,
+                )
             processed_messages.append(current_assistant_msg)
             current_assistant_msg = None
             current_parts = []
@@ -413,7 +538,7 @@ async def get_session_messages(
         processed_messages = [_brief_message(m) for m in messages]
     else:
         raw_messages = [_full_message(m) for m in messages]
-        processed_messages = _process_messages_citations(raw_messages)
+        processed_messages = await _process_messages_citations(raw_messages, db)
 
     raw_fetched = len(messages)
     return {

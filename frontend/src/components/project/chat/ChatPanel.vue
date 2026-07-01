@@ -85,14 +85,13 @@
     <ChatInput
       ref="inputComponentRef"
       :input-message="inputMessage"
-      :enable-web-search="enableWebSearch"
+      :web-search-configured="webSearchConfigured"
       :source-count="sourceCount"
       :has-ready-files="hasReadyFiles"
       :has-current-session="hasCurrentSession"
       :is-streaming="isStreaming"
       :is-export-selection-mode="isExportSelectionMode"
       @update:input-message="emit('update:inputMessage', $event)"
-      @update:enable-web-search="emit('update:enableWebSearch', $event)"
       @send-enter="emit('send-enter')"
       @composition-start="emit('composition-start')"
       @composition-end="emit('composition-end')"
@@ -145,7 +144,7 @@ interface Props {
   showScrollToBottom: boolean
   scrollBtnBottom: number
   inputMessage: string
-  enableWebSearch: boolean
+  webSearchConfigured: boolean
   sourceCount: number
   hasCurrentSession: boolean
   copyToastVisible: boolean
@@ -190,7 +189,6 @@ const emit = defineEmits<{
   'toggle-export-selection-mode': []
   'export-selected-messages': []
   'update:inputMessage': [value: string]
-  'update:enableWebSearch': [value: boolean]
   'send-enter': []
   'composition-start': []
   'composition-end': []

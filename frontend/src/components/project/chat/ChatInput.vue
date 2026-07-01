@@ -36,13 +36,17 @@
         </button>
       </div>
       <div class="input-options-row">
-        <label class="web-search-toggle" :class="{ active: enableWebSearch }">
-          <input type="checkbox" :checked="enableWebSearch" @change="handleWebSearchChange" />
+        <div
+          class="web-search-tool"
+          :class="{ active: webSearchConfigured }"
+          :aria-label="webSearchConfigured ? $t('ui.webSearchEnabledAutoHint') : $t('ui.webSearchDisabledAdminHint')"
+          :data-tooltip="webSearchConfigured ? $t('ui.webSearchEnabledAutoHint') : $t('ui.webSearchDisabledAdminHint')"
+        >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
           </svg>
           <span>{{ $t('ui.webSearch') }}</span>
-        </label>
+        </div>
 
         <span class="source-count">{{ $t('ui.sourceCount', { count: sourceCount }) }}</span>
       </div>
@@ -55,7 +59,7 @@ import { ref } from 'vue'
 
 interface Props {
   inputMessage: string
-  enableWebSearch: boolean
+  webSearchConfigured: boolean
   sourceCount: number
   hasReadyFiles: boolean
   hasCurrentSession: boolean
@@ -67,7 +71,6 @@ defineProps<Props>()
 
 const emit = defineEmits<{
   'update:inputMessage': [value: string]
-  'update:enableWebSearch': [value: boolean]
   'send-enter': []
   'composition-start': []
   'composition-end': []
@@ -91,10 +94,6 @@ defineExpose({
 function handleInput(event: Event) {
   emit('update:inputMessage', (event.target as HTMLTextAreaElement).value)
   emit('auto-resize')
-}
-
-function handleWebSearchChange(event: Event) {
-  emit('update:enableWebSearch', (event.target as HTMLInputElement).checked)
 }
 </script>
 
@@ -182,34 +181,73 @@ function handleWebSearchChange(event: Event) {
   border-radius: 50%;
 }
 
-.web-search-toggle {
+.web-search-tool {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
   font-size: 12px;
+  background: var(--bg-hover);
   color: var(--text-tertiary);
-  cursor: pointer;
+  cursor: default;
   border-radius: 12px;
   transition: all 0.2s;
   user-select: none;
+  position: relative;
 }
 
-.web-search-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.web-search-toggle.active {
+.web-search-tool.active {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
 }
 
-.web-search-toggle input[type="checkbox"] {
-  display: none;
+.web-search-tool svg {
+  flex-shrink: 0;
 }
 
-.web-search-toggle svg {
-  flex-shrink: 0;
+.web-search-tool::before,
+.web-search-tool::after {
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+}
+
+.web-search-tool::before {
+  content: attr(data-tooltip);
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 10px;
+  background: #1f2937;
+  color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  transform: translateY(4px);
+}
+
+.web-search-tool::after {
+  content: '';
+  left: 16px;
+  bottom: calc(100% + 3px);
+  width: 10px;
+  height: 5px;
+  background: #1f2937;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  transform: translateY(4px);
+}
+
+.web-search-tool:hover::before,
+.web-search-tool:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 </style>
